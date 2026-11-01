@@ -89,7 +89,7 @@ await block("Центр");
 await shot("centre-panel");
 await esc();
 let opened = false;
-for (const [x, y] of [[665, 655], [665, 640], [650, 660], [680, 650], [640, 650]] as const) { const t = await radialAt(x, y); if (t) { console.log("·    меню ПКМ в центре:", t); opened = true; break; } await esc(); }
+/* место щелчка ищем перебором: сцена сдвигается вместе с шириной колонок (Макс 01.11) */ const box = (await page.locator("[data-testid=scene] canvas").first().boundingBox())!; for (let dy = 40; dy <= 260 && !opened; dy += 20) for (let dx = -60; dx <= 60 && !opened; dx += 20) { const t = await radialAt(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy); if (t && (await radialItem("Корпус").count()) && !/Ящик/.test(t)) { console.log("·    меню ПКМ в центре:", t); opened = true; break; } await esc(); }
 check("центр: меню ПКМ открылось", opened);
 if (opened) {
   for (const name of ["Корпус", "Добавить", "В секцию"]) { await radialItem(name).click(); await page.waitForTimeout(350); }
@@ -103,7 +103,7 @@ if (opened) {
   await esc();
 }
 // 6. ПКМ по фасаду ящика: ручка не обещает того, чего нет
-{ let got = false; for (const [x, y] of [[730, 650], [720, 660], [735, 640]] as const) { const t = await radialAt(x, y); if (/Ящик/.test(t)) { got = true; break; } await esc(); }
+{ let got = false; const box2 = (await page.locator("[data-testid=scene] canvas").first().boundingBox())!; for (let dy = 40; dy <= 280 && !got; dy += 15) for (let dx = -160; dx <= 160 && !got; dx += 20) { const t = await radialAt(box2.x + box2.width / 2 + dx, box2.y + box2.height / 2 + dy); if (/Ящик/.test(t)) { got = true; break; } await esc(); }
   check("фасад ящика: меню ПКМ открылось", got);
   if (got) { const h = radialItem("Ручка"), lab = (await h.getAttribute("aria-label").catch(() => "")) ?? ""; expectNew("фасад ящика: «Ручка» серая с причиной", (await h.isDisabled().catch(() => false)) && lab.includes("вкладной"), lab); await shot("drawer-menu"); await esc(); } }
 // 7. габариты: всё заявленное строится

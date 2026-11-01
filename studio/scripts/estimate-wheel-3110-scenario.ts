@@ -117,7 +117,7 @@ try {
   if (found) {
     await shot("W1-wheel-shelf", 200);
     await radial("Параметры").click(); await page.waitForTimeout(700);
-    const sel = page.locator(".properties .selected-filling").first();
+    const sel = page.locator('.properties [data-part-params="shelf"], .properties details[data-setting="Полки"]').first(); /* Макс 01.11: «Параметры» ведут к своему блоку детали */
     const on = await lit(sel), seen = await inView(sel);
     await shot("W2-params-highlighted", 50);
     check("W2 «Параметры» — поля выбранной полки справа видны и подсвечены", on && seen, `подсветка ${on}, видно ${seen}`);

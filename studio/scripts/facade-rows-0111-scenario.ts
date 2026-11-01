@@ -49,7 +49,7 @@ async function addFromPalette(kind: string, w: number, h: number, d: number) {
 async function zoomOn() { const z = page.getByRole("button", { name: "Приблизить выбранный корпус" }); if ((await z.getAttribute("aria-pressed").catch(() => "true")) !== "true") await z.click().catch(() => {}); }
 /** Чистый вид для снимка: без открытых створок, выбранный корпус, вид и приближение. */
 let viewName = /600 × 2400/;
-async function view(mode: "Спереди" | "Сбоку" | "3D", openDoors = false) {
+async function view(mode: "Спереди" | "Справа" | "3D", openDoors = false) {
   // Esc снимает выбор детали (режим наполнения держит 3D), затем корпус снова выбирается в списке слева: иначе вид сбоку не включится
   for (let k = 0; k < 3; k++) { await page.keyboard.press("Escape"); await page.waitForTimeout(120); }
   await page.locator("button, [role=button], li").filter({ hasText: viewName }).first().click().catch(() => {}); await page.waitForTimeout(300);
@@ -115,7 +115,7 @@ try {
   p = await saved(); m = p.modules[1].module;
   const door0 = doors(m)[0];
   check("ящики за дверью: лицо фасада глубже лица двери", fronts(m).every((f) => faceZ(f) < faceZ(door0) - 10), `${faceZ(fronts(m)[0])} / ${faceZ(door0)}`);
-  await view("Сбоку"); await closeUp("flush-before-side");
+  await view("Справа"); await closeUp("flush-before-side");
   const flush = page.locator('.drawer-selection input[aria-label="Фасад ящика вровень с распашными фасадами"]').first();
   await openSet("Наполнение", "Ящики");
   await page.getByRole("button", { name: /Построение мебели/ }).first().click().catch(() => {}); await openSet("Наполнение", "Ящики"); await page.locator(".drawer-tabs button").first().click(); await page.waitForTimeout(300);
@@ -130,7 +130,7 @@ try {
   check("галочка отмечена", await flush.isChecked());
   // снимок сбоку доказывает плоскость: дверь и ящики — одна линия
   await page.keyboard.press("Escape");
-  await view("Сбоку"); await closeUp("flush-after-side");
+  await view("Справа"); await closeUp("flush-after-side");
   await view("Спереди"); await shot("flush-after-front");
   await view("3D"); await shot("flush-after-3d");
   await openSet("Наполнение", "Ящики");
@@ -151,7 +151,7 @@ try {
   p = await saved(); m = p.modules[1].module;
   check("ряды над ящиками вровень: 3 ряда по 2 створки, верх до верха фасадов", doors(m).length === 6 && Math.abs(hi(doors(m)[5]) - facadeTop(m)) < 0.1 && Math.abs(lo(doors(m)[0]) - hi(fronts(m).at(-1)!) - 2) < 0.1, doors(m).map((d) => Math.round(d.size[1])).join("/"));
   await page.keyboard.press("Escape"); await view("Спереди"); await shot("flush-with-rows-front");
-  await view("Сбоку"); await shot("flush-with-rows-side");
+  await view("Справа"); await shot("flush-with-rows-side");
   // ── 3. Ответы Макса 01.11: ряд от 200 мм; верх ящиков по ряду соседней секции ──
   await addFromPalette("Для одежды", 600, 900, 600); viewName = /600 × 900/;
   await openFacades();
