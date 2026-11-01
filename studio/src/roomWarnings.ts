@@ -10,6 +10,7 @@ import {parts,RULES,facadeTop,hasDrawerCap,isDrawerModule,rodClearanceWarnings} 
 import {partCollisions,rawCheck,bazisAirHardware,edgePullGaps,LEAF_GAP_MIN,RAW_FAR,BAZIS_AIR,type EdgePullGap} from './collisions';
 import {rawHangerSeats,rawKitchen,RAW_HANGER_DROP} from './rawModule';
 import {cutoutWarnings,mansardWarnings} from './shapes';
+import {supportWarnings} from './placement';
 
 export type RoomWarning={moduleId:string;openingId?:string;obstacleId?:string;fixtureId?:string;kind?:string;message:string};
 /** Что советуем по каждому типу объекта на стене, если его перекрывает мебель. */
@@ -100,7 +101,8 @@ export function roomWarnings(project:Project){
       if(actual>limit+.1)warnings.push({moduleId:edge.a.id,kind:'niche-'+size,message:`Ниша: ${label.toLocaleLowerCase('ru')} мебели ${Math.round(actual*10)/10} мм превышает допустимые ${limit} мм после вычетов СТП. Проверьте состав композиции и замер. Учтены закрытые фасады, ручки и промежутки между корпусами.`});
     }
   }
-  return [...warnings,...sinkChecks(project),...dishwasherServiceWarnings(project),...shapeWarnings(project),...drawerGapWarnings(project),...rodWarnings(project)];
+  // физика расстановки (Макс 31.10): шкаф в воздухе, навесной не у стены — предупреждение с исправлением одним щелчком (placement.fixSupport)
+  return [...warnings,...supportWarnings(project).map((w):RoomWarning=>w),...sinkChecks(project),...dishwasherServiceWarnings(project),...shapeWarnings(project),...drawerGapWarnings(project),...rodWarnings(project)];
 }
 /** Штанга без нормы места под одеждой — предупреждение, не ошибка (правка Макса 29.10: штангу ставить независимо от места под ней). */
 export function rodWarnings(project:Project):RoomWarning[]{

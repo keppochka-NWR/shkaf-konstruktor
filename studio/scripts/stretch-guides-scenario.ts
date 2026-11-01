@@ -484,9 +484,9 @@ try {
   check("11. «Слева»: линия y = 300 от пола", g.length === 1 && g[0].at === 300 && g[0].n[1] === 1, JSON.stringify(g.map((x) => [x.n, x.at])));
   const lgrab = { x: SZ(40), y: SY(150) };
   const s11m = await modDrag("Control", lgrab, { x: lgrab.x + 3 * Math.sign(lz), y: lgrab.y + SY(300) - SY(0) - 4 }, "left-ctrl-move");
+  // физика расстановки (Макс 31.10): шкаф стоит на полу или на модуле — Ctrl ловит пересечение (плашка), но корпус в воздух не поднимается
   const b11l = await settled((b) => b.a.y !== 0);
-  check("11. «Слева» Ctrl + перенос → высота по пересечению: y = 300, z = 3, x на месте", b11l.a.y === 300 && b11l.a.z === 3 && b11l.a.x === 1000 && /Ctrl · пересечение/.test(s11m.live), fmt(b11l.a) + ` · «${s11m.live}»`);
-  await key("Control+z"); await settled((b) => b.a.y === 0);
+  check("11. «Слева» Ctrl + перенос: пересечение поймано, шкаф остался на полу (y = 0, z = 3, x на месте)", b11l.a.y === 0 && b11l.a.z === 3 && b11l.a.x === 1000 && /Ctrl · пересечение/.test(s11m.live), fmt(b11l.a) + ` · «${s11m.live}»`);
   // повторная проверка критика 29.10: сбоку дрожание руки не поднимает корпус с пола; высота — только при главном вертикальном ходе
   await drag(lgrab, { x: lgrab.x + 60 * Math.sign(lz), y: lgrab.y - 6 }, "left-plain-wobble");
   const bw = await settled((b) => b.a.z !== 3);
@@ -500,8 +500,8 @@ try {
   await drag(lgrab, { x: lgrab.x + 4 * Math.sign(lz), y: lgrab.y - 40 }, "left-nosnap-up");
   await snapToggle(true);
   const bu = await settled((b) => b.a.y !== 0);
-  check("11. «Слева»: вертикальный ход 40 px главный — высота меняется", bu.a.y > 100, fmt(bu.a));
-  if (bu.a.y !== 0) { await key("Control+z"); await settled((b) => b.a.y === 0); }
+  check("11. «Слева»: вертикальный ход 40 px — шкаф не взлетает (на полу, Макс 31.10)", bu.a.y === 0, fmt(bu.a));
+  if (bu.a.y !== 0 || bu.a.z !== 3) { await key("Control+z"); await settled((b) => b.a.y === 0 && b.a.z === 3); }
   await page.getByRole("button", { name: /Убрать вспомогательные линии/ }).click(); await page.waitForTimeout(400);
 
   // 12. «План»: те же клавиши

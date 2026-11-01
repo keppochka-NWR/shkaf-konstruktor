@@ -279,7 +279,8 @@ test('room warnings inspect all four walls and height without blocking project s
   assert.equal(roomWarnings(p).filter(w=>w.kind!=='opening-sweep').length,1);assert.deepEqual(projectErrors(p),[]);
   a.z=901;assert.equal(roomWarnings(p).filter(w=>w.kind!=='opening-sweep').length,1); // nailed back extends 3 mm
   a.z=903;assert.equal(roomWarnings(p).filter(w=>w.kind!=='opening-sweep').length,0);
-  a.z=30;a.y=2200;p.room.height=4500;assert.equal(roomWarnings(p).filter(w=>w.kind!=='opening-sweep').length,0);
+  // шкаф, поднятый на 2200 в 30 мм от стены, теперь ещё и «навесной не у стены» (физика расстановки, Макс 31.10) — здесь проверяем только проёмы
+  a.z=30;a.y=2200;p.room.height=4500;assert.equal(roomWarnings(p).filter(w=>w.kind!=='opening-sweep'&&w.kind!=='support').length,0);
   a.y=0;p.room.openings[0]={...p.room.openings[0],type:'window',sill:2100,height:1000};
   assert.equal(roomWarnings(p).filter(w=>w.kind!=='opening-sweep').length,0);
   p.room.openings[0].sill=900;assert.equal(roomWarnings(p).filter(w=>w.kind!=='opening-sweep').length,1);
