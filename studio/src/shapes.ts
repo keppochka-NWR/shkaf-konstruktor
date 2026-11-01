@@ -560,6 +560,15 @@ export function radiusEditErrors(before: Pick<Module, "radius" | "width" | "dept
   if (before?.radius && before.depth === m.depth) { const i = e.indexOf(radiusDepthText); if (i >= 0) e.splice(i, 1); }
   return e;
 }
+/** Правка проекта: radiusEditErrors у каждого модуля. Прежний размер — свой (тот же id) или такого же старого стеллажа в проекте:
+ *  копия старого стеллажа шире 600 (новый id) копируется, как оригинал (критик 31.10). */
+export function radiusProjectErrors(prev: { modules: { id: string; module: Module }[] }, next: { modules: { id: string; module: Module }[] }): string[] {
+  return next.modules.flatMap((a) => {
+    if (!a.module.radius) return [];
+    const own = prev.modules.find((b) => b.id === a.id)?.module, twin = prev.modules.find((b) => b.module.radius && b.module.width === a.module.width && b.module.depth === a.module.depth)?.module;
+    return radiusEditErrors(own ?? twin, a.module).map((x) => `${a.module.name}: ${x}`);
+  });
+}
 /** Ошибки стеллажа с радиусными полками (validate). */
 export function radiusErrors(m: Module): string[] {
   if (!m.radius) return [];

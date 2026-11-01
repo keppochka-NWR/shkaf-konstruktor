@@ -8,16 +8,21 @@ import { isUpperModule, RULES, type Module } from "./model";
 import { edgeArc, edgeLength, edgePoint, edgeTangent, flatten, polygonInOutline, projectToEdges, roomOutline, type FlatPolygon, type P2 } from "./roomOutline";
 
 /** Правило опоры по типу (Claude 31.10, ждёт подтверждения Макса):
- *  wall — навесной: Module.hanging (шкаф, поднятый «От пола», подвесной ящик), кухонный навесной и кухонная антресоль, а также шкаф/стеллаж
- *    студии, поднятый от пола без флага (старые проекты, «полка на стене»): спина вплотную к стене (прямой, косой, дуге) или стоит на модуле;
+ *  wall — навесной: только явно навесной — Module.hanging (шкаф, поднятый «От пола», подвесной ящик), кухонный навесной и кухонная
+ *    антресоль: спина у стены (прямой, косой, дуге; допуск WALL_TOL) или вровень со спиной ряда у стены, или стоит на модуле;
  *  floor — всё остальное (шкафы, комоды, кухонные низы и пеналы, купе, столы, угловые, антресоль на шкафу): низ на полу или на верху модуля.
- *  null — не проверяем: модули из проекта Базиса (расстановка как в Базисе: у кухонь k03/k14 навесные в 8 мм от стены) и столешница (лежит на низах по своим правилам).
- *  Свободно висящих типов нет: полка на стене — навесная (к стене), «парящей» мебели в студии не бывает. */
+ *    Шкаф/стеллаж студии, поднятый без флага навесного (старые файлы, «полка на стене»), — floor: у стены (как навесной) — без замечаний,
+ *    не у стены — предупреждение; к стене сам не тянется (критик 31.10).
+ *  null — не проверяем: модули из проекта Базиса (расстановка как в Базисе: у кухонь k03/k14 навесные в 8 мм от стены) и столешница. */
 export type SupportRole = "floor" | "wall";
-/** Числа правил (мм): rest — низ на полу/на верху соседа; flush — спина навесного у стены; magnet — зона у стены, где корпус при тяге
- *  разворачивается к ней спиной и встаёт вплотную (как в The Sims); turnRadius/dragRadius — поиск ближайшего свободного места при
- *  повороте и тяге; step — шаг поиска вдоль стены. */
-export const SUPPORT = { rest: 2, flush: 5, magnet: 150, turnRadius: 1000, dragRadius: 300, step: 10 } as const;
+/** Числа правил (мм): rest — низ на полу/на верху соседа; magnet — зона у стены, где шкаф при тяге встаёт к ней вплотную (только сдвиг,
+ *  если спина уже смотрит на стену ±45°; навесной у стены — разворот к ней лицом в комнату); turnRadius/dragRadius — поиск ближайшего
+ *  свободного места при повороте и тяге; step — шаг поиска вдоль стены. */
+export const SUPPORT = { rest: 2, magnet: 150, turnRadius: 1000, dragRadius: 300, step: 10 } as const;
+/** Допуск «спина навесного у стены», мм (критик 31.10: композиции в 30 мм от стены — заказы 7441182, 7437584-b; навес ABS и шина
+ *  выбирают такой зазор). ПРЕДЛОЖЕНИЕ — ждёт подтверждения Макса; было 5. Вровень со спиной ряда у стены (±ROW_TOL) — тоже норма. */
+export const WALL_TOL = 50;
+const ROW_TOL = 5;
 const WALL_FILLER = RULES.panel + RULES.wallFillerEdgeGap;
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const norm360 = (d: number) => ((d % 360) + 360) % 360;
@@ -40,9 +45,7 @@ export function supportLevels(p: Project, a: PlacedModule, at: Partial<Pos> = {}
 export function supportRole(p: Project, a: PlacedModule): SupportRole | null {
   const m = a.module;
   if (m.raw || m.worktop || isBazisModule(p, a)) return null;
-  if (m.hanging || isUpperModule(m)) return "wall";
-  if ((a.y ?? 0) > SUPPORT.rest && canHang(m) && !restsOn(p, a)) return "wall";
-  return "floor";
+  return m.hanging || isUpperModule(m) ? "wall" : "floor";
 }
 /** Спина корпуса у стены: стена (номер ребра контура; прямоугольник — 0 задняя, 1 правая, 2 передняя, 3 левая), зазор спины и место
  *  середины спины вдоль стены. Спина — задние углы следа (с задником 3 мм); у дуги — с поправкой на стрелу хорды спины. */
@@ -64,27 +67,48 @@ export function backContact(p: Project, a: PlacedModule): { edge: number; gap: n
   });
   return best;
 }
+const faceOf = (rot: number | undefined) => ({ x: Math.sin(((rot ?? 0) * Math.PI) / 180), z: Math.cos(((rot ?? 0) * Math.PI) / 180) });
+/** Спина вровень (±ROW_TOL) со спиной соседа того же поворота, который сам стоит у стены (ряд шкафов в 30 мм от стены и антресоль над
+ *  ними) и рядом по длине ряда (зазор до 50 мм или над/под ним). */
+export function rowAligned(p: Project, a: PlacedModule): boolean {
+  const rot = norm360(a.rotation ?? 0), fc = faceOf(rot), t = { x: fc.z, z: -fc.x };
+  const line = (q: P2) => q.x * fc.x + q.z * fc.z, along = (q: P2) => q.x * t.x + q.z * t.z;
+  const spine = (x: PlacedModule) => { const f = moduleFootprint(x), M = { x: (f[0].x + f[1].x) / 2, z: (f[0].z + f[1].z) / 2 }; return { back: line(M), u0: Math.min(along(f[0]), along(f[1])), u1: Math.max(along(f[0]), along(f[1])) }; };
+  const me = spine(a);
+  return p.modules.some((o) => {
+    if (o.id === a.id || o.module.raw || Math.abs(norm360(o.rotation ?? 0) - rot) > 0.5) return false;
+    const s = spine(o);
+    if (Math.abs(s.back - me.back) > ROW_TOL || s.u0 > me.u1 + 50 || s.u1 < me.u0 - 50) return false;
+    const c = backContact(p, o);
+    return !!c && c.gap <= SUPPORT.magnet;
+  });
+}
+/** Спина у стены (до WALL_TOL) или вровень с рядом у стены. */
+export const wallOk = (p: Project, a: PlacedModule) => { const c = backContact(p, a); return (!!c && c.gap <= WALL_TOL) || rowAligned(p, a); };
 /** Что не так с опорой корпуса (предупреждение «Проверьте расстановку»); null — стоит/висит правильно. */
 export function supportProblem(p: Project, a: PlacedModule): string | null {
   const role = supportRole(p, a);
   if (!role) return null;
   const y = a.y ?? 0, n = a.module.name;
   if (y <= SUPPORT.rest || restsOn(p, a)) return null;
-  if (role === "floor") return `«${n}» висит в воздухе: низ на ${Math.round(y)} мм от пола, под ним нет модуля. Шкаф стоит на полу или на другом модуле.`;
+  if (role === "floor") {
+    if (canHang(a.module) && wallOk(p, a)) return null; // старый файл: шкаф студии поднят без флага навесного, но у стены — «полка на стене»
+    return `«${n}» висит в воздухе: низ на ${Math.round(y)} мм от пола, под ним нет модуля. Шкаф стоит на полу или на другом модуле.`;
+  }
+  if (wallOk(p, a)) return null;
   const c = backContact(p, a);
-  if (c && c.gap <= SUPPORT.flush) return null;
-  return `Навесной «${n}» не у стены: спина в ${c ? Math.round(c.gap) : "?"} мм от стены. Навесной крепится к стене вплотную.`;
+  return `Навесной «${n}» не у стены: спина в ${c ? Math.round(c.gap) : "?"} мм от стены. Навесной крепится к стене (допуск ${WALL_TOL} мм).`;
 }
 export function supportWarnings(p: Project): { moduleId: string; kind: "support"; message: string }[] {
   return p.modules.flatMap((a) => { const m = supportProblem(p, a); return m ? [{ moduleId: a.id, kind: "support" as const, message: m }] : []; });
 }
-/** Корпус спиной к стене edge: середина спины — в точке s стены, лицом в комнату (поворот по нормали стены). Дуга-эркер — углы спины
- *  на дуге (корпус сдвигается внутрь, пока след в комнате). */
-export function attachToWall(p: Project, a: PlacedModule, edge: number, s: number): PlacedModule {
+/** Корпус спиной к стене edge: середина спины — в точке s стены, лицом в комнату (поворот по нормали стены); inset — зазор спины от стены
+ *  (тяга сохраняет прежний, композиция в 30 мм не прижимается). Дуга-эркер — углы спины на дуге (корпус сдвигается внутрь). */
+export function attachToWall(p: Project, a: PlacedModule, edge: number, s: number, inset = 0): PlacedModule {
   const o = roomOutline(p.room), { n } = edgeTangent(o, edge, s), P = edgePoint(o, edge, s);
   const b: PlacedModule = { ...a, rotation: norm360(Math.round((Math.atan2(n.x, n.z) * 1800) / Math.PI) / 10) };
   const f = moduleFootprint(b);
-  b.x += P.x - (f[0].x + f[1].x) / 2; b.z += P.z - (f[0].z + f[1].z) / 2;
+  b.x += P.x - (f[0].x + f[1].x) / 2 + n.x * inset; b.z += P.z - (f[0].z + f[1].z) / 2 + n.z * inset;
   const v = o[edge];
   if (edgeArc(v, o[(edge + 1) % o.length], v.bulge ?? 0)) { const poly = flatten(o); for (let k = 0; k < 120 && !polygonInOutline(moduleFootprint(b), poly); k++) { b.x += n.x * 2.5; b.z += n.z * 2.5; } }
   return { ...b, x: r1(b.x), z: r1(b.z) };
@@ -125,24 +149,23 @@ export function nearestShift(p: Project, list: PlacedModule[], radius: number, s
   for (const s of shifts(c, mv, radius, step)) if (fitsShift(c, mv, s.dx, s.dz)) return { dx: s.dx, dz: s.dz };
   return null;
 }
-/** Места навесного у стен по удалению центра от want (вдоль стены шагом step, у каждой стены — лицом в комнату). Только стены,
+/** Места навесного у стен с удалением центра d от want (вдоль стены шагом step, у каждой стены — лицом в комнату). Только стены,
  *  у которых нормаль не дальше maxTurn° от нынешнего «лица» корпуса (поворот: та же сторона; исправление: любая). */
-function wallSpots(p: Project, want: PlacedModule, radius: number, maxTurn = 180): PlacedModule[] {
-  const o = roomOutline(p.room), C = moduleCenter(want), rot = want.rotation ?? 0, out: { a: PlacedModule; d: number }[] = [];
-  const face = { x: Math.sin((rot * Math.PI) / 180), z: Math.cos((rot * Math.PI) / 180) };
+function wallSpots(p: Project, want: PlacedModule, radius: number, maxTurn = 180): { t: PlacedModule; d: number }[] {
+  const o = roomOutline(p.room), C = moduleCenter(want), out: { t: PlacedModule; d: number }[] = [], face = faceOf(want.rotation), reach = radius + Math.max(want.module.width, want.module.depth);
   o.forEach((_, i) => {
-    const L = edgeLength(o, i), near = projectToEdges(o, C, (j) => j === i);
-    if (near.dist > radius + Math.max(want.module.width, want.module.depth)) return;
+    const L = edgeLength(o, i);
+    if (projectToEdges(o, C, (j) => j === i).dist > reach) return;
     for (let s = 0; s <= L + 0.01; s += SUPPORT.step) {
       const { n } = edgeTangent(o, i, s);
-      if (Math.acos(Math.max(-1, Math.min(1, n.x * face.x + n.z * face.z))) * 180 / Math.PI > maxTurn + 0.5) continue;
+      if ((Math.acos(Math.max(-1, Math.min(1, n.x * face.x + n.z * face.z))) * 180) / Math.PI > maxTurn + 0.5) continue;
       const P = edgePoint(o, i, s);
-      if (Math.hypot(P.x - C.x, P.z - C.z) > radius + Math.max(want.module.width, want.module.depth)) continue;
+      if (Math.hypot(P.x - C.x, P.z - C.z) > reach) continue;
       const b = attachToWall(p, want, i, s), q = moduleCenter(b), dd = Math.hypot(q.x - C.x, q.z - C.z);
-      if (dd <= radius) out.push({ a: b, d: dd });
+      if (dd <= radius) out.push({ t: b, d: dd });
     }
   });
-  return out.sort((u, v) => u.d - v.d).map((x) => x.a);
+  return out.sort((u, v) => u.d - v.d);
 }
 /** Проверка итога как у правки (автофальши + projectErrors): ошибки, которых не было до правки. */
 function cleanAfter(before: Project): (n: Project) => boolean {
@@ -150,17 +173,25 @@ function cleanAfter(before: Project): (n: Project) => boolean {
   return (n) => projectErrors(applyAutoFillers(n), true).every((e) => old.has(e));
 }
 const withModule = (p: Project, a: PlacedModule): Project => ({ ...p, modules: p.modules.map((x) => (x.id === a.id ? a : x)) });
-/** Запас от соседей в первом проходе поиска: автофальш у стыка под 90° (угловая планка, до 40 мм) и у стены не упрётся в соседа. */
-const MARGIN = 45;
-/** Первое место, которое проходит проверку правки (ok): сначала с запасом MARGIN от соседей, затем вплотную; в каждом проходе — не больше
- *  cap полных проверок (дешёвая — по габаритам, полная — автофальши + projectErrors). */
-function firstOk<T>(cands: T[], cheap: (t: T, margin: number) => boolean, build: (t: T) => Project, ok: (n: Project) => boolean, cap = 25): { t: T; n: Project } | null {
-  for (const margin of [MARGIN, 0]) { let tried = 0; for (const t of cands) { if (!cheap(t, margin)) continue; const n = build(t); if (ok(n)) return { t, n }; if (++tried >= cap) break; } }
+/** Запас от соседей (MARGIN): место, где автофальш у стыка под 90° (угловая планка, до 40 мм) не упрётся в соседа. Один проход по удалению
+ *  (критик 31.10: «сначала с запасом» уводил антресоль на 580 мм при годном месте рядом): ближайшие места проверяются полностью все,
+ *  но вплотную к соседу — не больше PLAIN раз (дальше у стыка обычно та же угловая планка), места с запасом — до cap. */
+const MARGIN = 45, PLAIN = 8;
+function firstOk<T>(cands: { t: T; d: number }[], cheap: (t: T, margin: number) => boolean, build: (t: T) => Project, ok: (n: Project) => boolean, cap = 40): { t: T; n: Project } | null {
+  let tried = 0, plain = 0;
+  for (const c of [...cands].sort((a, b) => a.d - b.d)) {
+    if (!cheap(c.t, 0)) continue;
+    const roomy = cheap(c.t, MARGIN);
+    if (!roomy && plain >= PLAIN) continue;
+    if (!roomy) plain++;
+    const n = build(c.t);
+    if (ok(n)) return { t: c.t, n };
+    if (++tried >= cap) break;
+  }
   return null;
 }
-
 /** «Поставить на пол / к стене» одним щелчком: шкаф — на верх модуля под ним или на пол; навесной — к ближайшей стене лицом в комнату
- *  (свободное место вдоль стены). Места нет — понятная ошибка. */
+ *  (ближайшее свободное место). Места нет — понятная ошибка. */
 export function fixSupport(p: Project, mid: string): Project {
   const a = p.modules.find((x) => x.id === mid);
   if (!a) throw Error("Корпус не найден.");
@@ -171,14 +202,24 @@ export function fixSupport(p: Project, mid: string): Project {
     if (ok(n)) return n;
     throw Error(`«${a.module.name}» не встаёт ${y ? "на модуль под ним" : "на пол"}: место занято. Сдвиньте корпус или освободите место.`);
   }
-  const c = fitCtx(p, new Set([mid])), hit = firstOk(wallSpots(p, a, 20000), (b, m) => fitsShift(c, moving([b]), 0, 0, m), (b) => withModule(p, b), ok);
-  if (hit) return hit.n;
+  const n = hangOnWall(p, a, ok);
+  if (n) return n;
   throw Error(`Навесной «${a.module.name}» некуда повесить: у стен нет свободного места. Освободите место у стены или поставьте его на пол («От пола» 0).`);
 }
-/** Тяга корпуса (сцена и «План»): что делает физика с местом под курсором. Шкаф: на виде спереди/сбоку высота — ближайший уровень опоры
- *  (пол или верх модуля под ним), сверху — падает на опору, если ушёл с модуля; у стены (ближе magnet) разворачивается к ней спиной и
- *  встаёт вплотную (не у стопки и не при Alt/Ctrl). Навесной: всегда спиной к ближайшей стене (едет вдоль неё, переходит на другую, если
- *  курсор ближе к ней). Пересёкся с соседом — ближайшее свободное место в dragRadius (упирается, а не проходит насквозь). free — без привязок. */
+/** Ближайшее свободное место навесного у стены (любой стороны, лицом в комнату); null — нет. */
+function hangOnWall(p: Project, a: PlacedModule, ok: (n: Project) => boolean): Project | null {
+  const c = fitCtx(p, new Set([a.id])), hit = firstOk(wallSpots(p, a, 20000), (b, m) => fitsShift(c, moving([b]), 0, 0, m), (b) => withModule(p, b), ok);
+  return hit ? hit.n : null;
+}
+/** Тяга корпуса (сцена и «План»): что делает физика с местом под курсором.
+ *  Шкаф (floor): поворот при тяге НЕ меняется (критик 31.10: столы и торцевые шкафы, поставленные боком, разворачивались); на виде
+ *  спереди/сбоку высота — ближайший уровень опоры, сверху — падает на опору, если ушёл с модуля; у стены (ближе magnet) встаёт вплотную
+ *  только сдвигом и только если спина смотрит на стену (±45°) и тяга началась вне этой зоны. Шкаф, висевший в воздухе до тяги (старый
+ *  файл), высоту не меняет — предупреждение остаётся.
+ *  Навесной (wall): спиной к стене, едет вдоль неё; на другую стену (с разворотом лицом в комнату) — только когда курсор явно ближе к ней
+ *  (на magnet); зазор спины от своей стены сохраняется (ряд в 30 мм от стены не прижимается).
+ *  Пересёкся с соседом — ближайшее свободное место в dragRadius. free — без привязок; point — Alt/Ctrl или линия Q поймали место: ни
+ *  прижима к стене, ни упора в соседа (иначе корпус сдёргивается с линии) — пересечение покажет красный след. */
 export type DragView = "iso" | "front" | "side" | "left" | "top" | "plan";
 export function settleDrag(p: Project, mid: string, next: Pos, ctx: { view: DragView; free?: boolean; point?: boolean }): Pos {
   const a = p.modules.find((x) => x.id === mid);
@@ -186,36 +227,44 @@ export function settleDrag(p: Project, mid: string, next: Pos, ctx: { view: Drag
   const role = supportRole(p, a);
   if (!role) return next;
   const vertical = ctx.view === "front" || ctx.view === "side" || ctx.view === "left";
-  let b: PlacedModule = { ...a, x: next.x, y: next.y, z: next.z, rotation: next.rotation ?? a.rotation };
-  const c = fitCtx(p, new Set([mid]));
+  let b: PlacedModule = { ...a, x: next.x, y: next.y, z: next.z };
+  const c = fitCtx(p, new Set([mid])), loose = !ctx.free && !ctx.point;
   if (role === "wall") {
     if ((b.y ?? 0) > SUPPORT.rest && !restsOn(p, a, b)) {
-      const o = roomOutline(p.room), C = moduleCenter(b), near = projectToEdges(o, C), cur = backContact(p, a);
-      // своя стена держит, пока курсор не ближе к другой больше чем на magnet (у угла не прыгает туда-сюда)
-      const edge = cur && cur.gap <= SUPPORT.flush && projectToEdges(o, C, (j) => j === cur.edge).dist <= near.dist + SUPPORT.magnet ? cur.edge : near.edge;
-      b = attachToWall(p, b, edge, projectToEdges(o, C, (j) => j === edge).s);
-      if (!fitsShift(c, moving([b]), 0, 0)) { const q = wallSpots(p, b, SUPPORT.dragRadius, 1).find((x) => placeFits(p, [x])); if (q) b = q; }
+      const o = roomOutline(p.room), C = moduleCenter(b), near = projectToEdges(o, C), cur = backContact(p, a), curOk = !!cur && cur.gap <= WALL_TOL;
+      const edge = curOk && projectToEdges(o, C, (j) => j === cur!.edge).dist <= near.dist + SUPPORT.magnet ? cur!.edge : near.edge;
+      b = attachToWall(p, b, edge, projectToEdges(o, C, (j) => j === edge).s, curOk && edge === cur!.edge ? cur!.gap : 0);
+      if (loose && !fitsShift(c, moving([b]), 0, 0)) { const q = wallSpots(p, b, SUPPORT.dragRadius, 1).find((x) => placeFits(p, [x.t])); if (q) b = q.t; }
     }
     return { x: b.x, y: b.y ?? 0, z: b.z, rotation: b.rotation ?? 0 };
   }
-  const levels = supportLevels(p, a, b), y = b.y ?? 0;
-  if (vertical) b.y = levels.reduce((best, v) => (Math.abs(v - y) < Math.abs(best - y) ? v : best), 0);
-  else if (y > SUPPORT.rest && !restsOn(p, a, b)) b.y = Math.max(...levels.filter((v) => v <= y + SUPPORT.rest));
-  if (!ctx.free && !ctx.point && !vertical && (b.y ?? 0) <= SUPPORT.rest && !a.module.kupe && !a.module.corner) { const m = wallMagnet(p, b); if (m) b = m; }
-  if (!ctx.free && !fitsShift(c, moving([b]), 0, 0)) { const s = nearestShift(p, [b], SUPPORT.dragRadius, 20); if (s) b = { ...b, x: r1(b.x + s.dx), z: r1(b.z + s.dz) }; }
+  const y0 = a.y ?? 0, floating = y0 > SUPPORT.rest && !restsOn(p, a);
+  if (!floating) {
+    const levels = supportLevels(p, a, b), y = b.y ?? 0;
+    if (vertical) b.y = levels.reduce((best, v) => (Math.abs(v - y) < Math.abs(best - y) ? v : best), 0);
+    else if (y > SUPPORT.rest && !restsOn(p, a, b)) b.y = Math.max(...levels.filter((v) => v <= y + SUPPORT.rest));
+  }
+  if (loose && !vertical && (b.y ?? 0) <= SUPPORT.rest && !a.module.kupe && !a.module.corner) { const m = wallFlush(p, a, b); if (m) b = m; }
+  if (loose && !fitsShift(c, moving([b]), 0, 0)) { const s = nearestShift(p, [b], SUPPORT.dragRadius, 20); if (s) b = { ...b, x: r1(b.x + s.dx), z: r1(b.z + s.dz) }; }
   return { x: b.x, y: b.y ?? 0, z: b.z, rotation: b.rotation ?? 0 };
 }
-/** Магнит к стене (The Sims, ресёрч 31.10 п. 3): корпус, который ещё не стоит спиной к стене (дальше magnet), подведён к стене боком или
- *  фасадом ближе magnet — разворачивается спиной к ней, вплотную. null — не трогаем. */
-export function wallMagnet(p: Project, b: PlacedModule): PlacedModule | null {
-  const back = backContact(p, b);
-  if (back && back.gap <= SUPPORT.magnet) return null;
-  const o = roomOutline(p.room);
-  let best: { edge: number; dist: number } | null = null;
-  for (const q of moduleFootprint(b)) { const e = projectToEdges(o, q); if (e.dist <= SUPPORT.magnet && (!best || e.dist < best.dist)) best = e; }
+/** Прижим шкафа к стене при тяге (The Sims, ресёрч 31.10 п. 3, урезано по критику 31.10): только сдвиг, без поворота. Стена — та, на которую
+ *  смотрит спина (±45°) и до которой ближний задний угол ближе magnet; тяга началась вне этой зоны (иначе — как стоял). null — не трогаем. */
+export function wallFlush(p: Project, start: PlacedModule, b: PlacedModule): PlacedModule | null {
+  const s0 = backContact(p, start);
+  if (s0 && s0.gap <= SUPPORT.magnet) return null;
+  const o = roomOutline(p.room), f = moduleFootprint(b), fc = faceOf(b.rotation), back = [f[0], f[1]];
+  let best: { n: P2; dist: number } | null = null;
+  o.forEach((_, i) => {
+    const pr = back.map((q) => projectToEdges(o, q, (j) => j === i)), dist = Math.min(...pr.map((q) => q.dist));
+    if (dist > SUPPORT.magnet || dist < 0.5) return;
+    const { n } = edgeTangent(o, i, pr[0].s);
+    if (n.x * fc.x + n.z * fc.z < Math.SQRT1_2 - 1e-6) return; // спина смотрит на стену: «лицо» корпуса ±45° от нормали стены внутрь
+    if (!best || dist < best.dist) best = { n, dist };
+  });
   if (!best) return null;
-  const e = best.edge;
-  return attachToWall(p, b, e, projectToEdges(o, moduleCenter(b), (j) => j === e).s);
+  const { n, dist } = best as { n: P2; dist: number };
+  return { ...b, x: r1(b.x - n.x * dist), z: r1(b.z - n.z * dist) };
 }
 /** Поворот без места (запрос Макса 31.10): корпус повёрнут на rotation вокруг центра, место занято или за стеной — ближайшее свободное
  *  положение к исходному в turnRadius (навесной — у стены той же стороны, лицом в комнату). Итог проверяется как правка; нет — ошибка. */
@@ -230,7 +279,7 @@ export function nearestTurn(p: Project, mid: string, rotation: number): { projec
   if (hang) { const hit = firstOk(wallSpots(p, turned, SUPPORT.turnRadius, 45), (b, m) => fitsShift(c, moving([b]), 0, 0, m), (b) => withModule(p, b), ok); if (hit) return { project: hit.n, moved: dist(hit.t) }; }
   else {
     const mv = moving([turned]), at = (s: { dx: number; dz: number }) => ({ ...turned, x: r1(turned.x + s.dx), z: r1(turned.z + s.dz) });
-    const hit = firstOk(shifts(c, mv, SUPPORT.turnRadius, 25), (s, m) => fitsShift(c, mv, s.dx, s.dz, m), (s) => withModule(p, at(s)), ok);
+    const hit = firstOk(shifts(c, mv, SUPPORT.turnRadius, 25).map((s) => ({ t: s, d: s.d })), (s, m) => fitsShift(c, mv, s.dx, s.dz, m), (s) => withModule(p, at(s)), ok);
     if (hit) return { project: hit.n, moved: dist(at(hit.t)) };
   }
   throw Error(`Повернуть «${a.module.name}» некуда: в пределах ${SUPPORT.turnRadius} мм от места нет свободного положения${hang ? " у стены" : ""}. Освободите место рядом или сначала передвиньте корпус.`);
@@ -238,13 +287,20 @@ export function nearestTurn(p: Project, mid: string, rotation: number): { projec
 /** Поворот группы без места: группа уже повёрнута (rotated) — ближайший свободный сдвиг всей группы в turnRadius. */
 export function nearestGroupPlace(p: Project, rotated: Project, ids: readonly string[]): { project: Project; moved: number } {
   const list = rotated.modules.filter((a) => ids.includes(a.id)), c = fitCtx(rotated, new Set(ids)), mv = moving(list), ok = cleanAfter(p);
-  const hit = firstOk(shifts(c, mv, SUPPORT.turnRadius, 25), (s, m) => fitsShift(c, mv, s.dx, s.dz, m), (s) => ({ ...rotated, modules: rotated.modules.map((a) => (ids.includes(a.id) ? { ...a, x: r1(a.x + s.dx), z: r1(a.z + s.dz) } : a)) }), ok);
+  const hit = firstOk(shifts(c, mv, SUPPORT.turnRadius, 25).map((s) => ({ t: s, d: s.d })), (s, m) => fitsShift(c, mv, s.dx, s.dz, m), (s) => ({ ...rotated, modules: rotated.modules.map((a) => (ids.includes(a.id) ? { ...a, x: r1(a.x + s.dx), z: r1(a.z + s.dz) } : a)) }), ok);
   if (hit) return { project: hit.n, moved: Math.round(hit.t.d) };
   throw Error(`Повернуть группу некуда: в пределах ${SUPPORT.turnRadius} мм от места нет свободного положения. Освободите место рядом или измените состав группы.`);
 }
-/** Только что добавленный корпус (палитра, копия): навесной встал не у стены — к ближайшей стене; не вышло — как есть (покажет проверка). */
+/** Навесные из ids, которые после правки (поворот группы) не у стены — для сообщения «Повесить к стене». */
+export function looseHanging(p: Project, ids: readonly string[]): string[] {
+  return p.modules.filter((a) => ids.includes(a.id) && supportRole(p, a) === "wall" && supportProblem(p, a)).map((a) => a.module.name);
+}
+/** Только что добавленный корпус (палитра, копия): навесной встал не вплотную к стене (и не в ряд у стены) — к ближайшей стене; не вышло — как есть. */
 export function settleAdded(p: Project, mid: string): Project {
   const a = p.modules.find((x) => x.id === mid);
-  if (!a || !supportProblem(p, a)) return p;
-  try { return fixSupport(p, mid); } catch { return p; }
+  if (!a || supportRole(p, a) !== "wall" || (a.y ?? 0) <= SUPPORT.rest || restsOn(p, a) || rowAligned(p, a)) return p;
+  // новый навесной — вплотную к стене (допуск WALL_TOL — для уже стоящих: палитра ставит на 30 мм от стены)
+  const c = backContact(p, a);
+  if (c && c.gap <= SUPPORT.rest) return p;
+  return hangOnWall(p, a, cleanAfter(p)) ?? p;
 }

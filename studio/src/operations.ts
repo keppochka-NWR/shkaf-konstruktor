@@ -11,7 +11,7 @@ import {bindCutouts,insertShelf,dropId,fitDrawerIds,renewIds,ensureIds,cutHost} 
 import {drawersUnderMansard} from './mansardFit';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors,applyAutoFillers} from './project';
 import {placeInRow} from './rowResize';
-import {nearestTurn,nearestGroupPlace,supportRole,supportProblem} from './placement';
+import {nearestTurn,nearestGroupPlace,looseHanging,supportRole,supportProblem} from './placement';
 import {mirrorKitchen} from './kitchen';
 import type {DrawerConfig} from './hardware';
 export type FillKind='shelf'|'drawer'|'rod'|'pantograph'|'mesh';
@@ -356,7 +356,9 @@ export function turnNear(p:Project,mid:string,dir:Turn):{project:Project;moved:n
  if(direct&&projectErrors(applyAutoFillers(direct),true).every(e=>old.has(e))&&!(supportRole(p,a)==='wall'&&supportProblem(direct,direct.modules.find(x=>x.id===mid)!)))return {project:direct,moved:0};
  return nearestTurn(p,mid,rotation);
 }
-export function rotateModuleGroup(p:Project,ids:readonly string[],dir:Turn='ccw'):Project{
+export function rotateModuleGroup(p:Project,ids:readonly string[],dir:Turn='ccw'):Project{return rotateGroupNear(p,ids,dir).project;}
+/** Поворот группы; moved — сдвиг группы в ближайшее свободное место (мм, 0 — на месте), loose — навесные группы не у стены после поворота. */
+export function rotateGroupNear(p:Project,ids:readonly string[],dir:Turn='ccw'):{project:Project;moved:number;loose:string[]}{
  const chosen=p.modules.filter(a=>ids.includes(a.id));
  if(!chosen.length)throw Error('Отметьте корпуса для поворота.');
  const box=mountingCompositionBounds({...p,modules:chosen}),cx=box.x+box.w/2,cz=box.z+box.d/2;
@@ -373,8 +375,8 @@ export function rotateModuleGroup(p:Project,ids:readonly string[],dir:Turn='ccw'
  const dz=Math.max(0,Math.min(p.room.depth-rotated.d,rotated.z))-rotated.z;
  for(const a of n.modules.filter(a=>ids.includes(a.id))){a.x+=dx;a.z+=dz;}
  // Макс 31.10: на месте группа не помещается — ближайший свободный сдвиг всей группы (радиус 1000), иначе — понятный отказ
- if(projectErrors(n)[0])return nearestGroupPlace(p,n,ids).project;
- return n;
+ const r=projectErrors(n)[0]?nearestGroupPlace(p,n,ids):{project:n,moved:0};
+ return {...r,loose:looseHanging(r.project,ids)};
 }
 
 /** Resize only the target opening; other section widths and contents stay intact. One undo step. */

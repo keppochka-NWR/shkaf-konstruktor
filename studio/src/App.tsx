@@ -175,8 +175,8 @@ import {
 } from "./project";
 import {settleDrag,supportProblem,fixSupport,settleAdded} from './placement';
 import {placeOpening} from './openingDrag';
-import {RADIUS,radiusEditErrors} from './shapes';
-import {wholeDrawerPid,fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,turnNear,type Turn,setWallDistance,mirrorModule,moveDivider,insertItem,insertGlassShelf,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {RADIUS,radiusProjectErrors} from './shapes';
+import {wholeDrawerPid,fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateGroupNear,rotateModule,turnNear,type Turn,setWallDistance,mirrorModule,moveDivider,insertItem,insertGlassShelf,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 import {drawerAddReason,drawerFitsOnTop} from './drawerLimit';
 import {moduleHandleFloor,setModuleHandleFloor} from './handleFloorGroup';
 function NumberField({
@@ -627,7 +627,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     // Угловые фальши ставятся и снимаются автоматически по факту примыкания корпусов под 90°.
     const next = applyAutoFillers(raw);
     // радиусный стеллаж (Макс 31.10): новая ширина/глубина — в пределах RADIUS (600 × 600); старый файл шире открывается и правится
-    const e = [...next.modules.flatMap(a=>radiusEditErrors(project.modules.find(b=>b.id===a.id)?.module,a.module).map(x=>`${a.module.name}: ${x}`)),...projectErrors(next,!!onEmptyProject)];
+    const e = [...radiusProjectErrors(project,next),...projectErrors(next,!!onEmptyProject)];
     if (e.length) {
       rejectedProject.current=next;
       setError(e[0]);
@@ -857,7 +857,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   /** Поворот на 90° по часовой / против (кнопки, круговое меню, R / Shift+R). Корпус в отмеченной группе — поворачивается группа. */
   function turnSelected(mid:string,dir:Turn,fit=false){
     // Макс 31.10: на месте не помещается — повёрнут и сдвинут в ближайшее свободное положение (сообщение — на сколько)
-    try{const ids=inGroup(mid)?liveGroupIds:null,r=ids?{project:rotateModuleGroup(project,ids,dir),moved:0}:turnNear(project,mid,dir);if(commitProject(r.project)){if(r.moved)setNotice({title:'Поворот',text:`На месте корпус не помещался — повёрнут и сдвинут на ${r.moved} мм в ближайшее свободное место.`});if(fit||ids){if(ids)setFocusActive(false);setFit(f=>f+1);}}}catch(e){setError((e as Error).message);}
+    try{const ids=inGroup(mid)?liveGroupIds:null,r:{project:Project;moved:number;loose?:string[]}=ids?rotateGroupNear(project,ids,dir):turnNear(project,mid,dir);if(commitProject(r.project)){
+      const parts=[r.moved?`На месте ${ids?'группа не помещалась':'корпус не помещался'} — ${ids?'повёрнута и сдвинута':'повёрнут и сдвинут'} на ${r.moved} мм в ближайшее свободное место.`:'',r.loose?.length?`Навесные не у стены: ${r.loose.map(n=>'«'+n+'»').join(', ')} — «Повесить к стене» в «Проверьте расстановку».`:''].filter(Boolean);
+      if(parts.length)setNotice({title:'Поворот',text:parts.join(' ')});if(fit||ids){if(ids)setFocusActive(false);setFit(f=>f+1);}}}catch(e){setError((e as Error).message);}
   }
   function modifyAt(mid:string,update:(draft:Module)=>void){
     const a=project.modules.find(x=>x.id===mid);if(!a)return false;
@@ -1566,7 +1568,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             keepIn={(mid,p)=>keepInRoom(project,mid,p,moveAll?project.modules.map(a=>a.id):liveGroupIds.includes(mid)?liveGroupIds:undefined)}
             settle={(mid,p,ctx)=>settleDrag(project,mid,p,ctx)}
             onMoveModule={moveBody}
-            moveProblem={(mid,p)=>{const n=movedBodies(mid,p),one=!moveAll&&!liveGroupIds.includes(mid);return projectErrors(n)[0]??(one?supportProblem(n,n.modules.find(a=>a.id===mid)!)??undefined:undefined);}}
+            moveProblem={(mid,p)=>{const n=movedBodies(mid,p),one=!moveAll&&!liveGroupIds.includes(mid),a0=project.modules.find(a=>a.id===mid);/* опора — только новая беда: висевший до тяги (старый файл) не запирает перенос */return projectErrors(n)[0]??(one&&a0&&!supportProblem(project,a0)?supportProblem(n,n.modules.find(a=>a.id===mid)!)??undefined:undefined);}}
             onOpeningMove={moveOpeningTo}
             onMoveDivider={(mid,sid,delta)=>{try{return commitProject(moveDivider(project,mid,sid,delta));}catch(e){setError((e as Error).message);return false;}}}
             onMoveDividerEnd={(mid,sid,edge,delta)=>{try{const n=structuredClone(project),t=n.modules.find(x=>x.id===mid)!.module,notes=moveDividerEnd(t,sid,edge,delta),ok=commitProject(n);if(ok)announceDividerNotes(notes);return ok;}catch(e){setError((e as Error).message);return false;}}}

@@ -4,8 +4,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,type Module} from '../src/model';
 import {newProject,projectErrors,applyAutoFillers,bounds,moduleCenter,parseProject,type PlacedModule,type Project} from '../src/project';
-import {supportRole,supportProblem,supportWarnings,backContact,fixSupport,settleDrag,nearestTurn,attachToWall,restsOn,settleAdded,SUPPORT} from '../src/placement';
-import {turnNear,rotateModuleGroup} from '../src/operations';
+import {supportRole,supportProblem,supportWarnings,backContact,fixSupport,settleDrag,nearestTurn,attachToWall,restsOn,settleAdded,SUPPORT,WALL_TOL} from '../src/placement';
+import {turnNear,rotateModuleGroup,rotateGroupNear} from '../src/operations';
+import {radiusProjectErrors} from '../src/shapes';
+import {radiusShelving} from '../src/paletteBuild';
 import {outlinePreset,withOutline} from '../src/roomOutline';
 import {roomWarnings} from '../src/roomWarnings';
 
@@ -13,11 +15,11 @@ const box=(name:string,w=600,h=2000,d=550,extra:Partial<Module>={}):Module=>{con
 const place=(id:string,m:Module,x:number,z:number,y=0,rotation=0):PlacedModule=>({id,x,z,y,rotation,module:m});
 function room(mods:PlacedModule[],w=4000,d=3000):Project{const p=newProject();p.room={width:w,depth:d,height:2700,openings:[]};p.modules=mods;return p;}
 
-test('опора: роли по типу — шкаф на полу, навесной, поднятый шкаф без флага — навесной, столешница и Базис — не проверяются', () => {
+test('опора: роли по типу — шкаф на полу, навесной; поднятый шкаф без флага — шкаф (у стены без замечаний); столешница — не проверяется', () => {
   const p=room([place('a',box('Шкаф'),100,3),place('h',box('Навесной',600,700,300,{hanging:true,plinthHeight:0}),1000,3,1400),place('r',box('Поднятый',600,400,300),2000,3,1200),place('k',box('Кухня',600,720,300,{kitchen:{role:'wall'}}),2700,3,1400)]);
   assert.equal(supportRole(p,p.modules[0]),'floor');
   assert.equal(supportRole(p,p.modules[1]),'wall');
-  assert.equal(supportRole(p,p.modules[2]),'wall');
+  assert.equal(supportRole(p,p.modules[2]),'floor','без флага навесного — шкаф (критик 31.10), к стене сам не тянется');
   assert.equal(supportRole(p,p.modules[3]),'wall');
   assert.equal(supportRole(p,place('w',box('Столешница',1200,38,600,{worktop:{material:'ldsp',thickness:38}} as Partial<Module>),0,0,850)),null);
   assert.deepEqual(supportWarnings(p),[],'все у стены (z = 3, задник 3) и на полу — предупреждений нет');
@@ -52,7 +54,7 @@ test('опора: косая стена контура — навесной сп
   const o=p.room.outline!,diag=o.findIndex((q,i)=>{const n=o[(i+1)%o.length];return Math.abs(n.x-q.x)>1&&Math.abs(n.z-q.z)>1;});
   const a=attachToWall(p,place('h',box('Навесной',600,700,300,{hanging:true,plinthHeight:0}),0,0,1400),diag,375);
   p.modules=[a];
-  assert.equal(backContact(p,a)!.edge,diag);assert.ok(backContact(p,a)!.gap<=SUPPORT.flush);
+  assert.equal(backContact(p,a)!.edge,diag);assert.ok(backContact(p,a)!.gap<=1);
   assert.equal(a.rotation!%90!==0,true,'повёрнут по скосу');assert.deepEqual(projectErrors(p),[]);assert.equal(supportProblem(p,a),null);
 });
 
@@ -68,14 +70,50 @@ test('тяга: шкаф сверху падает со стопки на пол
   const t=settleDrag(q,'h',{x:3500,y:1400,z:1500},{view:'top'});assert.equal(t.rotation,270,'ближе к правой стене — на неё, лицом в комнату');
 });
 
-test('тяга: упирается в соседа и стену, магнит к стене разворачивает спиной', () => {
+test('тяга: упирается в соседа; шкаф при тяге НЕ разворачивается (критик 31.10), к стене — только сдвигом, если спина смотрит на неё', () => {
   const a=place('a',box('А'),1000,3),b=place('b',box('Б'),2000,3),p=room([a,b]);
   const s=settleDrag(p,'b',{x:1300,y:0,z:3},{view:'top'});assert.equal(s.x,1600,'вплотную к А справа');
-  const c=place('c',box('В',600,2000,550),1500,1200,0,0),q=room([c]);
-  const m=settleDrag(q,'c',{x:60,y:0,z:1200},{view:'top'});assert.equal(m.rotation,90,'к левой стене боком — развернулся спиной к ней');
-  assert.equal(settleDrag(q,'c',{x:60,y:0,z:1200},{view:'top',point:true}).rotation,0,'Alt/Ctrl — без магнита');
+  // стол/шкаф у левой стены, тянем на 200 мм — поворот прежний (было: разворот на 90° к левой стене)
+  const desk=place('d',box('Стол',1200,750,600),100,1200,0,0),q=room([desk]);
+  const m=settleDrag(q,'d',{x:300,y:0,z:1200},{view:'top'});assert.equal(m.rotation,0);assert.equal(m.x,300);assert.equal(m.z,1200);
+  // торцевой шкаф ряда поперёк комнаты (боком к задней стене), тянем на 1 мм — ни поворота, ни прыжка
+  const side=place('e',box('Торец'),2000,40,0,90),q2=room([side]);
+  const e=settleDrag(q2,'e',{x:2001,y:0,z:40},{view:'top'});assert.equal(e.rotation,90);assert.equal(e.x,2001);assert.equal(e.z,40);
+  // спина к задней стене, тяга началась вне зоны (z 400), подвели на 100 — встал вплотную, поворот тот же
+  const far=place('f',box('Ф'),1500,400),q3=room([far]);
+  const f=settleDrag(q3,'f',{x:1500,y:0,z:100},{view:'top'});assert.equal(f.z,3);assert.equal(f.rotation,0);
+  // тяга началась в зоне (композиция в 30 мм от стены) — к стене не прижимает
+  const near=place('n',box('Н'),1500,30),q4=room([near]);
+  assert.equal(settleDrag(q4,'n',{x:1700,y:0,z:30},{view:'top'}).z,30);
+  // спина смотрит в комнату (поворот 180) у задней стены — не прижимает и не разворачивает
+  const back=place('k',box('К'),1500,300,0,180),q5=room([back]);
+  const k=settleDrag(q5,'k',{x:1500,y:0,z:100},{view:'top'});assert.equal(k.rotation,180);assert.equal(k.z,100);
+  assert.equal(settleDrag(q3,'f',{x:1500,y:0,z:100},{view:'top',point:true}).z,100,'Alt/Ctrl или линия Q — без прижима');
 });
 
+test('опора: композиция в 30 мм от стены — навесной в ряд без замечаний, тяга зазор не съедает (критик 31.10)', () => {
+  const base=place('a',box('Шкаф',600,2000,550),300,30),hang=place('h',box('Антресоль',600,500,550,{hanging:true,plinthHeight:0}),300,30,2050);
+  const p=room([base,hang]);
+  assert.equal(backContact(p,hang)!.gap,27,'z 30 − задник 3');assert.equal(supportProblem(p,hang),null,'в пределах допуска '+WALL_TOL);
+  const off=place('o',box('Навесной',600,700,300,{hanging:true,plinthHeight:0}),1500,120,1400),q=room([base,off]);
+  assert.match(supportProblem(q,off)!,/не у стены: спина в 117 мм/);
+  const row=place('r',box('Шкаф2',600,2000,550),2000,120),q2=room([row,{...off,x:2000,y:2050,module:{...off.module,height:500}}]);
+  assert.equal(supportProblem(q2,q2.modules[1]),null,'вровень со спиной ряда у стены (117 ≤ 150)');
+  const s=settleDrag(p,'h',{x:400,y:2050,z:30},{view:'top'});assert.equal(s.z,30,'тянем вдоль — зазор 30 сохранён');assert.equal(s.x,400);
+});
+
+test('опора: шкаф студии, поднятый без флага навесного, не у стены — «висит в воздухе», к стене при тяге не тянется', () => {
+  const r=place('r',box('Полка',600,400,300),1500,800,1200),p=room([r]);
+  assert.equal(supportRole(p,r),'floor');assert.match(supportProblem(p,r)!,/висит в воздухе/);
+  const s=settleDrag(p,'r',{x:1600,y:1200,z:800},{view:'top'});assert.equal(s.z,800);assert.equal(s.y,1200,'висел до тяги — высота не меняется');assert.equal(s.rotation,0);
+});
+
+test('«Повесить к стене» и поворот берут ближайшее место (запас от соседей — лишь надбавка, критик 31.10)', () => {
+  // навесной между двумя навесными, отъехал от стены на 200: ближайшее — вплотную между ними (а не с запасом в 600 мм или на другой стене)
+  const L=place('l',box('Л',600,700,300,{hanging:true,plinthHeight:0}),400,3,1400),R=place('r',box('П',600,700,300,{hanging:true,plinthHeight:0}),1600,3,1400);
+  const H=place('h',box('Н',600,700,300,{hanging:true,plinthHeight:0}),1000,200,1400),p=room([L,R,H]);
+  const n=fixSupport(p,'h').modules[2];assert.equal(n.rotation,0);assert.equal(n.z,3);assert.ok(Math.abs(n.x-1000)<=10,String(n.x));
+});
 test('поворот без места: в ближайшее свободное положение, навесной — к стене; нет места — отказ', () => {
   // узкий проём между двумя шкафами: повёрнутый 800×550 не встаёт на месте — сдвигается к ближайшему свободному
   const a=place('a',box('А'),0,3),m=place('m',box('Средний'),620,3),b=place('b',box('Б'),1240,3),f=place('f',box('Перед',1200,2000,400),300,590);
@@ -90,13 +128,20 @@ test('поворот без места: в ближайшее свободное
   assert.throws(()=>nearestTurn(tight,'x',90),/Повернуть «Широкий» некуда/);
 });
 
-test('поворот группы без места — сдвиг всей группы', () => {
-  const g1=place('g1',box('Г1'),1500,3),g2=place('g2',box('Г2'),2100,3),wall=place('w',box('Стена',600),2800,3);
-  const p=room([g1,g2,wall]);
-  const n=rotateModuleGroup(p,['g1','g2'],'cw');
-  assert.deepEqual(projectErrors(n),[]);assert.equal(n.modules[0].rotation,270);
+test('поворот группы без места — сдвиг всей группы, сколько сдвинута — в ответе', () => {
+  const g1=place('g1',box('Г1'),1500,3),g2=place('g2',box('Г2'),2100,3),wall=place('w',box('Стена',600),2800,3),front=place('f',box('Перед',1200,2000,500),1300,640);
+  const p=room([g1,g2,wall,front]);
+  const r=rotateGroupNear(p,['g1','g2'],'cw');
+  assert.deepEqual(projectErrors(r.project),[]);assert.equal(r.project.modules[0].rotation,270);assert.ok(r.moved>0,String(r.moved));assert.deepEqual(r.loose,[]);
+  assert.deepEqual(projectErrors(rotateModuleGroup(p,['g1','g2'],'cw')),[]);
 });
 
+test('радиусный шире 600 из старого файла копируется (копия — тот же размер), новый — в пределах', () => {
+  const old={...radiusShelving(600,2000,400,initialModule()),width:800,name:'Радиусный'};
+  const p=room([place('a',old,0,3)]),copy=room([place('a',old,0,3),place('b',structuredClone(old),900,3)]);
+  assert.deepEqual(radiusProjectErrors(p,copy),[]);
+  assert.match(radiusProjectErrors(p,room([place('a',old,0,3),place('b',{...old,width:900},900,3)]))[0],/до 600/);
+});
 test('добавленный навесной встаёт к стене', () => {
   const p=room([place('h',box('Навесной',600,700,300,{hanging:true,plinthHeight:0}),1000,30,1400)]);
   const n=settleAdded(p,'h');assert.equal(supportProblem(n,n.modules[0]),null);assert.equal(n.modules[0].z,3);
