@@ -137,6 +137,28 @@ function boxesOf(p: Part): Box[] {
   }
   return p.collide?.length ? p.collide.map((c) => ({ c: c.position, h: [c.size[0] / 2, c.size[1] / 2, c.size[2] / 2], ax: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] })) : [box(p)];
 }
+/** Габарит детали в осях модуля по тем же коробкам, что у partPenetration (точные коробки collide, вырезы planHoles, повороты).
+ *  aligned — все коробки без поворота: тогда оси модуля входят в оси SAT, и partPenetration(a, b) ≤ −(зазор габаритов по любой оси) —
+ *  точная отсечка далёких деталей до SAT (поиск высоты петли, ревью 31.10). */
+export type PartBounds = { lo: [number, number, number]; hi: [number, number, number]; aligned: boolean };
+export function partBounds(p: Part): PartBounds {
+  const lo: [number, number, number] = [Infinity, Infinity, Infinity], hi: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  let aligned = true;
+  for (const B of boxesOf(p)) {
+    for (let i = 0; i < 3; i++) {
+      const r = B.h[0] * Math.abs(B.ax[0][i]) + B.h[1] * Math.abs(B.ax[1][i]) + B.h[2] * Math.abs(B.ax[2][i]);
+      lo[i] = Math.min(lo[i], B.c[i] - r); hi[i] = Math.max(hi[i], B.c[i] + r);
+      if (Math.abs(Math.abs(B.ax[i][i]) - 1) > 1e-12) aligned = false;
+    }
+  }
+  return { lo, hi, aligned };
+}
+/** Наибольший зазор габаритов по осям модуля (≤ 0 — габариты перекрываются по всем осям). */
+export function boundsGap(a: PartBounds, b: PartBounds): number {
+  let g = -Infinity;
+  for (let i = 0; i < 3; i++) g = Math.max(g, b.lo[i] - a.hi[i], a.lo[i] - b.hi[i]);
+  return g;
+}
 /** Глубина пересечения двух деталей (с учётом точных коробок); ≤ 0 — не пересекаются. */
 export function partPenetration(a: Part, b: Part): number {
   let best = -Infinity;

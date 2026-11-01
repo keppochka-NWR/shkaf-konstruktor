@@ -132,6 +132,7 @@ import {tweenState,tweenProgress,wantsViewTween,type CamState} from './cameraTwe
 import {altKeyupGuard,acrossSegments,markDragStarts,isMarkClick,wheelGuard,historyGuard,sideView,sideHeightFree,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import {cornerDims,axisOf,edgeOf,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
+import {searchShortcut} from './searchKeys';
 import './guides.css';
 /** side — вид справа (камера с +X), left — вид слева (клавиша A, п.28 волны 22.10). */
 export type View = "iso" | "front" | "side" | "left" | "top";
@@ -1723,6 +1724,8 @@ export function Scene(p: Props) {
       if(document.querySelector('[aria-modal="true"]'))return;
       // Ctrl+Z/Ctrl+Y посреди тяги (Ctrl зажат ради привязки) — не отменять (критик 29.10 п.6)
       if(historyGuard(e,!!(drag||stretch||corner||markPress))){e.preventDefault();e.stopPropagation();return;}
+      // критик 31.10: «/» и Ctrl+K посреди тяги или инструмента Q не открывают поиск (и не уходят браузеру)
+      if((drag||stretch||corner||markPress||tool)&&searchShortcut(e)){e.preventDefault();e.stopPropagation();return;}
       // тяга за угол: набор размеров «600;2400», Enter, Esc, Backspace — раньше App и Q
       if(corner){if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&cornerKey(corner,e)){e.preventDefault();e.stopPropagation();}return;}
       if(e.code==='KeyQ'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){

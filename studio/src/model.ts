@@ -7,7 +7,7 @@ import { facadeSideToFloor, droppedSide, finishFacadeSides } from './kitchenFaca
 import { applyAllegroParts } from './premialPullout';
 import { rafixGrid, rafixSide, rafixCount, rafixZs, parseKitchenRafix, parseGridRecord, rafixErrors } from "./kitchenRafix";
 import { kitchenDividerZ } from "./kitchenDivider";
-import { partPenetration, allowedContact } from "./collisions";
+import { partPenetration, allowedContact, partBounds, boundsGap, type PartBounds } from "./collisions";
 import { qmul, qrot, type Quat } from "./quat";
 import { partAxes as partAxesOf } from "./edges";
 import { applyCutouts, applyMansard, radiusParts, cutoutErrors, mansardErrors, mansardFitErrors, radiusErrors, parseShapes, type PartShape, type Cutout } from "./shapes";
@@ -1123,8 +1123,33 @@ export function setRodTiers(m: Module, s: Section, on: boolean) {
   s.rod = true; delete s.pantograph;
   s.rodLower = Math.round(((sup + rodY) / 2 / h) * 10000) / 10000;
 }
-/** Детали модуля. Фигурные детали (shapes.ts): мансарда и радиусный стеллаж — контуром, затем вырезы (Module.cutouts) поверх. */
+/** Детали модуля. Фигурные детали (shapes.ts): мансарда и радиусный стеллаж — контуром, затем вырезы (Module.cutouts) поверх.
+ *  Ревью 31.10 (скорость): parts() зовут validate, смета/раскрой, сводка комнаты, панели — десятки раз на модуль за правку, а у шкафа
+ *  с ящиками и петлями это десятки мс (поиск свободной высоты петли). Результат запоминается на объекте модуля (WeakMap) и годен,
+ *  пока JSON модуля тот же (модуль правят и на месте). Отдаётся всегда новая глубокая копия: вызывающие (applyCutouts, раскрой,
+ *  сцена) меняют и список, и сами детали. Внутренний вызов без склейки фальшей (falshZones, glueOff) — мимо памяти. */
+const partsMemo = new WeakMap<Module, { key: string; out: Part[] }>();
+/** Копии модуля (structuredClone в групповых правках, разбор сохранённого проекта, история) — по тому же JSON, последние PARTS_RECENT. */
+const partsRecent = new Map<string, Part[]>(), PARTS_RECENT = 64;
 export function parts(m: Module): Part[] {
+  if (glueOff) return partsUncached(m);
+  // ключ — ДО расчёта: если расчёт поправит модуль на месте, следующий вызов увидит другой JSON и посчитает заново
+  const key = JSON.stringify(m), hit = partsMemo.get(m);
+  if (hit && hit.key === key) return structuredClone(hit.out);
+  let kept = partsRecent.get(key);
+  if (!kept) {
+    const out = partsUncached(m);
+    kept = structuredClone(out);
+    partsRecent.set(key, kept);
+    if (partsRecent.size > PARTS_RECENT) partsRecent.delete(partsRecent.keys().next().value!);
+    partsMemo.set(m, { key, out: kept });
+    return out;
+  }
+  partsRecent.delete(key); partsRecent.set(key, kept); // свежий — в конец очереди
+  partsMemo.set(m, { key, out: kept });
+  return structuredClone(kept);
+}
+function partsUncached(m: Module): Part[] {
   const out = shapeBaseParts(m);
   if (m.cutouts?.length) applyCutouts(m, out);
   return out;
@@ -2217,10 +2242,31 @@ function hardwareParts(m: Module, out: Part[]) {
     // Зазор — только до «чужих» деталей в зоне петли (полки, царги, крепёж, ящики, другие петли); каркас и свой фасад петля касает по устройству.
     const clearOf = (o: Part) => o.role === "shelf" || o.role === "drawer" || o.role === "hinge" || o.id.startsWith("rail:") || o.id.startsWith("fast:") || o.id.startsWith("shp:") || o.id.startsWith("ecc:") || o.id.startsWith("rafix:");
     const floating = (hs: Part[]) => partialStand && !ffHinge && hs.length > 1 && !standFaces(hs[1].position[1] - 26.5, hs[1].position[1] + 26.5).some((fx) => Math.abs(fx - sideX) < 1);
-    const blocked = (hs: Part[]) => floating(hs) || hs.some((h) => [...obstacles, ...placed].some((o) => { const depth = partPenetration(h, o); if (allowedContact(h, o, Math.max(depth, 0), m)) return false; return depth > 0.1 || (clearOf(o) && depth > -HINGE_CLEAR); }));
+    const hits = (h: Part, o: Part) => { const depth = partPenetration(h, o); if (allowedContact(h, o, Math.max(depth, 0), m)) return false; return depth > 0.1 || (clearOf(o) && depth > -HINGE_CLEAR); };
     // Петля не должна пересекать ничего (замечание Макса 09.10.2026): идеальная высота (100 мм от краёв фасада), а если там полка,
     // царга, конфирмат, полкодержатель, ящик или соседняя петля — ближайшая свободная высота в пределах фасада.
     const lo = cy - dh / 2 + Math.min(40, dh / 4), hi = cy + dh / 2 - Math.min(40, dh / 4);
+    // Ревью 31.10 (скорость): hits — SAT по коробкам и реестр контактов, а пробных высот у петли до 80, деталей — сотни. Деталь, чей габарит
+    // дальше FAR от габарита петли по какой-нибудь оси, не может ни пересечь, ни подойти ближе HINGE_CLEAR (коробки петли без поворота:
+    // partPenetration ≤ −зазор по этой оси), hits для неё всегда false — отсекаем её до SAT. Кандидаты двери отличаются только высотой,
+    // поэтому список «близких» деталей (зона всех высот от lo до hi) строится один раз на дверь; кандидат вне зоны — полная проверка.
+    const FAR = HINGE_CLEAR + 0.5, bnd = new Map<Part, PartBounds>(), boundsOf = (p: Part) => { let b = bnd.get(p); if (!b) { b = partBounds(p); bnd.set(p, b); } return b; };
+    let zone: PartBounds | undefined, near: Part[] = [];
+    const inZone = (b: PartBounds) => !!zone && [0, 1, 2].every((i) => b.lo[i] >= zone!.lo[i] - 1e-6 && b.hi[i] <= zone!.hi[i] + 1e-6);
+    const blocked = (hs: Part[]) => {
+      if (floating(hs)) return true;
+      if (!zone) {
+        const ends = [...hingeAt(lo, 0), ...hingeAt(hi, 0)].map(partBounds);
+        zone = { lo: [0, 1, 2].map((i) => Math.min(...ends.map((b) => b.lo[i]))) as PartBounds["lo"], hi: [0, 1, 2].map((i) => Math.max(...ends.map((b) => b.hi[i]))) as PartBounds["hi"], aligned: true };
+        near = obstacles.filter((o) => boundsGap(zone!, boundsOf(o)) <= FAR);
+      }
+      return hs.some((h) => {
+        const hb = partBounds(h);
+        if (!hb.aligned) return [...obstacles, ...placed].some((o) => hits(h, o));
+        const close = (o: Part) => boundsGap(hb, boundsOf(o)) <= FAR && hits(h, o);
+        return (inZone(hb) ? near.some(close) : obstacles.some(close)) || placed.some(close);
+      });
+    };
     const sec = m.sections.find((s) => s.id === door.sectionId);
     // ряд створки (номер row*2+col): у пенала кухни нижний — hingeY, средние (doorRows) — hingeYMid или правило, верхний — hingeYUp или hingeY
     const row = Math.floor(Number(door.id.split(":door:")[1]) / 2), rowsN = sec ? doorRowCount(m, sec) : 1;

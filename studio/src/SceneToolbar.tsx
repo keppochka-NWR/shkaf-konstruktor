@@ -27,7 +27,7 @@ export function ViewIcon({view,size=20}:{view:ToolbarView;size?:number}){
 
 /** Иконки видов. active — текущий вид (plan — открыт план); hidden — скрытые виды (показ клиенту без плана). */
 export function ViewButtons({active,onView,hidden=[]}:{active:ToolbarView;onView:(v:ToolbarView)=>void;hidden?:ToolbarView[]}){
- return <div className="view-tabs" role="group" aria-label="Вид">{VIEW_BUTTONS.filter(v=>!hidden.includes(v.id)).map(v=><button key={v.id} type="button" className="view-button" aria-label={v.label} title={`${v.title} · клавиша ${v.key}`} aria-pressed={active===v.id} onClick={e=>{e.currentTarget.blur();onView(v.id);}}><ViewIcon view={v.id}/><span className="sr-only">{v.label}</span></button>)}</div>;
+ return <div className="view-tabs" data-tour="views" role="group" aria-label="Вид">{VIEW_BUTTONS.filter(v=>!hidden.includes(v.id)).map(v=><button key={v.id} type="button" className="view-button" aria-label={v.label} title={`${v.title} · клавиша ${v.key}`} aria-pressed={active===v.id} onClick={e=>{e.currentTarget.blur();onView(v.id);}}><ViewIcon view={v.id}/><span className="sr-only">{v.label}</span></button>)}</div>;
 }
 
 /** Одна строка над сценой: виды, затем режимы/переключатели. Сплошной фон, сцена начинается под полосой. */

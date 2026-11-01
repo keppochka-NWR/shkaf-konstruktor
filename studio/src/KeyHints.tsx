@@ -17,7 +17,7 @@ export function KeyHints({mode,moveAll,group,snapping,focus,onHelp}:{mode:string
  return <div className="orbit-help key-hints" role="note" aria-label="Клавиши">
   <span className="key-action">{focus?'Крупный вид · ':''}{action}</span>
   {mode==='move'&&(snapping?<><Hint keys={['Shift']}>группа</Hint><Hint keys={['Alt']}>к линии</Hint><Hint keys={['Ctrl']}>к пересечению</Hint></>:<span className="key-off">привязки выключены (галочка слева)</span>)}
-  <span className="view-keys" title={KEYS_TITLE}><Hint keys={['W','A','S','D']}>виды</Hint><Hint keys={['E']}>3D</Hint><Hint keys={['Q']}>линия</Hint><Hint keys={['R']}>поворот</Hint><Hint keys={['Esc']}>снять</Hint></span>
+  <span className="view-keys" data-tour="guides" title={KEYS_TITLE}><Hint keys={['W','A','S','D']}>виды</Hint><Hint keys={['E']}>3D</Hint><Hint keys={['Q']}>линия</Hint><Hint keys={['R']}>поворот</Hint><Hint keys={['Esc']}>снять</Hint></span>
   <Hint keys={['Колесо']} className="key-wide">масштаб</Hint>
   <b className="rmb-hint"><Hint keys={['ПКМ']}>меню действий</Hint></b>
   <button type="button" className="key-help" aria-label="Все клавиши и приёмы" title="Все клавиши и приёмы" onClick={onHelp}><HelpCircle size={15}/></button>

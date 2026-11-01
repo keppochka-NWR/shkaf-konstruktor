@@ -1,0 +1,24 @@
+/* Подробная стоимость (Макс 31.10): только внутри .estimate-breakdown, без глобальных правил — макет экрана правит другая ветка */
+.estimate-breakdown{margin:14px 0;max-width:860px}
+.estimate-breakdown .eb-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.estimate-breakdown .eb-head h3{margin:0;font-size:16px}
+.estimate-breakdown .eb-group{border:1px solid var(--line,#dce1e5);border-radius:8px;margin:6px 0;background:#fff}
+.estimate-breakdown .eb-group>summary{display:flex;align-items:baseline;gap:10px;padding:9px 12px;cursor:pointer;list-style:none}
+.estimate-breakdown .eb-group>summary::-webkit-details-marker{display:none}
+.estimate-breakdown .eb-group>summary::before{content:"▸";color:var(--muted,#63707b);transition:transform .15s}
+.estimate-breakdown .eb-group[open]>summary::before{transform:rotate(90deg)}
+.estimate-breakdown .eb-title{font-weight:600}
+.estimate-breakdown .eb-count{color:var(--muted,#63707b);font-size:12px;flex:1}
+.estimate-breakdown .eb-missing{color:#b42318;font-weight:600}
+.estimate-breakdown .eb-sum{white-space:nowrap}
+.estimate-breakdown .eb-table{width:100%;border-collapse:collapse;font-size:13px}
+.estimate-breakdown .eb-table td,.estimate-breakdown .eb-table th{padding:4px 12px;border-top:1px solid #eef0f2;text-align:left;vertical-align:top}
+.estimate-breakdown .eb-table .n{text-align:right;white-space:nowrap}
+.estimate-breakdown .eb-sub th{font-size:12px;color:var(--muted,#63707b);font-weight:600;background:#f7f8f9}
+.estimate-breakdown .eb-row.in-sheet td{color:var(--muted,#63707b)}
+.estimate-breakdown .eb-badge{display:inline-block;font-size:11px;padding:1px 6px;border-radius:9px;background:#eef0f2;color:var(--muted,#63707b)}
+.estimate-breakdown .eb-row.pending .eb-badge{background:#fff4e5;color:#8a5300}
+.estimate-breakdown .eb-row.missing .eb-badge{background:#fde8e7;color:#b42318}
+.estimate-breakdown .eb-line{display:flex;justify-content:space-between;padding:6px 12px;margin:0}
+.estimate-breakdown .eb-total{font-size:16px;border-top:2px solid var(--ink,#252a30);margin-top:6px}
+.sales-summary .eb-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
