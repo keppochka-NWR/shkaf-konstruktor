@@ -84,7 +84,7 @@ test('Макс 01.11: «Параметры» — у ящика поля ящик
   assert.equal(partKind('s1:left'),'section');
   assert.equal(partSetting('s1:drawer:2:facade'),'Ящики');
   assert.equal(partSetting('s1:divider'),'Перегородки секции');
-  assert.equal(partParamTargets('s1:drawer:2:facade')[0],'.properties [data-part-params="drawer"]');
+  assert.equal(partParamTargets('s1:drawer:2:facade')[1],'.properties [data-part-params="drawer"]');
   assert.ok(partParamTargets('s1:drawer:2:facade').indexOf('.properties details[data-setting="Ящики"]')<partParamTargets('s1:drawer:2:facade').indexOf('.properties details[data-setting="Секция"]'),'«Секция» — только запасной путь');
   assert.equal(partParamTargets('s1:left')[0],'.properties details[data-setting="Секция"]');
 });
