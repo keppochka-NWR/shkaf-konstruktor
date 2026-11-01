@@ -2,7 +2,7 @@
 // Только правки модели — те же для панели справа и меню правой кнопки; геометрию строит parts() (doorBands), петли — по высоте каждого ряда.
 import { doorBands, doorCount, doorRowCount, doorRowsBlock, drawerCapTop,externalDrawerBoundary, facadeBottom, facadeTop, fb, RULES, type Module, type Section } from "./model";
 
-/** Рядов фасадов в секции: 5 — предел модели (нижний, 3 средних, верхний); у шкафа каждый ряд — от doorMinH, у кухни панель даёт до 4, как было. */
+/** Рядов фасадов в секции: 5 — предел модели (нижний, 3 средних, верхний); у шкафа каждый ряд — от doorRowMinH (200), у кухни панель даёт до 4, как было. */
 export const MAX_DOOR_ROWS = 5;
 const sectionOf = (m: Module, sid: string) => { const s = m.sections.find((x) => x.id === sid); if (!s) throw Error("Выберите секцию."); return s; };
 const half = (v: number) => Math.round(v * 2) / 2;
@@ -23,9 +23,9 @@ function equalFace(m: Module, s: Section, n: number) {
   if (s.doorNiche !== undefined && s.doorSplit !== undefined) return (whole[1] - (whole[0] + s.doorSplit - g / 2 + s.doorNiche) - Math.max(0, n - 2) * g) / (n - 1);
   return (whole[1] - whole[0] - g - Math.max(0, n - 2) * g) / n;
 }
-/** Сколько рядов встаёт в секцию при равных фасадах (у шкафа каждый ряд от doorMinH). */
+/** Сколько рядов встаёт в секцию при равных фасадах (у шкафа каждый ряд от doorRowMinH). */
 export function maxDoorRows(m: Module, s: Section): number {
-  const min = m.kitchen ? 200 : RULES.doorMinH;
+  const min = m.kitchen ? 200 : RULES.doorRowMinH;
   for (let n = MAX_DOOR_ROWS; n > 2; n--) if (equalFace(m, s, n) >= min) return n;
   return 2;
 }
@@ -61,7 +61,7 @@ export function setDoorRowCount(m: Module, sid: string, n: number): void {
     return;
   }
   const g = s.doorGap ?? fb(m), face = Math.floor(equalFace(m, s, n) * 2) / 2;
-  if (face < RULES.doorMinH) throw Error(`${n} ${n < 5 ? "ряда" : "рядов"} не встанет: фасад выйдет ${Math.round(face)} мм, а меньше ${RULES.doorMinH} мм фасад не делаем. В этой секции — не больше ${maxDoorRows(m, s)} рядов.`);
+  if (face < RULES.doorRowMinH) throw Error(`${n} ${n < 5 ? "ряда" : "рядов"} не встанет: фасад выйдет ${Math.round(face)} мм, а ряд ниже ${RULES.doorRowMinH} мм не делаем. В этой секции — не больше ${maxDoorRows(m, s)} рядов.`);
   if (s.doorNiche === undefined || s.doorSplit === undefined) s.doorSplit = half(face + g / 2);
   if (n > 2) s.doorRows = Array.from({ length: n - 2 }, () => face); else delete s.doorRows;
   delete s.removedDoors; delete s.doorHinges; delete s.doorLifts; delete s.hingeY; delete s.hingeYFor;

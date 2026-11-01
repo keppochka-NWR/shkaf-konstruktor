@@ -70,10 +70,10 @@ test('пенал в 3 ряда распашных (doorRows): нижний 824,5
   assert.equal(hinges.length,2+3+2,'824,5 → 2, 1135 → 3, верхний ≤ 900 → 2 (как 7 петель k05 m01)');
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify(t))).sections[0].doorRows,[1135]);
   const w={...t};delete (w as Partial<typeof t>).kitchen;
-  // Макс 01.11: ряды и у шкафа, но средний ряд от правила цеха doorMinH (360), а не от 100, как у пенала кухни
+  // Макс 01.11: ряды и у шкафа, средний ряд от doorRowMinH (200), а не от 100, как у пенала кухни
   assert.deepEqual(validate(w as typeof t).filter(e=>e.includes('ряды фасадов')),[],'у шкафа ряды есть');
-  const low=structuredClone(w);low.sections[0].doorRows=[200];
-  assert.ok(validate(low as typeof t).some(e=>e.includes('ряды фасадов')),'у шкафа средний ряд от 360');
+  const low=structuredClone(w);low.sections[0].doorRows=[150];
+  assert.ok(validate(low as typeof t).some(e=>e.includes('ряды фасадов')),'у шкафа средний ряд от 200');
 });
 
 test('распознавание рядов: k05 m01 — 3 ряда по одной створке (826 + средний 1135), k24 m04 — 3 ряда; ряды с ящиками не трогаем',{skip:!existsSync(`${ETALON}/k05.json`)},()=>{

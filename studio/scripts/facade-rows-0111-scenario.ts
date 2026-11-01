@@ -152,6 +152,45 @@ try {
   check("ряды над ящиками вровень: 3 ряда по 2 створки, верх до верха фасадов", doors(m).length === 6 && Math.abs(hi(doors(m)[5]) - facadeTop(m)) < 0.1 && Math.abs(lo(doors(m)[0]) - hi(fronts(m).at(-1)!) - 2) < 0.1, doors(m).map((d) => Math.round(d.size[1])).join("/"));
   await page.keyboard.press("Escape"); await view("Спереди"); await shot("flush-with-rows-front");
   await view("Сбоку"); await shot("flush-with-rows-side");
+  // ── 3. Ответы Макса 01.11: ряд от 200 мм; верх ящиков по ряду соседней секции ──
+  await addFromPalette("Для одежды", 600, 900, 600); viewName = /600 × 900/;
+  await openFacades();
+  await click(page.getByText("Разделить фасады по высоте", { exact: true }));
+  const low = page.locator('select[aria-label="Рядов фасадов"]');
+  const opts = (await low.locator("option").allInnerTexts()).map((x) => x.trim());
+  check("при высоте 900: 4 ряда можно, 5 — отключено с причиной про 200 мм", !(await low.locator('option[value="4"]').evaluate((e) => (e as HTMLOptionElement).disabled)) && (await low.locator('option[value="5"]').evaluate((e) => (e as HTMLOptionElement).disabled)) && /ниже 200 мм/.test(opts.at(-1)!), opts.join(" | "));
+  await low.selectOption("4"); await page.waitForTimeout(500);
+  p = await saved(); m = p.modules[2].module;
+  check("4 ряда по 200+ мм, на каждом 2 петли", doors(m).length === 4 && doors(m).every((d) => d.size[1] >= 200 && parts(m).filter((x) => x.id.startsWith(d.id.replace(":door:", ":hingecup:") + ":")).length === 2), doors(m).map((d) => Math.round(d.size[1])).join("/"));
+  await view("Спереди"); await shot("rows-4-at-900-front");
+  // шкаф в 2 секции: справа ряды, слева ящики вровень
+  await addFromPalette("Пустой шкаф", 1000, 2400, 600); viewName = /1000 × 2400/;
+  await page.getByRole("button", { name: /Построение мебели/ }).first().click().catch(() => {}); await page.waitForTimeout(300);
+  await openSet("Наполнение", "Секция");
+  await click(page.getByRole("button", { name: "Разделить пополам" }));
+  const pickSec = async (i: number) => { await page.locator('select[aria-label="Выбранная секция"]').selectOption({ index: i }); await page.waitForTimeout(400); };
+  await pickSec(1); await openFacades();
+  await click(page.getByText("Разделить фасады по высоте", { exact: true }));
+  await type(field("Высота нижнего ряда фасадов"), 600);
+  await pickSec(0); await openSet("Наполнение", "Ящики");
+  await click(page.getByRole("button", { name: "Добавить: Ящики", exact: true })); await click(page.getByRole("button", { name: "Добавить: Ящики", exact: true }));
+  await page.locator(".drawer-tabs button").first().click(); await page.waitForTimeout(300);
+  await page.locator('.drawer-selection input[aria-label="Фасад ящика вровень с распашными фасадами"]').first().check(); await page.waitForTimeout(600);
+  p = await saved(); m = p.modules[3].module;
+  const sid0 = m.sections[0].id, sid1 = m.sections[1].id;
+  const pair = (x: Module) => { const a = doors(x).filter((d) => d.sectionId === sid0)[0], bs = doors(x).filter((d) => d.sectionId === sid1); return { a, near: bs.sort((u, v) => Math.abs(lo(u) - lo(a)) - Math.abs(lo(v) - lo(a)))[0] }; };
+  let q0 = pair(m);
+  check("дверь над ящиками встала на низ ряда соседа", Math.abs(lo(q0.a) - lo(q0.near)) < 0.4, `${lo(q0.a)} / ${lo(q0.near)}`);
+  const toRow = page.locator('.drawer-selection input[aria-label="Верх ящиков по ряду соседней секции"]').first();
+  check("галочка «Верх ящиков по ряду соседней секции» стоит", await toRow.isChecked());
+  await page.keyboard.press("Escape"); await view("Спереди"); await shot("flush-on-neighbour-row-front");
+  // сосед меняет нижний ряд — ящики идут за ним; Ctrl+Z — один шаг
+  await pickSec(1); await openFacades(); await type(field("Высота нижнего ряда фасадов"), 800);
+  p = await saved(); m = p.modules[3].module; q0 = pair(m);
+  check("сосед 800: ящики пошли за рядом", m.sections[1].doorSplit === 800 && Math.abs(lo(q0.a) - lo(q0.near)) < 0.4, `${lo(q0.a)} / ${lo(q0.near)}`);
+  await page.keyboard.press("Escape"); await view("Спереди"); await shot("flush-follows-neighbour-front");
+  await undo(); p = await saved(); m = p.modules[3].module; q0 = pair(m);
+  check("Ctrl+Z одним шагом: и ряд соседа, и ящики вернулись", m.sections[1].doorSplit === 600 && Math.abs(lo(q0.a) - lo(q0.near)) < 0.4, `${m.sections[1].doorSplit}`);
   check("ошибок страницы нет", errors.length === 0, errors.slice(0, 3).join(" | "));
 } catch (e) { check("сценарий дошёл до конца", false, (e as Error).message); await shot("error"); }
 writeFileSync(`${out}/result.json`, JSON.stringify(results, null, 1));

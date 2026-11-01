@@ -157,6 +157,7 @@ export const RULES = {
   doorMaxLow: 640, // ширина фасада до 640 при высоте до 920 (Перечень для производства), выше — 600
   doorLowH: 920,
   doorMinH: 360, // минимальная высота распашного фасада
+  doorRowMinH: 200, // ряд разделённых фасадов шкафа (doorSplit, doorRows) — Макс 01.11: «не менее 200 мм»; цельная дверь — по-прежнему doorMinH
   longHandleFloor: 100, // длинная ручка (≥1000, напр. 1200) ставится от пола: низ ручки на 100 мм от пола, но не ниже низа двери + handleEdge (предположение, вопрос Максу 20.10)
   handleEdge: 50, // ручка, сдвинутая по высоте от пола, не ближе 50 мм к краю двери (не помещается — прижимается к краю с этим отступом)
   handleSide: 40, // ось вертикальной ручки распашного фасада — 40 мм от кромки открывания (как было в коде)
@@ -224,6 +225,8 @@ export type Section = {
   hingeless?: number[];
   /** Фасады ящиков вровень с распашными фасадами (не за дверью): наружные ящики снизу, распашные двери только над обязательной полкой (см. drawersFlush). */
   externalDrawers?: boolean;
+  /** Макс 01.11: верх ящиков вровень идёт за рядом соседней секции (drawerRowAlign.ts). Ставит только галочка «вровень»; ручная высота ящика снимает. */
+  drawersToRow?: boolean;
   /** Полка над ящиками (п.29 волны 22.10): true — есть, false — нет; без поля — есть, если над блоком ящиков остаётся проём
    *  (полка + 80 мм), и нет, если ящики доходят до крыши (комод). См. hasDrawerCap. */
   drawerCap?: boolean;
@@ -2311,7 +2314,9 @@ function hardwareParts(m: Module, out: Part[]) {
     const midYs = midRow ? sec!.hingeYMid?.[row - 1] : undefined;
     const src: [number[], number] | undefined = upRow ? [sec!.hingeYUp!, sec!.hingeYUpFor ?? dh] : midRow ? (midYs?.length ? [midYs, sec!.hingeYMidFor?.[row - 1] ?? dh] : undefined)
       : sec?.hingeY?.length ? [sec.hingeY, sec.hingeYFor ?? dh] : undefined;
-    let hys = src ? scaleHingeY(src[0], src[1], dh) : hingePositions(dh, dw, !!m.kitchen || midRow);
+    // Макс 01.11: низкий ряд шкафа (200…360) — 2 петли, как в низких фасадах кухни: третья «за ширину» при 200 мм упирается в соседние планки 53 мм; ручные высоты на такой ряд не масштабируем
+    const lowRow = !m.kitchen && dh < RULES.doorMinH;
+    let hys = lowRow ? hingePositions(dh, dw, true) : src ? scaleHingeY(src[0], src[1], dh) : hingePositions(dh, dw, !!m.kitchen || midRow);
     // кухня: высоты проекта, пересчитанные под другую высоту фасада, сбились (не по порядку, ближе планки 53 мм, вне фасада) —
     // столько же петель, сколько разных высот в проекте (студия не добавляет петель), равномерно с отступом правила от краёв;
     // не теснее планки 53 мм. При высоте фасада как в проекте высоты Базиса не трогаем.
@@ -2823,11 +2828,12 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
     if(s.handleFloor!==undefined&&(!Array.isArray(s.handleFloor)||s.handleFloor.length>Math.max(8,2*doorRowCount(m,s))||s.handleFloor.some(v=>v!==null&&(typeof v!=='number'||!Number.isFinite(v)||v<0||v>5000))))errors.push(prefix+'неверная высота ручки от пола.');
     if(s.handlePos!==undefined&&(!Array.isArray(s.handlePos)||s.handlePos.length>Math.max(8,2*doorRowCount(m,s))||s.handlePos.some(v=>v!==null&&!HANDLE_POS.includes(v))))errors.push(prefix+'неверное расположение ручки.');
     if(s.externalDrawers!==undefined&&typeof s.externalDrawers!=='boolean')errors.push(prefix+'неверное расположение ящиков.');
+    if(s.drawersToRow!==undefined&&typeof s.drawersToRow!=='boolean')errors.push(prefix+'неверная привязка ящиков к ряду.');
     if(s.drawerGrip!==undefined&&typeof s.drawerGrip!=='boolean')errors.push(prefix+'неверный зазор между ящиками.');
     if(s.drawerGrip)for(let j=0;j<s.drawers;j++){const c=drawerConfig(m,s,j);if(drawerGripOn(m,s,c)&&drawerBoxHeight(m,s,c)<60)errors.push(prefix+'ящик '+(j+1)+': при зазоре 30 мм короб ниже 60 мм — увеличьте ящик.');}
-    // кухня: фасады от 200 мм (антресоль Базиса k13 m02 в два ряда по 342; n3-antresol); шкафы — doorMinH
-    const splitMin=m.kitchen?200:RULES.doorMinH;
-    if(s.doorSplit!==undefined&&(!Number.isFinite(s.doorSplit)||s.doorSplit<splitMin||s.doorSplit>m.height-splitMin))errors.push(prefix+'недопустимая высота разделения фасадов.');
+    // кухня: фасады от 200 мм (антресоль Базиса k13 m02 в два ряда по 342; n3-antresol); шкафы — ряд от doorRowMinH (Макс 01.11)
+    const splitMin=m.kitchen?200:RULES.doorRowMinH;
+    if(s.doorSplit!==undefined&&(!Number.isFinite(s.doorSplit)||s.doorSplit<splitMin||s.doorSplit>m.height-splitMin))errors.push(prefix+(m.kitchen||!Number.isFinite(s.doorSplit)?'недопустимая высота разделения фасадов.':s.doorSplit<splitMin?`нижний ряд фасадов ниже ${splitMin} мм.`:`нижний ряд фасадов ${Math.round(s.doorSplit)} мм не оставляет места верхнему (от ${splitMin} мм): уменьшите нижний ряд или увеличьте высоту.`));
     if(s.doorNiche!==undefined&&(s.doorSplit===undefined||!Number.isFinite(s.doorNiche)||s.doorNiche<0||s.doorSplit+s.doorNiche>m.height-200))errors.push(prefix+(m.kitchen?'ниша под технику: только у кухни с разделёнными фасадами, верхний ряд не ниже 200 мм.':'проём между рядами фасадов: только при разделённых фасадах, верхний ряд не ниже 200 мм.'));
     // шкаф (заказ 7442203): ящики в проёме между рядами фасадов — фасады ящиков не выходят за проём (не наезжают на двери)
     if(nicheDrawers(m,s)&&s.drawers>0&&m.doorMount!=='inset'){const g=s.doorGap??fb(m),lo=facadeBottom(m)+s.doorSplit!-g/2,hi=lo+s.doorNiche!;let bad=false;for(let j=0;j<s.drawers;j++){const c=drawerConfig(m,s,j),sp=drawerFaceSpan(m,s,c),y0=b.bottom+drawerOffsets(s)[j]+sp[0],y1=b.bottom+drawerOffsets(s)[j]+sp[1];if(!c.mesh&&!c.noFacade&&(y0<lo+g/2-0.5||y1>hi-g/2+0.5))bad=true;}if(bad)errors.push(prefix+`ящики в проёме между рядами фасадов: фасады ящиков должны быть в проёме ${Math.round(lo)}–${Math.round(hi)} мм от пола (сместите ящики или измените высоту нижнего ряда).`);}
@@ -2839,11 +2845,11 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
     if(s.doorGap!==undefined&&(!Number.isFinite(s.doorGap)||s.doorGap<2||s.doorGap>10))errors.push(prefix+'зазор створок от 2 до 10 мм.');
     if(s.removedDoors!==undefined&&(!Array.isArray(s.removedDoors)||s.removedDoors.some(k=>!Number.isInteger(k)||k<0||k>2*doorRowCount(m,s)-1)))errors.push(prefix+'неверный список снятых фасадов.');
     if(s.hingeless!==undefined&&(!m.kitchen||!Array.isArray(s.hingeless)||s.hingeless.some(k=>!Number.isInteger(k)||k<0||k>2*doorRowCount(m,s)-1)))errors.push(prefix+'фасады без петель: только у кухни, номера створок секции.');
-    // Макс 01.11: ряды и у шкафа; кухня — фасады от 100/200 (пенал Базиса), шкаф — правило цеха doorMinH для любого ряда
-    const rowMin=m.kitchen?100:RULES.doorMinH,topMin=m.kitchen?200:RULES.doorMinH;
-    if(s.doorRows!==undefined&&(doorRowsBlock(m)||s.doorSplit===undefined||!Array.isArray(s.doorRows)||s.doorRows.length>3||s.doorRows.some(h=>!Number.isFinite(h)||h<rowMin)||s.doorSplit+(s.doorNiche??0)+s.doorRows.reduce((a,h)=>a+h+3,0)>m.height-topMin))errors.push(prefix+(doorRowsBlock(m)??`ряды фасадов: при разделённых фасадах, не больше 5 рядов, средний ряд от ${rowMin} мм, верхний не ниже ${topMin} мм.`));
+    // Макс 01.11: ряды и у шкафа; кухня — фасады от 100/200 (пенал Базиса), шкаф — любой ряд от doorRowMinH (200)
+    const rowMin=m.kitchen?100:RULES.doorRowMinH,topMin=m.kitchen?200:RULES.doorRowMinH;
+    if(s.doorRows!==undefined&&(doorRowsBlock(m)||s.doorSplit===undefined||!Array.isArray(s.doorRows)||s.doorRows.length>3||s.doorRows.some(h=>!Number.isFinite(h)||h<rowMin)||(!!m.kitchen&&s.doorSplit+(s.doorNiche??0)+s.doorRows.reduce((a,h)=>a+h+3,0)>m.height-topMin)))errors.push(prefix+(doorRowsBlock(m)??`ряды фасадов: при разделённых фасадах, не больше 5 рядов, средний ряд от ${rowMin} мм, верхний не ниже ${topMin} мм.`));
     // верхний ряд — по фактической высоте фасада (от верха средних рядов до верха фасадов), а не от высоты корпуса
-    else if(s.doorRows!==undefined&&(!m.kitchen||(m.doorMount!=='inset'&&!s.externalDrawers))){const up=doorBands(m,s,b).at(-1)!,rest=up[1]-up[0];if(Number.isFinite(up[0])&&rest<topMin)errors.push(prefix+`верхний ряд фасадов ${Math.round(rest)} мм — меньше ${topMin} мм: уменьшите нижние ряды или увеличьте высоту.`);}
+    else if(s.doorRows!==undefined&&(!m.kitchen||(m.doorMount!=='inset'&&!s.externalDrawers))){const up=doorBands(m,s,b).at(-1)!,rest=up[1]-up[0];if(Number.isFinite(up[0])&&rest<topMin)errors.push(prefix+(rest<=0?`верхний ряд фасадов не помещается: нижние ряды занимают всю высоту фасадов, а ему нужно от ${topMin} мм. Уменьшите нижние ряды или увеличьте высоту.`:`верхний ряд фасадов ${Math.round(rest)} мм — меньше ${topMin} мм: уменьшите нижние ряды или увеличьте высоту.`));}
     // кухня: ручные высоты петель — в пределах фасада 40…H−40 (H — высота фасада, при которой они записаны); вне — ошибка, а не тихий кламп scaleHingeY (аудит 11.10)
     if(m.kitchen&&s.hingeY?.length){const H=s.hingeYFor??facadeTop(m)-facadeBottom(m);if(s.hingeY.some(y=>!Number.isFinite(y)||y<40-0.5||y>H-40+0.5))errors.push(prefix+`петля вне фасада: высоты петель от 40 до ${Math.round(H-40)} мм от низа фасада.`);}
     if(s.hingeYMid!==undefined&&(!m.kitchen||!Array.isArray(s.hingeYMid)||s.hingeYMid.length>(s.doorRows?.length??0)||s.hingeYMid.some(r=>!Array.isArray(r)||r.some(y=>!Number.isFinite(y)))))errors.push(prefix+'высоты петель средних рядов: только у кухни с рядами фасадов.');
@@ -3008,10 +3014,11 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
     if (p.role === "door" && p.width > doorWMax)
       errors.push(`Фасад шире ${doorWMax} мм при высоте ${Math.round(p.length)}. Разделите модуль на секции или уберите фасады.`);
     // кухонные антресоли Базиса — фасады от 247 мм (корпус 250–400); шкафы — правило цеха doorMinH
-    const doorHMin = m.kitchen ? 200 : RULES.doorMinH;
+    const inRows = !m.kitchen && m.sections.find((x) => x.id === p.sectionId)?.doorSplit !== undefined; // Макс 01.11: ряд разделённых фасадов шкафа от 200, цельная дверь — от 360
+    const doorHMin = m.kitchen ? 200 : inRows ? RULES.doorRowMinH : RULES.doorMinH;
     // глухой фасад кухни без петель (k03 m01, k06 m04: под нишей духовки, 116–117 мм) — петли не ставятся, минимум высоты не нужен
     if (p.role === "door" && p.length < doorHMin && m.kitchen?.hinges !== false)
-      errors.push(`Распашной фасад ниже ${doorHMin} мм. Увеличьте высоту корпуса или уберите фасады.`);
+      errors.push(inRows ? `Ряд фасадов ${Math.round(p.length)} мм — ниже ${doorHMin} мм. Измените высоты рядов или увеличьте корпус.` : `Распашной фасад ниже ${doorHMin} мм. Увеличьте высоту корпуса или уберите фасады.`);
     // высота — по листу стекла наполнения (решение Макса 29.10.2026), ширина — по СТП
     if (p.role === "door" && p.material === "alu" && m.alu) {
       const g = aluMaxHeight(m.alu);
@@ -3391,7 +3398,7 @@ export function parseModule(input: unknown): Module {
       ...(Array.isArray(s.hingeless)?{hingeless:s.hingeless.map(Number)}:{}),
       ...(s.drawerGap===undefined?{}:{drawerGap:s.drawerGap}),
       ...(s.drawerCap===undefined?{}:{drawerCap:s.drawerCap}),
-      ...(s.externalDrawers===undefined?{}:{externalDrawers:s.externalDrawers}),...(s.drawerGrip===true?{drawerGrip:true}:{}),
+      ...(s.externalDrawers===undefined?{}:{externalDrawers:s.externalDrawers}),...(s.drawersToRow===undefined?{}:{drawersToRow:s.drawersToRow}),...(s.drawerGrip===true?{drawerGrip:true}:{}),
       ...(s.doorGap===undefined?{}:{doorGap:s.doorGap}),
       ...(s.removedDoors===undefined?{}:{removedDoors:Array.isArray(s.removedDoors)?[...s.removedDoors]:s.removedDoors}),
       shelves: [...s.shelves],

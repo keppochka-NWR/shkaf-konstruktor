@@ -4,6 +4,7 @@
 import { boxes, doorBands, drawerConfig, drawerOffsets, drawersFillRoof, drawersFlushBlock, drawerStackHeight, drawersToRoof, evenDrawerConfigs, facadeBottom, facadeTop, fb, hasDrawerCap, isAutoDrawerLayout, nicheDrawers, parts, rearClear, RULES, type Module, type Section } from "./model";
 import { SLIDES, type DrawerConfig } from "./hardware";
 import { rescaleDoorRows } from "./doorRows";
+import { alignDrawersToRow } from "./drawerRowAlign";
 import { drawersUnderMansard } from "./mansardFit";
 import { fitDrawerIds } from "./partIds";
 
@@ -97,15 +98,22 @@ function fitLength(m: Module, s: Section, c: DrawerConfig): DrawerConfig {
  *  Макс 01.11 «не могу сделать вровень»: у вкладных дверей и у рамки ALU прежняя галочка плоскость не совпадала — вкладная дверь: фасад ящика
  *  тоже вкладной; рамка: фасад ящика в той же рамке (20 мм), иначе лицо на 4 мм глубже; ряды секции — в той же пропорции на новую высоту двери. */
 export function setDrawersOverlay(m: Module, sid: string, on: boolean): void {
+  overlay(m, sid, on);
+  // Макс 01.11: вровень — верх ящиков ещё и на ряду соседней секции (drawerRowAlign.ts); снято — привязки нет
+  const s = sectionOf(m, sid);
+  if (!on) delete s.drawersToRow;
+  else if (s.externalDrawers) { s.drawersToRow = true; alignDrawersToRow(m, s); }
+}
+function overlay(m: Module, sid: string, on: boolean): void {
   const s = sectionOf(m, sid);
   if (on) { const why = drawersFlushBlock(m, s); if (why) throw Error(why); }
   const auto = isAutoDrawerLayout(m, s), stack = s.drawers > 0 ? Array.from({ length: s.drawers }, (_, j) => drawerConfig(m, s, j)) : [];
   const top = stack.reduce((a, c) => a + c.height + RULES.drawerStep, 0);
   const whole = doorBands(m, { ...s, doorSplit: undefined, doorRows: undefined })[0], wasDoor = whole[1] - whole[0];
   // Макс 01.11: ящики подняты от дна на высоту двери — снизу своя дверь, над ящиками своя (тот же механизм, что проём заказа 7442203), иначе нижний
-  // фасад растягивался бы до пола на всю высоту под ящиками. Ниже doorMinH двери снизу не встать — фасад тянется к цоколю, как было.
+  // фасад растягивался бы до пола на всю высоту под ящиками. Ниже ряда doorRowMinH двери снизу не встать — фасад тянется к цоколю, как было.
   const low = s.drawers > 0 ? Math.min(...drawerOffsets(s)) : 0, b = boxes(m).find((x) => x.id === sid)!;
-  if (on && m.doorMount !== "inset" && s.doorSplit === undefined && b.bottom + low - facadeBottom(m) >= RULES.doorMinH) {
+  if (on && m.doorMount !== "inset" && s.doorSplit === undefined && b.bottom + low - facadeBottom(m) >= RULES.doorRowMinH + (s.doorGap ?? fb(m))) {
     if (m.alu) m.aluDrawers = true;
     const g = s.doorGap ?? fb(m); // зазор двери к фасаду ящика снизу и сверху — как между фасадами
     s.doorSplit = b.bottom + low - facadeBottom(m) - g / 2; s.doorNiche = drawerStackHeight(s) - low + g; delete s.externalDrawers; delete s.drawerMount;
@@ -142,7 +150,7 @@ export function fullSectionDrawer(m: Module, sid: string): void {
   s.shelves = []; s.rod = false;
   for (const k of ["pantograph", "rodAt", "rodLower", "pullouts", "glassShelves", "thickShelves", "fixed", "shelfLight", "shelfLights", "shelfDepth"] as const) delete s[k];
   s.drawers = 1; s.drawerCap = false;
-  delete s.drawerMount; delete s.drawerGrip; delete s.doorSplit; delete s.doorNiche; delete s.doorRows; delete s.removedDoors;
+  delete s.drawerMount; delete s.drawerGrip; delete s.doorSplit; delete s.doorNiche; delete s.doorRows; delete s.removedDoors; delete s.drawersToRow;
   if (m.doors) s.externalDrawers = true;
   const { y: _y, facadeH: _f, ...base } = drawerConfig(m, { ...s, drawerConfigs: undefined }, 0); void _y; void _f;
   s.drawerConfigs = [fitLength(m, s, base)];
