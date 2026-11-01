@@ -79,6 +79,20 @@ export function doorPickLabel(m: Module, s: Section, doorId: string): string {
   return "Дверь " + n + (doorRowCount(m, s) > 1 ? ` · ряд ${row + 1}` : "");
 }
 
+/** Смена высоты корпуса (критик 01.11): раньше весь прирост и вся убыль шли верхнему ряду — 5 рядов не проходили 2400→2000, а при росте верхний вырастал втрое.
+ *  Равные ряды остаются равными; заданные вручную стоят, верхний берёт разницу, пока он не ниже doorRowMinH, — иначе тоже в пропорции. Только секции со средними рядами
+ *  и шкафы: у 2 рядов и кухни разрез как был. */
+export function fitDoorRowsAfterResize(m: Module, before: Module): void {
+  if (m.kitchen || m.height === before.height) return;
+  for (const s of m.sections) {
+    const w = before.sections.find((x) => x.id === s.id);
+    if (!w?.doorRows?.length || !s.doorRows?.length || s.doorNiche !== undefined) continue;
+    const hs = doorBands(before, w).map(([a, b]) => b - a), wb = doorBands(before, { ...w, doorSplit: undefined, doorRows: undefined })[0];
+    const equal = Math.max(...hs) - Math.min(...hs) <= 3, up = doorBands(m, s).at(-1)!;
+    if (equal || up[1] - up[0] < RULES.doorRowMinH) rescaleDoorRows(m, s, wb[1] - wb[0]);
+  }
+}
+
 /** После смены низа двери (ящики вровень / за дверью): ряды секции — в той же пропорции на новую высоту, иначе верхний ряд съедало до ошибки. */
 export function rescaleDoorRows(m: Module, s: Section, was: number): void {
   if (s.doorSplit === undefined || s.doorNiche !== undefined) return;
