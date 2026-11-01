@@ -18,7 +18,9 @@
 .radial-item.active:hover, .radial-item.active:focus-visible { color: #fff; }
 .radial-item.danger { color: #b3261e; }
 .radial-item.danger:hover:not(:disabled), .radial-item.danger:focus-visible { background: #b3261e; border-color: #b3261e; color: #fff; }
-.radial-item:disabled { opacity: .4; cursor: not-allowed; }
+/* Макс 01.11: анимация появления с заливкой both перебивала opacity — недоступные пункты выглядели как обычные; серый — конечный кадр своей анимации */
+.radial-item:disabled { opacity: .4; cursor: not-allowed; animation-name: radial-pop-off; }
+@keyframes radial-pop-off { from { opacity: 0; scale: .6; } to { opacity: .4; scale: 1; } }
 .radial-label { position: absolute; white-space: nowrap; font-size: 11px; font-weight: 600; color: #1d2b3a; background: #ffffffee; padding: 2px 6px; border-radius: 6px; pointer-events: none; box-shadow: 0 1px 4px #1b2a4422; }
 .radial-label.below { top: calc(100% + 4px); left: 50%; transform: translateX(-50%); }
 .radial-label.above { bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); }

@@ -27,6 +27,7 @@ import {setDrawerCount,setDrawersOverlay,fullSectionDrawer,fullDrawerFacadeH,dra
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
+import {fitCornerFilling} from './cornerWardrobe';
 import OpeningLayoutEditor from './OpeningLayoutEditor';
 import PartialDividerPanel from './PartialDividerPanel';
 import {setPartialDivider,dividerInfo,dividerBounds,setDividerByShelves,moveDividerEnd,oneLeafAtDivider,announceDividerNotes} from './partialDivider';
@@ -769,7 +770,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     return {next,small,restored};
   }
   /** Размер из поля/плашки размера (и растяжения за угол): колонна и кухонные ящики подстраиваются. */
-  function applyDimension(n:Module,key:'width'|'height'|'depth',v:number){n[key]=v;if(n.corner&&key!=='height'){n.width=v;n.depth=v;}if(n.kitchen?.column&&key!=='width')configureColumn(n);else if(n.kdrawers&&key!=='width')n.kdrawers=refitKDrawers(n,key==='depth'?'depth':'height');}
+  function applyDimension(n:Module,key:'width'|'height'|'depth',v:number){n[key]=v;if(n.corner&&key!=='height'){n.width=v;n.depth=v;fitCornerFilling(n);}if(n.kitchen?.column&&key!=='width')configureColumn(n);else if(n.kdrawers&&key!=='width')n.kdrawers=refitKDrawers(n,key==='depth'?'depth':'height');}
   /** Растяжение за угол (решение Макса 29.10.2026): высота/глубина — как ввод в панели, противоположный край на месте; ширина — по
    *  правилу ряда (planStretch, как ручка «↔»). Итог — один проект (одна отмена); keepMemo — для фиксации, не для показа. */
   function planCorner(pull:CornerPull,keepMemo=false):CornerPlan&{project?:Project;notes?:string[];restored?:boolean}{
@@ -1019,7 +1020,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         {id:'hidden',label:'Скрытые',icon:Spline,hint:'Unihopper, DTC, Premial',active:cur.slide==='gtv0fpo',children:SLIDE_SYSTEMS.filter(s=>s.slide==='gtv0fpo').map(s=>slideItem(s.id))}]};
       const capOn=hasDrawerCap(mod,sec),capItem:RadialItem={id:'drawer-cap',label:capOn?'Убрать полку сверху':'Полка над ящиками',icon:Rows3,disabled:!!mod.kitchen||!!mod.corner||!!mod.raw||(!capOn&&!!sec.drawerConfigs?.every(x=>x.tray)),
         hint:capOn?'Ящики без полки над ними: полку уберут, ящики останутся на месте':'Поставить полку над ящиками; ящики до крыши опустятся под неё',run:()=>{setDrawerCapAt(a.id,c.sid,capOn?'off':'on');}};
-      const drawerItems:RadialItem[]=[slides,{id:'drawer-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого ящика',disabled:!!cfg.noFacade||!!cfg.mesh,run:()=>{setActive(a.id);setHandleFace(`${c.sid}:drawer:${j}:facade`);setModal('handles');}},capItem,...drawerQuickItems(mod,c.sid,quickOps),p.up,p.down,p.copy,p.params,{...p.remove,label:'Удалить ящик',hint:'Ящик целиком: короб, фасад, направляющие. Вернуть — Ctrl+Z',run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,wholeDrawerPid(pid))))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}];
+      const drawerItems:RadialItem[]=[slides,{id:'drawer-handle',label:'Ручка',icon:GripHorizontal,hint:mod.corner?'Фасад ящика вкладной, за дверью: ручка не ставится':'Ручка этого ящика',disabled:!!cfg.noFacade||!!cfg.mesh||!!mod.corner/* Макс 01.11: выбор ручки ящика угла ни в модель, ни в смету не шёл */,run:()=>{setActive(a.id);setHandleFace(`${c.sid}:drawer:${j}:facade`);setModal('handles');}},capItem,...drawerQuickItems(mod,c.sid,quickOps),p.up,p.down,p.copy,p.params,{...p.remove,label:'Удалить ящик',hint:'Ящик целиком: короб, фасад, направляющие. Вернуть — Ctrl+Z',run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,wholeDrawerPid(pid))))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}];
       return {title:'Ящик '+(j+1),subtitle:mod.name+' · '+cur.label,items:pid.endsWith(':facade')?
         [...facadeMenu([editFacade,drawerItems[1],...drawerQuickItems(mod,c.sid,quickOps),cutItem,...cutCopy]),{id:'drawer',label:'Ящик',icon:Archive,hint:'Направляющие и положение ящика',children:drawerItems.filter(item=>item.id!=='drawer-handle'&&item.id!=='drawer-mount'&&item.id!=='drawer-even')}]:[...drawerItems,...(canCut?[cutItem,...cutCopy]:[]),body]};
     }

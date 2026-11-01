@@ -627,7 +627,8 @@ export function Scene(p: Props) {
           // Цилиндр-заглушка только для деталей без модели: модель из Blender (part.model) — дочерний объект меша и унаследовала бы его поворот.
           // процедурная модель фурнитуры без сетки (hardwareModels.ts): профиль Gola, штанга, направляющая, эксцентрик, шкант, толкатель —
           // невидимый бокс детали для выбора + модель внутри; бокс не поворачивается (у модели свои оси)
-          const proc = procModel(part, { left: part.position[0] < m.width / 2, headSign: (() => {
+          // Макс 01.11: блоки угла зеркальны и повёрнуты, по «x левее середины корпуса» стенка внутренней направляющей смотрела к ящику, а не к перегородке
+          const proc = procModel(part, { left: m.corner ? part.id.endsWith(part.rotY ? ":slide:left" : ":slide:right") : part.position[0] < m.width / 2, headSign: (() => {
             if (!part.id.startsWith("ecc:") || !part.id.endsWith(":pin")) return undefined;
             const cam = byId.get(part.id.slice(0, -4)), ax = part.size.indexOf(Math.max(...part.size));
             return cam && cam.position[ax] < part.position[ax] ? -1 : 1;
@@ -777,7 +778,7 @@ export function Scene(p: Props) {
           let slide:{key:string;travel:number;open:boolean;wide:boolean}|undefined;
           {const kd=/^(kd:(\d+))(?::|$)/.exec(part.id),sd=/^((.+?):drawer:(\d+))(?::|$)/.exec(part.id);
             if(kd){const k=m.kdrawers?.[Number(kd[2])];if(k)slide={key:kd[1],travel:(k.box?k.box.len:(k.len??500))*.9,open:active&&state.openDoors,wide:true};}
-            else if(sd){const section=m.sections.find(s=>s.id===sd[2]),j=Number(sd[3]);if(section&&j<section.drawers)slide={key:sd[1],travel:drawerConfig(m,section,j).length*.8,open:active&&!!preview&&(state.openDoors||!m.doors)&&preview.sid===sd[2]&&preview.index===j,wide:!m.doors};}}
+            else if(sd){const section=m.sections.find(s=>s.id===sd[2]),j=Number(sd[3]);if(section&&j<section.drawers)slide={key:sd[1],travel:drawerConfig(m,section,j).length*.8,open:active&&!!preview&&(state.openDoors||!m.doors)&&preview.sid===sd[2]&&preview.index===j,wide:!m.doors&&!m.corner/* Макс 01.11: блоки угла едут навстречу — только по одному ящику */};}}
           const slidesWith=slide&&!part.id.includes(':slide:')&&!part.id.includes(':screw:run')&&!part.id.includes(':screw:fx3');
           // направляющая с процедурной моделью: сама деталь стоит в корпусе, подвижные звенья выезжают вместе с ящиком (на тот же ход)
           if(proc&&slide&&part.id.includes(':slide:')){const s=slide;proc.traverse(o=>{const dz=o.userData.slide==='run'?s.travel:o.userData.slide==='mid'?s.travel/2:0;if(dz){const base=o.position.clone();openMove(placed.id,s.key,s.open,s.wide,e=>{o.position.set(base.x,base.y,base.z+dz*e);});}});}
