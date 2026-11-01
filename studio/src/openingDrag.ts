@@ -47,6 +47,26 @@ export function snapOpening(room: R, id: string, s: number, sill: number, o2: { 
   }
   return { s: r1(ns), sill: r1(nsill), what };
 }
+/** Место в пределах стены и потолка (критик 31.10: набор «от угла;от пола» — сразу в пределах, видно на экране): s — 0…длина стены −
+ *  ширина, подоконник — 0…высота комнаты − высота проёма (у двери не меняется). */
+export function clampOpening(room: R, id: string, s: number, sill: number): { s: number; sill: number } {
+  const o = (room.openings ?? []).find((x) => x.id === id);
+  if (!o) return { s, sill };
+  const L = openingSpot(room, o).len;
+  return { s: r1(Math.max(0, Math.min(L - o.width, s))), sill: o.type === "window" ? r1(Math.max(0, Math.min(room.height - o.height, sill))) : o.sill };
+}
+/** Проём на месте (s, sill) пересекается с другим проёмом той же стены — текст для красной плашки; null — свободно. */
+export function openingOverlap(room: R, id: string, s: number, sill: number): string | null {
+  const o = (room.openings ?? []).find((x) => x.id === id);
+  if (!o) return null;
+  const e = openingSpot(room, o).edge;
+  for (const [i, x] of (room.openings ?? []).entries()) {
+    if (x.id === id) continue;
+    const q = openingSpot(room, x);
+    if (q.edge === e && s < q.s + x.width - 0.1 && s + o.width > q.s + 0.1 && sill < x.sill + x.height - 0.1 && sill + o.height > x.sill + 0.1) return `пересекается с ${x.type === "door" ? "дверью" : "окном"} ${i + 1}`;
+  }
+  return null;
+}
 /** Набор «отступ;от пола» (подпись «от угла» и «от пола»); одно число — только отступ. null — не число. */
 export function parseOpeningTyped(t: string): { offset: number; sill?: number } | null {
   const m = /^\s*(\d+(?:[.,]\d+)?)\s*(?:;\s*(\d+(?:[.,]\d+)?)\s*)?$/.exec(t);

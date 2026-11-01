@@ -3,8 +3,9 @@ import {applianceModel,APPLIANCE_MODEL_TYPES} from './applianceGeometry';
 import {surfacePoint} from './roomSurvey';
 import {hiddenWalls,roomEdges,edgeVisible,readCutaway,hiddenEdges,outlineEdges,type CutawayWall,type CutKey} from './roomCutaway';
 import {edgePanels,edgeLegacyWall,floorPolygon,openingEdge,wallFace,wallPrism,wallSpot,type OnWall} from './roomEdges';
-import {edgeLength,edgeTangent,roomOutline,type RoomOutline} from './roomOutline';
-import {openingSpot,snapOpening,edgeOffset,parseOpeningTyped} from './openingDrag';
+import {edgeLength,edgeTangent,roomOutline,projectToEdges,edgeArc,type RoomOutline} from './roomOutline';
+const edgeArcOf=(o:RoomOutline,i:number)=>edgeArc(o[i],o[(i+1)%o.length],o[i].bulge??0);
+import {openingSpot,snapOpening,edgeOffset,parseOpeningTyped,clampOpening,openingOverlap} from './openingDrag';
 import {finishById,floorUv,wallUv,defaultAlong,type FinishUnit} from './roomFinishes';
 import {drawFinish,FINISH_TEXTURE_PX} from './finishTextures';
 import {facadeHandleId} from './model';
@@ -1304,42 +1305,57 @@ export function Scene(p: Props) {
     const footMat=new THREE.MeshBasicMaterial({color:0x2f9e44,transparent:true,opacity:.32,depthTest:false,depthWrite:false,side:THREE.DoubleSide}),foot=new THREE.Mesh(new THREE.BufferGeometry(),footMat);foot.visible=false;foot.renderOrder=99;foot.rotation.x=-Math.PI/2;foot.position.y=1;foot.userData.footprint=true;scene.add(foot);
     // тяга окна/двери (Макс 31.10): плоскость стены (сверху — пол), сдвиг вдоль стены и по высоте с привязками; детали проёма едут на
     // экране, правка — при отпускании или по набору «от угла;от пола» + Enter (одна отмена)
-    let odrag:{id:string;plane:THREE.Plane;anchor:THREE.Vector3;t:THREE.Vector3;start:{s:number;sill:number};at:{s:number;sill:number};point:[number,number];moved:boolean;typed:string;what:string[];meshes:{o:THREE.Object3D;base:THREE.Vector3}[];mouse:[number,number]}|null=null;
+    let odrag:{id:string;plane:THREE.Plane;anchor:THREE.Vector3;t:THREE.Vector3;start:{s:number;sill:number};at:{s:number;sill:number};point:[number,number];moved:boolean;typed:string;what:string[];meshes:{o:THREE.Object3D;base:THREE.Vector3;rot:number}[];mouse:[number,number];bad?:string}|null=null;
     function startOpeningDrag(hit:THREE.Intersection,e:PointerEvent){
       const r=current.current.room!,id=String(hit.object.userData.openingId),o=(r.openings??[]).find(x=>x.id===id);if(!o)return;
       const sp=openingSpot(r,o),tn=edgeTangent(roomOutline(r),sp.edge,Math.min(sp.len,sp.s+o.width/2)),t=new THREE.Vector3(tn.t.x,0,tn.t.z);
       const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(current.current.view==='top'?new THREE.Vector3(0,1,0):new THREE.Vector3(tn.n.x,0,tn.n.z),hit.point),anchor=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,anchor))return;
-      const meshes:{o:THREE.Object3D;base:THREE.Vector3}[]=[];modelGroup.traverse(x=>{if(x.userData.openingId===id)meshes.push({o:x,base:x.position.clone()});});
+      const meshes:{o:THREE.Object3D;base:THREE.Vector3;rot:number}[]=[];modelGroup.traverse(x=>{if(x.userData.openingId===id)meshes.push({o:x,base:x.position.clone(),rot:x.rotation.y});});
       odrag={id,plane,anchor,t,start:{s:sp.s,sill:o.sill},at:{s:sp.s,sill:o.sill},point:[e.clientX,e.clientY],moved:false,typed:'',what:[],meshes,mouse:[e.clientX,e.clientY]};
       controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);window.addEventListener('keydown',openingKey,true);
     }
     function showOpening(){
       const d=odrag;if(!d)return;const r=current.current.room!,o=(r.openings??[]).find(x=>x.id===d.id);if(!o)return;
-      const v=d.t.clone().multiplyScalar(d.at.s-d.start.s).add(new THREE.Vector3(0,d.at.sill-d.start.sill,0));for(const m of d.meshes)m.o.position.copy(m.base).add(v);needsRender=true;
-      const rr=target.getBoundingClientRect();badge.hidden=false;badge.classList.remove('invalid');
+      // по дуге — по дуге (критик 31.10): детали проёма переносятся из точки стены в точку стены с поворотом по касательной
+      const ol=roomOutline(r),edge=openingSpot(r,o).edge,w0=wallSpot(ol,edge,d.start.s+o.width/2),w1=wallSpot(ol,edge,d.at.s+o.width/2),so=sceneOrigin??{x:0,z:0};
+      const da=Math.atan2(-w1.t.z,w1.t.x)-Math.atan2(-w0.t.z,w0.t.x),cs=Math.cos(da),sn=Math.sin(da),dy=d.at.sill-d.start.sill;
+      for(const m of d.meshes){const rx=m.base.x-(w0.p.x-so.x),rz=m.base.z-(w0.p.z-so.z);m.o.position.set(w1.p.x-so.x+rx*cs+rz*sn,m.base.y+dy,w1.p.z-so.z-rx*sn+rz*cs);m.o.rotation.y=m.rot+da;}needsRender=true;
+      d.bad=openingOverlap(r,d.id,d.at.s,d.at.sill)??undefined;
+      const rr=target.getBoundingClientRect();badge.hidden=false;badge.classList.toggle('invalid',!!d.bad);
       Object.assign(badge.style,{left:Math.max(8,Math.min(d.mouse[0]-rr.left,target.clientWidth-8))+'px',top:Math.max(40,d.mouse[1]-rr.top-26)+'px',bottom:'auto',right:'auto',transform:'translate(-50%,-100%)'});
-      badge.textContent=(d.typed?'Набор: '+d.typed+' · ':'')+(o.type==='door'?'Дверь':'Окно')+': '+Math.round(edgeOffset(r,o,d.at.s))+' от угла'+(o.type==='window'?' · '+Math.round(d.at.sill)+' от пола':'')+(d.what.length?' · по: '+d.what.join(', '):'')+' · «от угла;от пола» + Enter — точно';
+      badge.textContent=(d.bad?(o.type==='door'?'Дверь ':'Окно ')+d.bad+' · ':'')+(d.typed?'Набор: '+d.typed+' · ':'')+(o.type==='door'?'Дверь':'Окно')+': '+Math.round(edgeOffset(r,o,d.at.s))+' от угла'+(o.type==='window'?' · '+Math.round(d.at.sill)+' от пола':'')+(d.what.length?' · по: '+d.what.join(', '):'')+' · «от угла;от пола» + Enter — точно';
     }
     function moveOpening(e:PtrLike){
       const d=odrag;if(!d)return;d.mouse=[e.clientX,e.clientY];if(d.typed)return;if(!d.moved&&Math.hypot(e.clientX-d.point[0],e.clientY-d.point[1])<4)return;d.moved=true;
-      cast(e.clientX,e.clientY);const q=new THREE.Vector3();if(!ray.ray.intersectPlane(d.plane,q))return;q.sub(d.anchor);
       const r=current.current.room!,o=(r.openings??[]).find(x=>x.id===d.id),view=current.current.view,vertical=(view==='front'||sideView(view))&&o?.type==='window';
-      const s=snapOpening(r,d.id,d.start.s+q.dot(d.t),d.start.sill+(vertical?q.y:0),{vertical,free:!snapOn()});d.at={s:s.s,sill:s.sill};d.what=s.what;showOpening();
+      cast(e.clientX,e.clientY);const q=new THREE.Vector3();if(!ray.ray.intersectPlane(d.plane,q))return;
+      // вдоль стены: дуга — по проекции курсора на дугу (roomOutline.projectToEdges), прямая — по касательной
+      const ol=roomOutline(r),sp=o?openingSpot(r,o):undefined,arc=!!(sp&&r.outline&&edgeArcOf(ol,sp.edge)),so=sceneOrigin??{x:0,z:0};
+      const want=arc&&sp&&o?projectToEdges(ol,{x:q.x+so.x,z:q.z+so.z},j=>j===sp.edge).s-(projectToEdges(ol,{x:d.anchor.x+so.x,z:d.anchor.z+so.z},j=>j===sp.edge).s-d.start.s):d.start.s+q.clone().sub(d.anchor).dot(d.t);
+      const s=snapOpening(r,d.id,want,d.start.sill+(vertical?q.y-d.anchor.y:0),{vertical,free:!snapOn()});d.at={s:s.s,sill:s.sill};d.what=s.what;showOpening();
     }
     function endOpening(commit:boolean){
       const d=odrag;if(!d)return;odrag=null;window.removeEventListener('keydown',openingKey,true);
-      for(const m of d.meshes)m.o.position.copy(m.base);badge.hidden=true;badge.style.cssText='';controls.enabled=true;needsRender=true;
-      if(commit&&(d.at.s!==d.start.s||d.at.sill!==d.start.sill))current.current.onOpeningMove?.(d.id,d.at);
+      for(const m of d.meshes){m.o.position.copy(m.base);m.o.rotation.y=m.rot;}badge.hidden=true;badge.classList.remove('invalid');badge.style.cssText='';controls.enabled=true;needsRender=true;
+      if(!commit||(d.at.s===d.start.s&&d.at.sill===d.start.sill))return;
+      // отпустили на красном — проём на месте (как у корпуса)
+      if(d.bad){window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Проём не сдвинут',text:'На новом месте проём '+d.bad+'.'}}));return;}
+      current.current.onOpeningMove?.(d.id,d.at);
     }
     function openingKey(e:KeyboardEvent){
       const d=odrag;if(!d)return;
-      if(e.key==='Escape'){e.preventDefault();e.stopPropagation();endOpening(false);return;}
-      if(/^[0-9;.,]$/.test(e.key)||e.key==='Backspace'){e.preventDefault();e.stopPropagation();d.typed=e.key==='Backspace'?d.typed.slice(0,-1):d.typed+e.key;showOpening();return;}
-      if(e.key==='Enter'&&d.typed){e.preventDefault();e.stopPropagation();openingTyped();}
+      const stop=()=>{e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();};
+      if(e.key==='Escape'){stop();endOpening(false);return;}
+      if(/^[0-9;.,]$/.test(e.key)||e.key==='Backspace'){stop();d.typed=e.key==='Backspace'?d.typed.slice(0,-1):d.typed+e.key;
+        // набор сразу на экране и в пределах стены/потолка
+        const t=parseOpeningTyped(d.typed),r=current.current.room!,o=(r.openings??[]).find(x=>x.id===d.id);if(t&&o)d.at=clampOpening(r,d.id,edgeOffset(r,o,t.offset),t.sill??o.sill);showOpening();return;}
+      if(e.key==='Enter'&&d.typed){stop();openingTyped();return;}
+      // во время тяги проёма клавиши сцены и редактора (R — поворот, Delete, W/A/S/D/E — камера и виды) не срабатывают
+      if(['KeyR','KeyW','KeyA','KeyS','KeyD','KeyE','KeyQ','Delete'].includes(e.code)||e.key==='Delete')stop();
     }
-    /** набранное «от угла;от пола» — точно (Enter или отпускание с набором, как у угла корпуса); не число — отказ, проём на месте */
+    /** набранное «от угла;от пола» — точно (Enter или отпускание с набором, как у угла корпуса), в пределах стены и потолка; не число — отказ */
     function openingTyped(){const d=odrag;if(!d)return;const t=parseOpeningTyped(d.typed),r=current.current.room!,o=(r.openings??[]).find(x=>x.id===d.id);
-      if(!t||!o){endOpening(false);window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Проём не сдвинут',text:'Наберите «от угла;от пола», например 600;900.'}}));return;}d.at={s:edgeOffset(r,o,t.offset),sill:o.type==='window'&&t.sill!==undefined?t.sill:o.sill};endOpening(true);}
+      if(!t||!o){endOpening(false);window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Проём не сдвинут',text:'Наберите «от угла;от пола», например 600;900.'}}));return;}d.at=clampOpening(r,d.id,edgeOffset(r,o,t.offset),t.sill??o.sill);d.bad=openingOverlap(r,d.id,d.at.s,d.at.sill)??undefined;endOpening(true);}
     function showFootprint(a:PlacedModule|undefined,at:{x:number;y:number;z:number;rotation?:number},bad:boolean){if(!a){foot.visible=false;return;}const o=sceneOrigin??{x:0,z:0},pts=moduleFootprint({...a,...at,rotation:at.rotation??a.rotation});foot.geometry.dispose();foot.geometry=new THREE.ShapeGeometry(new THREE.Shape(pts.map(p=>new THREE.Vector2(p.x-o.x,-(p.z-o.z)))));footMat.color.set(bad?0xe03131:0x2f9e44);foot.visible=true;}
     function indicateTarget(hit:THREE.Intersection|undefined){
       needsRender=true;targetMaterial.color.set(0x4057ee);
@@ -1370,7 +1386,7 @@ export function Scene(p: Props) {
       cast(e.clientX,e.clientY);const first=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId));
       // окно/дверь (Макс 31.10): тянется вдоль своей стены, окно на видах спереди/сбоку — и по высоте подоконника (openingDrag.ts)
       // проём ближней стены (между камерой и комнатой, обычно скрыт «Ближние стены») не перехватывает щелчок — тянется только стена лицом к камере
-      const facing=(h:THREE.Intersection)=>{const r=current.current.room,o=r?.openings?.find(x=>x.id===h.object.userData.openingId);if(!r||!o||!h.object.visible)return false;const sp=openingSpot(r,o),n=edgeTangent(roomOutline(r),sp.edge,Math.min(sp.len,sp.s+o.width/2)).n,dir=camera.getWorldDirection(new THREE.Vector3());return n.x*dir.x+n.z*dir.z<0.05;};
+      const facing=(h:THREE.Intersection)=>{const r=current.current.room,o=r?.openings?.find(x=>x.id===h.object.userData.openingId);if(!r||!o||!h.object.visible)return false;const sp=openingSpot(r,o),n=edgeTangent(roomOutline(r),sp.edge,Math.min(sp.len,sp.s+o.width/2)).n,dir=camera.getWorldDirection(new THREE.Vector3());return n.x*dir.x+n.z*dir.z<-0.2||Math.abs(dir.y)>0.9;}; // стена лицом к камере; окно боковой стены, видное с ребра, щелчок не перехватывает (критик 31.10)
       const oh=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.openingId?facing(h):(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId)));
       if(oh?.object.userData.openingId&&current.current.onOpeningMove&&current.current.room&&(current.current.mode==='move'||current.current.mode==='select')){startOpeningDrag(oh,e);return;}
       if(first?.object.userData.obstacleId){current.current.onObstacleSelect(first.object.userData.obstacleId);return;}
@@ -1413,7 +1429,7 @@ export function Scene(p: Props) {
         // сбоку высота — только если ход по вертикали главный и > 15 px (дрожание руки не поднимает корпус с пола)
         const lockY=sideView(current.current.view)&&!sideHeightFree(e.clientX-drag.point[0],e.clientY-drag.point[1]);
         const raw={x:drag.origin.x+point.x,y:lockY?drag.origin.y:current.current.view==='front'||sideView(current.current.view)?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:drag.origin.z+point.z};
-        const mode=snapMode(e,snapOn()),look=lookNow(),da=current.current.arrangement.find(a=>a.id===drag!.mid);let next:{x:number;y:number;z:number},hit:PointHit|undefined;
+        const mode=snapMode(e,snapOn()),look=lookNow(),da=current.current.arrangement.find(a=>a.id===drag!.mid);let next:{x:number;y:number;z:number},hit:PointHit|undefined,onGuide=false;
         if(isPointMode(mode)&&look&&da){
           // Alt/Ctrl: угол корпуса, ближайший к месту захвата, — на линию / в пересечение (корпуса, что едут вместе, не в счёт)
           const s=current.current,d=drag;
@@ -1425,7 +1441,7 @@ export function Scene(p: Props) {
         else{
           next=current.current.snap(drag.mid,raw);
           // края корпуса — к вспомогательным линиям этого вида (Q), ближе обычной привязки
-          if(da)next=snapMoveToGuides(da,raw,next,viewGuides(),snapTol());
+          if(da){const g=snapMoveToGuides(da,raw,next,viewGuides(),snapTol());onGuide=g.x!==next.x||g.y!==next.y||g.z!==next.z;next=g;}
         }
         // контур: после линий Q, Alt/Ctrl и без привязки — корпус упирается в стену, а не проходит сквозь скос (критик 30.10)
         if(current.current.keepIn)next={...current.current.keepIn(drag.mid,next),y:next.y};
@@ -1436,7 +1452,7 @@ export function Scene(p: Props) {
         // физика расстановки (Макс 31.10, placement.settleDrag): одиночный корпус — на полу или на модуле, навесной — спиной к стене, в соседа
         // упирается, у стены разворачивается к ней спиной; группа и композиция едут как есть (проверка — при отпускании)
         const single=!current.current.moveAll&&!(dragGroup(drag)?.includes(drag.mid)&&(dragGroup(drag)?.length??0)>1);let rot:number|undefined;
-        if(single&&current.current.settle){const st=current.current.settle(drag.mid,next,{view:current.current.view,free:mode==='free',point:!!hit});next={x:st.x,y:st.y,z:st.z};if(st.rotation!==undefined&&st.rotation!==(da?.rotation??0))rot=st.rotation;}
+        if(single&&current.current.settle){const st=current.current.settle(drag.mid,next,{view:current.current.view,free:mode==='free',point:isPointMode(mode)||onGuide/* Alt/Ctrl зажат или линия Q поймала — физика не сдёргивает с линии (критик 31.10) */});next={x:st.x,y:st.y,z:st.z};if(st.rotation!==undefined&&st.rotation!==(da?.rotation??0))rot=st.rotation;}
         drag.candidate=rot===undefined?next:{...next,rotation:rot};for(const [mid,group] of moduleGroups)if(current.current.moveAll||mid===drag.mid||dragGroup(drag)?.includes(drag.mid)&&dragGroup(drag)!.includes(mid)){
           if(mid===drag.mid&&da){const o=sceneOrigin??{x:0,z:0},q=localToRoom({...da,...next,rotation:rot??da.rotation},0,0);group.position.set(q.x-o.x,next.y,q.z-o.z);group.rotation.y=(rot??da.rotation??0)*Math.PI/180;}
           else group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));}
@@ -1469,8 +1485,9 @@ export function Scene(p: Props) {
       if(d.moved){
         if(d.kind==='module'){
           // группа (Shift+протяжка, отмеченные, вся композиция) — отказ целиком, если хоть один корпус упрётся или выйдет из помещения
-          const s=current.current,grouped=s.moveAll||(dragGroup(d)?.includes(d.mid)&&(dragGroup(d)?.length??0)>1),problem=grouped?s.moveProblem(d.mid,d.candidate):undefined;
-          if(problem)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Группа не перенесена',text:problem}}));
+          // отпустили на красном (одиночный корпус тоже, критик 31.10) — корпус на прежнем месте, причина в сообщении
+          const s=current.current,grouped=s.moveAll||(dragGroup(d)?.includes(d.mid)&&(dragGroup(d)?.length??0)>1),problem=s.moveProblem(d.mid,d.candidate);
+          if(problem)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:grouped?'Группа не перенесена':'Корпус не перенесён',text:problem}}));
           else s.onMoveModule(d.mid,d.candidate);
         }
         else if(d.kind==='divider')current.current.onMoveDivider(d.mid,d.sid,d.delta);

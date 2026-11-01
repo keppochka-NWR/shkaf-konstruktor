@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {newProject,projectErrors,type Opening,type Project} from '../src/project';
-import {snapOpening,placeOpening,openingSpot,parseOpeningTyped,ownOffset} from '../src/openingDrag';
+import {snapOpening,placeOpening,openingSpot,parseOpeningTyped,ownOffset,clampOpening,openingOverlap} from '../src/openingDrag';
 import {outlinePreset,withOutline} from '../src/roomOutline';
 
 const win=(id:string,wall:Opening['wall'],offset:number,width=1200,sill=850,height=1400):Opening=>({id,type:'window',wall,offset,width,height,sill});
@@ -45,4 +45,13 @@ test('набор «600;900»', () => {
   assert.deepEqual(parseOpeningTyped('600;900'),{offset:600,sill:900});
   assert.deepEqual(parseOpeningTyped('600'),{offset:600});
   assert.equal(parseOpeningTyped('6x0'),null);
+});
+
+test('набор и тяга окна: в пределах стены и потолка, пересечение с другим проёмом — красное (критик 31.10)', () => {
+  const p=room([win('a','back',500),win('b','back',2500,800)]);
+  assert.deepEqual(clampOpening(p.room,'a',3900,2000),{s:2800,sill:1300},'4000 − 1200 по стене, 2700 − 1400 по высоте');
+  assert.deepEqual(clampOpening(p.room,'a',-50,-10),{s:0,sill:0});
+  assert.match(openingOverlap(p.room,'a',2000,850)!,/пересекается с окном 2/);
+  assert.equal(openingOverlap(p.room,'a',1300,850),null,'вплотную — можно');
+  assert.equal(openingOverlap(p.room,'a',2000,2300-1400+1400),null,'выше окна 2 — можно');
 });

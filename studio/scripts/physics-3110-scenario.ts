@@ -156,6 +156,22 @@ await view("План");
   const m = await one("b");
   check("3г. «План», рывок далеко за стену — корпус упёрся в стену", inside(m) && !(await errorText()), JSON.stringify(m) + " " + (await errorText()));
   await shot("plan-fast");
+  // критик 31.10: потерянный pointerup на «Плане» (pointermove с buttons = 0) — тяга кончается на этом месте, без «Maximum call stack»
+  {
+    const f0 = await one("f"), s3 = await pscr(f0.x + 300, f0.z + 250), t3 = await pscr(f0.x + 300 + 300, f0.z + 250);
+    await page.mouse.move(s3.x, s3.y); await page.mouse.down(); await page.mouse.move(t3.x - 40, t3.y, { steps: 3 });
+    await page.evaluate(([x, y]) => { const s = document.querySelector(".room-plan svg")!; s.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: x, clientY: y, buttons: 0, pointerType: "mouse", pointerId: 1, isPrimary: true })); }, [t3.x, t3.y] as const);
+    await page.waitForTimeout(400); await page.mouse.up(); await page.waitForTimeout(300);
+    const f1 = await one("f");
+    check("3е. «План»: отпускание потерялось (buttons = 0) — тяга кончилась на месте, без ошибки стека", !errors.some((x) => /call stack/i.test(x)) && Math.abs(f1.x - (f0.x + 300)) <= 30 && f1.r === f0.r, `${f0.x} → ${f1.x} r${f1.r} ${errors.join(" | ")}`);
+  }
+  // критик 31.10: шкаф у стены боком не разворачивается при тяге — «Ф» тянем к левой стене, поворот прежний
+  {
+    const f0 = await one("f"), s4 = await pscr(f0.x + 300, f0.z + 250), t4 = await pscr(330, f0.z + 250);
+    await page.mouse.move(s4.x, s4.y); await page.mouse.down(); await page.mouse.move(t4.x, t4.y, { steps: 6 }); await page.mouse.up(); await page.waitForTimeout(400);
+    const f1 = await one("f");
+    check("3ж. «План»: шкаф подведён к левой стене боком — не развернулся", f1.r === f0.r && f1.x < f0.x, `${f0.x}/r${f0.r} → ${f1.x}/r${f1.r}`);
+  }
 }
 // ── 5. окно мышью ── (исходная расстановка заново: окно не закрыто корпусами, переставленными выше)
 await page.goto(url, { timeout: 60000 }); await page.waitForSelector("canvas", { timeout: 60000 }); // чистая загрузка без правок — уход со страницы не сохранит прежнюю расстановку поверх
@@ -181,6 +197,15 @@ await view("Спереди");
   await typeKeys("3200;1000"); await page.keyboard.press("Enter"); await page.mouse.up(); await page.waitForTimeout(500);
   const w3 = (await room())!.openings!.find((o) => o.id === "win")!;
   check("5б. набор «3200;1000» + Enter — окно ровно 3200 от угла и 1000 от пола", w3.offset === 3200 && w3.sill === 1000, `${w3.offset}/${w3.sill}`);
+  {
+    const s5 = await scr(3200 + 300, 1000 + 600, 0);
+    await page.mouse.move(s5.x, s5.y); await page.mouse.down(); await page.mouse.move(s5.x - 20, s5.y - 10, { steps: 3 }); await page.waitForTimeout(150);
+    await typeKeys("3900;2000"); await page.waitForTimeout(150);
+    const live = await page.locator(".drag-badge").innerText().catch(() => "");
+    await page.keyboard.press("r"); await page.keyboard.press("Enter"); await page.mouse.up(); await page.waitForTimeout(500);
+    const w4 = (await room())!.openings!.find((o) => o.id === "win")!;
+    check("5б. набор «3900;2000» — сразу в пределах стены и потолка (3400 от угла, 1500 от пола), R во время тяги не поворачивает", w4.offset === 3400 && w4.sill === 1500 && /3400 от угла · 1500 от пола/.test(live) && (await arr()).every((a) => a.r === 0 || a.id === "h"), `${w4.offset}/${w4.sill} «${live}»`);
+  }
 }
 await view("План");
 {
