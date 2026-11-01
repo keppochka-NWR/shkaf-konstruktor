@@ -5,6 +5,9 @@
 //  4. «Открыть фасады» работает без выбранного корпуса; R и Esc видны на 1366.
 //  5. Колонки приглушены только пока тянут корпус; линия Q и потеря фокуса окна не оставляют их приглушёнными.
 //  6. Клавиши видов в пустой комнате; свёрнутая колонка показывает все корпуса.
+//  7. Макс 01.11, «иконки непонятные, вернём текст»: у каждой кнопки полосы виден текст, значков в полосе нет; у каждой кнопки колонки — подпись; колонка не уходит на строку клавиш.
+//  8. Макс 01.11, общий стиль: плашка детали и полоса подсветки — белые, в сцене, не на строке клавиш, текст кнопок в одну строку, одна синяя кнопка.
+//  9. Макс 01.11, «параметры ящика открывают параметры секции»: мышью выбрать ящик в сцене → «Параметры» → видны и подсвечены поля этого ящика; то же у полки, штанги и двери.
 import { chromium, type Page } from "playwright";
 import { mkdirSync } from "node:fs";
 import { initialModule, section, id, type Module } from "../src/model";
@@ -45,14 +48,21 @@ const probe = `(function(){
     coveredStage:list('.stage-step,.stage-actions button,.stage-advanced').filter(function(e){return !e.disabled&&!hit(e);}).map(name),
     coveredHeader:list('.header button').filter(function(e){return !hit(e);}).map(name),
     offHeader:list('.header button').filter(function(e){var r=e.getBoundingClientRect();return r.right>innerWidth+0.5||r.left<-0.5;}).map(name),
-    clipped:list('.scene-toolbar button').filter(function(e){var r=e.getBoundingClientRect();return r.left<bar.left-0.5||r.right>bar.right+0.5;}).map(name),
+    clipped:list('.scene-toolbar button').filter(function(e){var r=e.getBoundingClientRect();return r.left<bar.left-0.5||r.right>bar.right+0.5||r.top<bar.top-0.5||r.bottom>bar.bottom+0.5;}).map(name),
+    noText:list('.scene-toolbar button').filter(function(e){return !e.innerText.trim()||e.scrollWidth>e.clientWidth+1||e.querySelector('svg')||getComputedStyle(e).fontSize==='0px';}).map(name),
+    toolbarButtons:list('.scene-toolbar button').length,
+    sceneUnderBar:(function(){var s=document.querySelector('.scene');return !s||Math.abs(s.getBoundingClientRect().top-bar.bottom)<=1.5;})(),
+    noCap:list('.scene-tools button').filter(function(e){var c=e.querySelector('.tool-cap');return !c||!c.innerText.trim()||c.scrollWidth>c.clientWidth+1||!e.querySelector('svg');}).map(name),
+    toolsScroll:(function(){var t=document.querySelector('.scene-tools');return t?t.scrollHeight-t.clientHeight:0;})(),
+    toolsW:(function(){var t=document.querySelector('.scene-tools');return t?Math.round(t.getBoundingClientRect().width):0;})(),
+    toolsOverKeys:(function(){var t=document.querySelector('.scene-tools'),k=document.querySelector('.key-hints');return !!t&&!!k&&t.getBoundingClientRect().bottom>k.getBoundingClientRect().top+0.5;})(),
     toolbarScroll:document.querySelector('.scene-toolbar').scrollWidth-document.querySelector('.scene-toolbar').clientWidth,
     scene:Math.round(document.querySelector('.viewport').getBoundingClientRect().width),
     keys:list('.key-hints kbd').map(function(e){return e.textContent;}).join(' '),
     keysClipped:(function(){var s=document.querySelector('.key-hints');if(!s)return false;return s.scrollWidth>s.clientWidth+1;})(),
     labels:list('.scene-toolbar .mode-label').length
   };})()`;
-type Probe = { hscroll: boolean; headerOver: boolean; coveredStage: string[]; coveredHeader: string[]; offHeader: string[]; clipped: string[]; toolbarScroll: number; scene: number; keys: string; keysClipped: boolean; labels: number };
+type Probe = { hscroll: boolean; headerOver: boolean; coveredStage: string[]; coveredHeader: string[]; offHeader: string[]; clipped: string[]; noText: string[]; toolbarButtons: number; sceneUnderBar: boolean; noCap: string[]; toolsScroll: number; toolsW: number; toolsOverKeys: boolean; toolbarScroll: number; scene: number; keys: string; keysClipped: boolean; labels: number };
 const measure = (page: Page) => page.evaluate(probe) as Promise<Probe>;
 
 // 1–2. Шапка, этапы и полоса сцены на всех ширинах
@@ -63,6 +73,8 @@ for (const w of [1024, 1100, 1150, 1200, 1240, 1280, 1366, 1400, 1600, 1920]) {
     check(`${tag}: шапка над этапами, без прокрутки страницы`, !m.hscroll && !m.headerOver);
     check(`${tag}: этапы и шапка не перекрыты`, !m.coveredStage.length && !m.coveredHeader.length && !m.offHeader.length, [...m.coveredStage, ...m.coveredHeader, ...m.offHeader].join(", "));
     check(`${tag}: все кнопки полосы сцены внутри неё`, !m.clipped.length && m.toolbarScroll <= 0, `сцена ${m.scene}, подписей ${m.labels}, ${m.clipped.join(", ")}`);
+    check(`${tag}: у каждой кнопки полосы виден текст, значков нет; сцена под полосой`, !m.noText.length && m.toolbarButtons >= 6 && m.sceneUnderBar, `кнопок ${m.toolbarButtons}: ${m.noText.join(", ")}`);
+    check(`${tag}: у каждой кнопки колонки значок и подпись, колонка 64–72 px, влезает`, !m.noCap.length && m.toolsW >= 64 && m.toolsW <= 72 && m.toolsScroll <= 0 && !m.toolsOverKeys, `ширина ${m.toolsW}, прокрутка ${m.toolsScroll}: ${m.noCap.join(", ")}`);
     if (stage === "bodies") check(`${tag}: строка клавиш помещается, Q видна`, !m.keysClipped && /\bQ\b/.test(m.keys), m.keys);
     if (w === 1366 && stage === "bodies") check("1366: R и Esc на виду", /\bR\b/.test(m.keys) && /Esc/.test(m.keys), m.keys);
     if (w === 1024) {
@@ -78,7 +90,7 @@ for (const w of [1024, 1100, 1150, 1200, 1240, 1280, 1366, 1400, 1600, 1920]) {
 for (const [w, h] of [[1366, 768], [1100, 700], [1024, 700]] as const) {
   const page = await open(w, h, "bodies", { widths: { left: 460, right: 560 } });
   const m = await measure(page);
-  check(`${w}: запомненные 460/560 — сцена ≥ 480, кнопки полосы внутри`, m.scene >= 480 && !m.clipped.length && m.toolbarScroll <= 0, `сцена ${m.scene}: ${m.clipped.join(", ")}`);
+  check(`${w}: запомненные 460/560 — сцена ≥ 480, кнопки полосы внутри и с текстом`, m.scene >= 480 && !m.clipped.length && m.toolbarScroll <= 0 && !m.noText.length && m.sceneUnderBar, `сцена ${m.scene}: ${[...m.clipped, ...m.noText].join(", ")}`);
   await page.close();
 }
 {
@@ -88,7 +100,7 @@ for (const [w, h] of [[1366, 768], [1100, 700], [1024, 700]] as const) {
     await page.mouse.move(b.x + 5, b.y + 300); await page.mouse.down(); await page.mouse.move(b.x + 5 + (side === "left" ? 300 : -300), b.y + 300, { steps: 6 }); await page.mouse.up(); await page.waitForTimeout(300);
   }
   let m = await measure(page);
-  check("1366: колонки растянуты мышью — сцена ≥ 480, кнопки полосы внутри", m.scene >= 480 && !m.clipped.length && m.toolbarScroll <= 0, `сцена ${m.scene}: ${m.clipped.join(", ")}`);
+  check("1366: колонки растянуты мышью — сцена ≥ 480, кнопки полосы внутри и с текстом", m.scene >= 480 && !m.clipped.length && m.toolbarScroll <= 0 && !m.noText.length && m.sceneUnderBar, `сцена ${m.scene}: ${[...m.clipped, ...m.noText].join(", ")}`);
   // 3. двойной щелчок — только своя колонка
   const stored0 = await page.evaluate((k) => localStorage.getItem(k), WIDTHS);
   const rightBefore = (await page.locator(".properties").boundingBox())!.width, leftBefore = (await page.locator(".library").boundingBox())!.width;
@@ -163,6 +175,68 @@ for (const [w, h] of [[1366, 768], [1100, 700], [1024, 700]] as const) {
   check("пустая комната: P — «План»", (await pressed()) === "План" && (await page.locator(".room-plan").count()) === 1, await pressed());
   await page.keyboard.press("e"); await page.waitForTimeout(500);
   check("пустая комната: E — «3D»", (await pressed()) === "3D", await pressed());
+  await page.close();
+}
+
+// 7–9. Плашки в общем стиле и «Параметры» детали: ящик слева, полки и штанга справа, двери
+const filled = (): Project => { const p = project(); const s = section(); s.drawers = 3; s.drawerConfigs = undefined; const s2 = section(); s2.shelves = [0.3, 0.6]; s2.rod = true; const m: Module = { ...initialModule(), name: "Шкаф", width: 1200, height: 2000, depth: 550, doors: true, sections: [s, s2] }; p.modules = [{ id: id(), x: 100, y: 0, z: 3, rotation: 0, module: m }]; return p; };
+const barCheck = `(function(){var bar=document.querySelector('.selection-action-bar'),keys=document.querySelector('.key-hints'),vp=document.querySelector('.viewport');if(!bar)return null;var r=bar.getBoundingClientRect(),v=vp.getBoundingClientRect();var btns=Array.from(bar.querySelectorAll('button'));
+  return {bg:getComputedStyle(bar).backgroundColor,overKeys:r.bottom>keys.getBoundingClientRect().top+0.5,inScene:r.left>=v.left-0.5&&r.right<=v.right+0.5&&r.top>=v.top-0.5,tall:btns.filter(function(b){return b.getBoundingClientRect().height>36;}).map(function(b){return b.innerText;}),primary:btns.filter(function(b){return getComputedStyle(b).backgroundColor==='rgb(50, 91, 238)';}).map(function(b){return b.innerText;}),danger:btns.filter(function(b){return getComputedStyle(b).color==='rgb(180, 35, 24)';}).map(function(b){return b.innerText;})};})()`;
+type BarInfo = { bg: string; overKeys: boolean; inScene: boolean; tall: string[]; primary: string[]; danger: string[] } | null;
+const lit = (page: Page, sel: string) => page.evaluate(`(function(){var el=document.querySelector(${JSON.stringify(sel)});if(!el)return {ok:false,why:'нет блока'};var p=document.querySelector('.properties').getBoundingClientRect(),r=el.getBoundingClientRect();var inner=!!el.closest('details[data-setting]');return {ok:el.classList.contains('ui-highlight')&&el.offsetParent!==null&&r.top>=p.top-1&&r.top<p.bottom-40&&inner,why:(el.classList.contains('ui-highlight')?'':'без подсветки ')+Math.round(r.top)+'/'+Math.round(p.top)+'-'+Math.round(p.bottom),setting:(el.closest('details[data-setting]')||{dataset:{}}).dataset.setting,text:el.innerText.replace(/\\s+/g,' ').slice(0,3000),others:document.querySelectorAll('details[data-setting="Секция"] .ui-highlight,details[data-setting="Секция"].ui-highlight').length};})()`) as Promise<{ ok: boolean; why: string; setting?: string; text?: string; others?: number }>;
+for (const [w, h] of [[1920, 1080], [1366, 768], [1024, 700]] as const) {
+  const page = await open(w, h, "bodies", { p: filled() });
+  await page.getByRole("button", { name: "Спереди", exact: true }).click(); await page.waitForTimeout(900);
+  await page.getByRole("button", { name: "Скрыть фасады", exact: true }).click(); await page.waitForTimeout(300);
+  await page.getByRole("button", { name: "Выбрать", exact: true }).click(); await page.waitForTimeout(300);
+  await page.getByRole("button", { name: "Приблизить выбранный корпус" }).click(); await page.waitForTimeout(1200);
+  // мышью по сцене: щелчками по нижней части корпуса, пока не выбран ящик (модель на разных ширинах стоит по-разному)
+  const box = (await page.locator(".scene canvas").first().boundingBox())!;
+  const part = async () => (await page.locator(".selection-context strong").first().innerText({ timeout: 200 }).catch(() => "")).trim();
+  const pick = async (re: RegExp, xs: number[], ys: number[]) => { for (const dy of ys) for (const dx of xs) { const p = { x: box.x + box.width * dx, y: box.y + box.height * dy }; if (!(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.tagName === "CANVAS", [p.x, p.y]))) continue; await page.mouse.click(p.x, p.y, { delay: 60 }); await page.waitForTimeout(250); if (re.test(await part())) return await part(); } return ""; };
+  const picked = await pick(/^Ящик \d/, [0.46, 0.42, 0.5, 0.38, 0.54], [0.72, 0.68, 0.76, 0.64, 0.8, 0.6, 0.84]);
+  check(`${w}: щелчком в сцене выбран ящик`, !!picked, picked);
+  const params = async () => { await page.getByTestId("selection-params").click(); await page.waitForTimeout(650); };
+  if (picked) {
+    const b = (await page.evaluate(barCheck)) as BarInfo;
+    check(`${w}: плашка детали белая, в сцене, не на строке клавиш, текст кнопок в одну строку`, !!b && b.bg === "rgb(255, 255, 255)" && !b.overKeys && b.inScene && !b.tall.length, JSON.stringify(b));
+    check(`${w}: одна синяя кнопка «Параметры», «Удалить ящик» красная`, !!b && b.primary.join() === "Параметры" && b.danger.join() === "Удалить ящик", JSON.stringify(b && [b.primary, b.danger]));
+    await page.screenshot({ path: `${out}/bar-${w}.png` });
+    await params();
+    const d = await lit(page, '.properties [data-part-params="drawer"]');
+    check(`${w}: «Параметры» ящика — поля ${picked} видны и подсвечены, в разделе «Ящики», не в «Секции»`, d.ok && d.setting === "Ящики" && (d.text ?? "").startsWith(picked) && /Высота боковины ящика/.test(d.text ?? "") && /Направляющие/.test(d.text ?? "") && !d.others, `${d.why}; ${d.setting}; ${(d.text ?? "").slice(0, 60)}`);
+    await page.screenshot({ path: `${out}/params-drawer-${w}.png` });
+  }
+  if (w === 1366) {
+    // полка, штанга, дверь — своим блоком
+    const shelf = await pick(/^Полка/, [0.55, 0.57, 0.53], [0.5, 0.48, 0.46, 0.44, 0.42, 0.4, 0.38, 0.36, 0.52, 0.54, 0.56, 0.58, 0.6, 0.62, 0.64, 0.66]);
+    check("щелчком в сцене выбрана полка", !!shelf, shelf);
+    if (shelf) { await params(); const s = await lit(page, '.properties [data-part-params="shelf"]'); check("«Параметры» полки — её карточка в «Полках» видна и подсвечена", s.ok && s.setting === "Полки" && /Высота выбранной полки/.test(s.text ?? ""), `${shelf}: ${s.why}; ${s.setting}`); }
+    const rodPick = page.locator('button[aria-label="Выбрать: Высота штанги от дна"]').first();
+    await page.evaluate(`document.querySelector('details[data-setting="Штанги"]').open=true`); await rodPick.scrollIntoViewIfNeeded(); await rodPick.click(); await page.waitForTimeout(400);
+    const rodName = await part();
+    await params();
+    const r = await lit(page, '.properties [data-part-params="rod"]');
+    check("«Параметры» штанги — её поля в «Штангах» видны и подсвечены", /Штанга/.test(rodName) && r.ok && r.setting === "Штанги" && /Высота штанги/.test(r.text ?? ""), `${rodName}: ${r.why}; ${r.setting}`);
+    await page.getByRole("button", { name: "Показать фасады", exact: true }).click(); await page.waitForTimeout(300);
+    await page.getByRole("button", { name: "Выбрать", exact: true }).click(); await page.waitForTimeout(200);
+    await page.keyboard.press("Escape"); await page.waitForTimeout(200);
+    await page.mouse.click(box.x + box.width * 0.55, box.y + box.height * 0.42, { delay: 60 }); await page.waitForTimeout(400);
+    const doorName = await part();
+    await params();
+    const dr = await lit(page, '.properties [data-part-params="door"]');
+    check("«Параметры» двери — её поля в «Фасаде» видны и подсвечены", dr.ok && dr.setting === "Фасад" && /Открывание выбранной двери/.test(dr.text ?? ""), `${doorName}: ${dr.why}; ${dr.setting}`);
+    await page.screenshot({ path: `${out}/params-door-${w}.png` });
+  }
+  // полоса подсветки: ПКМ по корпусу › Подсветка › Режим выбора деталей…
+  await page.keyboard.press("Escape"); await page.keyboard.press("Escape"); await page.waitForTimeout(200);
+  await page.locator(".module-item").first().click({ button: "right" }); await page.waitForTimeout(350);
+  const radial = (l: string) => page.locator(".radial-item").filter({ has: page.locator(".radial-label", { hasText: new RegExp("^" + l + "( ›)?$") }) }).first();
+  await radial("Подсветка").click({ timeout: 2000 }).catch(() => {}); await page.waitForTimeout(250);
+  await radial("Режим выбора деталей…").click({ timeout: 2000 }).catch(() => {}); await page.waitForTimeout(400);
+  const l = await page.evaluate(`(function(){var bar=document.querySelector('.light-mode-bar'),keys=document.querySelector('.key-hints'),vp=document.querySelector('.viewport'),tools=document.querySelector('.scene-tools');if(!bar)return null;var r=bar.getBoundingClientRect(),v=vp.getBoundingClientRect(),t=tools.getBoundingClientRect();var btns=Array.from(bar.querySelectorAll('button'));return {bg:getComputedStyle(bar).backgroundColor,overKeys:r.bottom>keys.getBoundingClientRect().top+0.5,inScene:r.left>=v.left-0.5&&r.right<=v.right+0.5,overTools:r.left<t.right,tall:btns.filter(function(b){return b.getBoundingClientRect().height>36;}).map(function(b){return b.innerText;}),done:getComputedStyle(bar.querySelector('button.primary')).backgroundColor};})()`) as { bg: string; overKeys: boolean; inScene: boolean; overTools: boolean; tall: string[]; done: string } | null;
+  check(`${w}: полоса подсветки белая, «Готово» синяя, в сцене, не на колонке и не на клавишах`, !!l && l.bg === "rgb(255, 255, 255)" && l.done === "rgb(50, 91, 238)" && l.inScene && !l.overTools && !l.overKeys && !l.tall.length, JSON.stringify(l));
+  await page.screenshot({ path: `${out}/light-bar-${w}.png` });
   await page.close();
 }
 

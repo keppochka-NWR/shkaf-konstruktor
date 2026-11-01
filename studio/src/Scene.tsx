@@ -1971,7 +1971,7 @@ export function Scene(p: Props) {
       // Подписи размеров не налезают друг на друга: сначала основные размеры, потом проёмы; налезающую сдвигаем
       // вверх/вниз на её высоту, а если места нет — прячем до следующего поворота камеры (аудит вёрстки 06.10.2026).
       const rect=target.getBoundingClientRect();
-      const blocked=Array.from(target.parentElement?.querySelectorAll<HTMLElement>('.view-tabs,.interaction-bar,.scene-tools,.section-picker,.orbit-help,.presentation-tools,.rmb-tip,.light-mode-bar,.clear-guides')??[])
+      const blocked=Array.from(target.parentElement?.querySelectorAll<HTMLElement>('.view-tabs,.interaction-bar,.scene-tools,.section-picker,.orbit-help,.presentation-tools,.rmb-tip,.light-mode-bar,.selection-action-bar,.clear-guides')??[])
         .filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden').map(e=>{const r=e.getBoundingClientRect();return {x:r.left-rect.left+r.width/2,y:r.top-rect.top+r.height/2,w:r.width+12,h:r.height+12};});
       const placed: {x:number;y:number;w:number;h:number}[] = [...blocked];
       // Порядок: ручки растяжения (стоят на боку), плашки зазора (сразу над ручкой), размеры, проёмы.

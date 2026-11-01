@@ -175,7 +175,7 @@ try {
     await shot(`11-3d-gap-${g}`);
   }
   // m7: «Сбоку» — ось ширины вдоль взгляда, ручки в одной точке → скрыты
-  await page.getByRole("button", { name: "Сбоку", exact: true }).click(); await page.waitForTimeout(800);
+  await page.getByRole("button", { name: "Справа", exact: true }).click(); await page.waitForTimeout(800);
   const sideHandles = await page.locator(".stretch-handle").evaluateAll((els) => els.filter((e) => (e as HTMLElement).style.display !== "none").length);
   check("m7: «Сбоку» — ручки скрыты (ось ширины вдоль взгляда)", sideHandles === 0, `видно ручек: ${sideHandles}`);
   await shot("11-side-no-handles");

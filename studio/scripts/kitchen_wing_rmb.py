@@ -5,7 +5,7 @@ import json, sys, os
 sys.stdout.reconfigure(encoding="utf-8")
 from playwright.sync_api import sync_playwright
 PORT, OUT = int(sys.argv[1]), sys.argv[2]
-MENU_JS = """(()=>{const r=[];document.querySelectorAll('button,[role=menuitem]').forEach(e=>{const b=e.getBoundingClientRect();if(b.width>0&&b.x>250&&b.x<1000&&b.y>150&&b.y<720){const t=(e.innerText||e.getAttribute('aria-label')||'').replace(/\\n/g,' ').trim();if(t&&!/^(3D|Спереди|Сбоку|Сверху|План|Выбрать|Двигать корпуса|Наполнение|Свободная камера|Скрыть фасады|Проёмы|Понятно)$/.test(t)&&!/мм$/.test(t))r.push(t.slice(0,70))}});return [...new Set(r)]})()"""
+MENU_JS = """(()=>{const r=[];document.querySelectorAll('button,[role=menuitem]').forEach(e=>{const b=e.getBoundingClientRect();if(b.width>0&&b.x>250&&b.x<1000&&b.y>150&&b.y<720){const t=(e.innerText||e.getAttribute('aria-label')||'').replace(/\\n/g,' ').trim();if(t&&!/^(3D|Спереди|Слева|Справа|Сверху|План|Выбрать|Двигать корпуса|Наполнение|Свободная камера|Скрыть фасады|Проёмы|Понятно)$/.test(t)&&!/мм$/.test(t))r.push(t.slice(0,70))}});return [...new Set(r)]})()"""
 STATE_JS = """(()=>{const s=JSON.parse(localStorage.getItem('garderyob-rooms-v1')||'null');if(!s)return null;const r=s.rooms.find(r=>r.id===s.activeRoomId);return r.project.modules.map(m=>({name:m.module.name,x:m.x,z:m.z,rot:m.rotation||0}))})()"""
 out = {}
 with sync_playwright() as p:

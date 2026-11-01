@@ -4,7 +4,7 @@
 :root{
  --left-col:clamp(248px,calc(10vw + 120px),360px);  /* 1024–1280 → 248, 1366 → 257, 1920 → 312, 2560 → 360 */
  --right-col:clamp(288px,calc(10vw + 160px),400px); /* 1024–1280 → 288, 1366 → 297, 1920 → 352, 2560 → 400; сцена на 1024 — 488 px */
- --rail-w:52px;--toolbar-h:44px;--keys-h:30px;
+ --rail-w:64px;--tools-w:72px;--toolbar-h:44px;--keys-h:30px;--danger:#b42318;--danger-line:#f0c7c2;--bar-shadow:0 2px 8px #1d2b3a14; /* --toolbar-h: 44 — запас до первого замера, дальше SceneToolbar пишет фактическую высоту в .viewport */
  --accent:#325bee;--accent-hover:#2449d6;--accent-soft:#eef2ff;--muted:#5a6b74;--text-muted:#5a6b74;--blue:#325bee;--light:#eef2ff;--accent-line:#c3cff9;--accent-ink:#1f3fb8;
  --neutral-ink:#3b4652;--disabled-ink:#8a96a0;--disabled-bg:#f3f5f7;
 }
@@ -17,9 +17,10 @@
 
 /* ── 1. Верхняя полоса сцены: одна строка, сплошной фон, сцена — под ней ── */
 .app .viewport{container-type:inline-size;container-name:scene}
-.viewport .scene-toolbar{position:absolute;z-index:6;top:0;left:0;right:0;height:var(--toolbar-h);display:flex;align-items:center;gap:2px;padding:0 6px;background:#fff;border-bottom:1px solid var(--line);overflow:auto hidden;scrollbar-width:none}
-.app .scene-toolbar .view-tabs{position:static;display:flex;gap:4px;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;flex:none}
-.app .scene-toolbar .view-tabs .view-button{position:relative;width:32px;height:32px;min-height:0;padding:0;display:grid;place-items:center;border:1px solid transparent;border-radius:6px;background:none;color:var(--text-muted);font-size:0}
+/* Макс 01.11: текст вместо значков — группы переносятся на вторую строку, подписи не прячем ни на какой ширине */
+.viewport .scene-toolbar{position:absolute;z-index:6;top:0;left:0;right:0;min-height:44px;display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:5px 6px;background:#fff;border-bottom:1px solid var(--line)}
+.app .scene-toolbar .view-tabs{position:static;display:flex;gap:2px;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;flex:none}
+.app .scene-toolbar .view-tabs .view-button{position:relative;width:auto;height:auto;min-height:32px;padding:6px 8px;display:inline-flex;align-items:center;border:1px solid transparent;border-radius:6px;background:none;color:var(--neutral-ink);font-size:12px;font-weight:550;white-space:nowrap}
 .app .scene-toolbar .view-tabs .view-button:hover{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
 .app .scene-toolbar .view-tabs .view-button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
 .app .scene-toolbar .view-tabs button[hidden]{display:none}
@@ -31,34 +32,35 @@
 .app .scene-toolbar .interaction-bar .tool-toggle{padding:6px 7px}
 .app .scene-toolbar .interaction-bar .mode-sep{flex:none;width:1px;height:20px;margin:0 4px;background:var(--line)}
 .scene-toolbar .toolbar-end{margin-left:auto;display:flex;align-items:center;gap:4px;flex:none}
-/* Строка со всеми подписями занимает ~805 px (проба scripts/ui-layout-3110-scenario.ts; 1366: сцена 813); уже — подпись только у включённого режима; ещё уже — одни значки.
-   На всякий случай полоса прокручивается (overflow-x), кнопка не бывает недоступной. */
-@container scene (max-width:810px){.app .scene-toolbar .interaction-bar button:not([aria-pressed=true]) .mode-label{display:none}.app .scene-toolbar .interaction-bar button{padding:6px 8px}}
-@container scene (max-width:580px){.app .scene-toolbar .interaction-bar button .mode-label{display:none}.scene-toolbar .toolbar-sep{margin:0 3px}.app .scene-toolbar .view-tabs{gap:2px}}
+/* Узкая сцена: две строки — виды и переключатели сверху, режимы снизу; разделители не нужны, текст чуть мельче (сцена 480: 1024 или растянутые колонки) */
+@container scene (max-width:950px){.scene-toolbar .toolbar-sep{display:none}.app .scene-toolbar .view-tabs{order:1}.app .scene-toolbar .tool-toggles{order:2;margin-left:auto}.app .scene-toolbar .interaction-bar:not(.tool-toggles){order:3;flex-basis:100%}}
+@container scene (max-width:560px){.app .scene-toolbar .view-tabs .view-button,.app .scene-toolbar .interaction-bar button{padding:5px 4px;font-size:11.5px;min-height:30px}.app .scene-toolbar .view-tabs,.app .scene-toolbar .interaction-bar{gap:1px}}
 .app:not(.presentation) .viewport .scene{top:var(--toolbar-h);bottom:var(--keys-h)}.app.empty-room-app:not(.presentation) .viewport .scene{bottom:0} /* в пустой комнате строки клавиш нет */
+/* Макс 01.11: колонка с подписями шире — сцена начинается правее неё: корпус у левой стены и его ручки не прячутся под колонку, «Вписать» центрует по видимой части */
+.app:not(.presentation):not(.empty-room-app) .viewport .scene{left:calc(var(--tools-w) + 8px)}
 .app.presentation .viewport .scene-toolbar{position:absolute}
-.app .viewport .room-plan{inset:calc(var(--toolbar-h) + 10px) 16px 16px calc(var(--rail-w) + 8px)}
+.app .viewport .room-plan{inset:calc(var(--toolbar-h) + 10px) 16px 16px calc(var(--tools-w) + 16px)}
 .app .viewport>.view-header{display:none}
 
 /* ── 2–3. Колонка быстрых действий — слева, сверху «Назад / Вперёд» ── */
-.app .viewport .scene-tools{left:8px;right:auto;top:calc(var(--toolbar-h) + 8px);padding:4px;gap:2px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 2px 8px #1d2b3a0d}
-.app .viewport .scene-tools button{width:32px;height:30px;min-height:28px;flex:none;display:grid;place-items:center;border:1px solid transparent;border-radius:6px;color:var(--text-muted)}.app .viewport .scene-tools button svg{width:16px;height:16px}
+/* Макс 01.11: под каждым значком подпись; колонка 72 px. На низком окне — плотнее; совсем низкое — колонка прокручивается, ничего не обрезается */
+.app .viewport .scene-tools{left:8px;right:auto;top:calc(var(--toolbar-h) + 8px);width:var(--tools-w);padding:3px;gap:0;display:flex;flex-direction:column;max-height:calc(100% - var(--toolbar-h) - var(--keys-h) - 16px);overflow:hidden auto;scrollbar-width:thin;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:var(--bar-shadow)}
+.app .viewport .scene-tools button{width:100%;height:auto;min-height:0;flex:none;padding:3px 1px 2px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:1px;border:1px solid transparent;border-radius:6px;color:var(--text-muted)}.app .viewport .scene-tools button svg{width:15px;height:15px;flex:none}
+.scene-tools .tool-cap{display:block;width:100%;text-align:center;font-size:10px;line-height:11px;font-weight:550;white-space:normal;overflow-wrap:normal;hyphens:none}
+@media (max-height:860px){.app .viewport .scene-tools button{padding:2px 1px 1px;gap:0}.app .viewport .scene-tools button svg{width:13px;height:13px}.scene-tools .tool-cap{font-size:9.5px;line-height:10.5px}}
 .app .viewport .scene-tools button:hover:not(:disabled){background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
 .app .viewport .scene-tools button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent)}
-.app .viewport .scene-tools .tools-sep{flex:none;height:1px;margin:3px 4px;background:var(--line)}
+.app .viewport .scene-tools .tools-sep{flex:none;height:1px;margin:2px 4px;background:var(--line)}
 .app .viewport .scene-tools.plan-only>:not(.history-tool):not(.tools-sep){display:none}
 .app .viewport .scene-tools.plan-only>.tools-sep{display:none}
-/* подпись при наведении — вправо от колонки (колонка у левого края) */
-.app .viewport .scene-tools button[aria-label]:hover::after,.app .viewport .scene-tools button[aria-label]:focus-visible::after{left:calc(100% + 10px);right:auto}
-.app .viewport .scene-tools{overflow:visible}
-@media (max-height:760px){.app .viewport .scene-tools button{height:28px}}
+/* подпись теперь под значком; полное описание и клавиша — в обычной подсказке title (всплывашка aria-label резалась бы прокруткой колонки) */
+.app .viewport .scene-tools button[aria-label]:hover::after,.app .viewport .scene-tools button[aria-label]:focus-visible::after{display:none}
 /* левый край сцены занят колонкой: плашки внизу слева сдвигаем вправо */
-.app .viewport .error-banner,.app .viewport .restore-modules,.app .rmb-tip{left:calc(var(--rail-w) + 12px)}
+.app .viewport .error-banner,.app .viewport .restore-modules,.app .rmb-tip{left:calc(var(--tools-w) + 16px)}
 .app .viewport .error-banner{bottom:calc(var(--keys-h) + 12px)}
 .app .viewport .restore-modules{bottom:calc(var(--keys-h) + 10px)}
 .app .viewport .section-picker{bottom:calc(var(--keys-h) + 10px)}
 .app .viewport .clear-guides{bottom:calc(var(--keys-h) + 10px)}
-.app .viewport .light-mode-bar{top:calc(var(--toolbar-h) + 10px)}
 
 /* ── 4. Клавиши: плашки на сплошной полосе внизу сцены ── */
 .app .viewport .orbit-help.key-hints{position:absolute;left:0;right:0;bottom:0;top:auto;width:auto;height:var(--keys-h);display:flex;align-items:center;justify-content:flex-start;gap:12px;padding:0 10px;margin:0;background:#f7f8fa;border-top:1px solid var(--line);color:#2f3a45;font-size:11.5px;line-height:1;pointer-events:auto;white-space:nowrap;overflow:hidden;flex-wrap:nowrap}
@@ -99,6 +101,53 @@
 .app .library .module-palette .module-kinds button[aria-pressed=true],.app .library .module-palette .catalog-tabs [role=tab][aria-selected=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
 .app .primary:hover:not(:disabled){background:var(--accent-hover)}
 
+/* ── Макс 01.11: «выбивается дизайн» — плашки над сценой в общем стиле: белая поверхность, тонкая рамка, радиус и тень как у колонки быстрых действий ── */
+.app .viewport .selection-action-bar,.app .viewport .light-mode-bar{position:absolute;left:calc(var(--tools-w) + 16px);right:8px;transform:none;width:fit-content;max-width:calc(100% - var(--tools-w) - 24px);margin-inline:auto;background:#fff;color:var(--neutral-ink);border:1px solid var(--line);border-radius:8px;box-shadow:var(--bar-shadow);font-size:12px;line-height:1.3}
+.app .viewport .light-mode-bar{top:calc(var(--toolbar-h) + 8px);padding:6px 8px 6px 10px;z-index:7}
+.app .viewport .light-mode-bar b{color:var(--accent);font-weight:650}
+.app .viewport .light-mode-bar small{color:var(--text-muted);white-space:normal}
+.app .viewport .light-mode-bar small.warn{color:var(--danger)}
+.app .viewport .light-mode-bar2 .lmb-tools{border-top:1px solid var(--line);row-gap:4px}
+.app .viewport .light-mode-bar2 .lmb-group{color:var(--text-muted);white-space:nowrap}
+.app .viewport .light-mode-bar button.primary{flex:none;min-height:30px;padding:4px 14px;border-radius:6px;font-size:12px;font-weight:600;white-space:nowrap;background:var(--accent);color:#fff}
+.app .viewport .light-mode-bar2 button.lmb-chip{min-height:26px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--neutral-ink);font-size:12px;font-weight:550;white-space:nowrap}
+.app .viewport .light-mode-bar2 button.lmb-chip:hover{background:var(--accent-soft);border-color:var(--accent-line)}
+.app .viewport .light-mode-bar2 button.lmb-chip[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+/* плашка выбранной детали — в сцене над строкой клавиш: перенос кнопок целиком, текст в кнопке в одну строку */
+.app .viewport .selection-action-bar{bottom:calc(var(--keys-h) + 8px);z-index:7;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px;padding:5px 6px}
+.app.advanced .viewport .selection-action-bar{bottom:calc(var(--keys-h) + 66px)} /* «Все настройки»: ниже стоят кнопки секций */
+.app .viewport .selection-action-bar .selection-context{flex:0 1 auto;min-width:0;max-width:220px;margin:0 4px;gap:1px;font-size:12px;line-height:1.25}
+.app .viewport .selection-action-bar .selection-context strong{font-weight:650;white-space:nowrap}
+.app .viewport .selection-action-bar .selection-context span{max-width:none;color:var(--text-muted);font-size:11px}
+.app .viewport .selection-action-bar button{flex:none;width:auto;min-height:30px;margin:0;padding:4px 9px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--neutral-ink);font-size:12px;font-weight:550;line-height:1.2;white-space:nowrap}
+.app .viewport .selection-action-bar button:hover{background:var(--accent-soft);border-color:var(--accent-line)}
+.app .viewport .selection-action-bar button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.app .viewport .selection-action-bar button.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.app .viewport .selection-action-bar button.danger{color:var(--danger);border-color:var(--danger-line)}
+.app .viewport .selection-action-bar button.danger:hover{background:#fef3f2;border-color:var(--danger)}
+/* плашка детали заняла низ сцены: кнопка линий Q — вверх, сообщения — над ней, разовая подсказка ждёт */
+.viewport:has(.selection-action-bar) .clear-guides{top:calc(var(--toolbar-h) + 8px);bottom:auto}
+.viewport:has(.selection-action-bar) .error-banner,.viewport:has(.selection-action-bar) .restore-modules{bottom:calc(var(--keys-h) + 60px)}
+.viewport:has(.selection-action-bar) .rmb-tip{display:none}
+/* «Понятно» — та же белая плашка */
+.app .rmb-tip{bottom:calc(var(--keys-h) + 8px);background:#fff;color:var(--neutral-ink);border:1px solid var(--line);border-radius:8px;box-shadow:var(--bar-shadow);font-size:12px;padding:6px 8px 6px 10px}
+.app .rmb-tip b{color:var(--accent);font-weight:650}
+.app .rmb-tip button{flex:none;min-height:28px;padding:3px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--neutral-ink);font-size:12px;font-weight:550;white-space:nowrap}
+.app .rmb-tip button:hover{background:var(--accent-soft);border-color:var(--accent-line)}
+/* свой блок ящика в панели справа: «Ящик N» и его поля; карточка выбранной детали — без второго заголовка */
+.app .drawer-tabs button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}.app .drawer-tabs button[aria-pressed=true] small{color:var(--accent-ink)}
+.app .drawer-own{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.app .drawer-own>h4{margin:0 0 8px;font-size:13px;font-weight:650;color:var(--accent-ink)}
+.app .drawer-own>.selected-filling{margin:10px 0 0}.app .drawer-own>.selected-filling>span:first-child{display:none}
+/* сообщения и предупреждения сцены: белая плашка, смысл — цветной полосой слева (было кремовое с коричневым) */
+.app .viewport .error-banner{background:#fff;border:1px solid var(--line);border-left:3px solid var(--danger);border-radius:8px;box-shadow:var(--bar-shadow);padding:10px 12px;color:var(--neutral-ink)}
+.app .viewport .error-banner.place-note{border-left-color:var(--accent)}
+.app .viewport .error-banner>svg{color:var(--danger)}.app .viewport .error-banner.place-note>svg{color:var(--accent)}
+.app .viewport .error-banner button:hover{background:var(--accent-soft)}
+.app .viewport .error-list .error-place{color:var(--neutral-ink)}.app .viewport .error-list .error-fix,.app .viewport .error-list .error-more{color:var(--text-muted)}
+.app .viewport .error-banner .error-show{border-color:var(--line);color:var(--accent-ink)}
+.environment-properties-trigger{background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:var(--bar-shadow);color:var(--neutral-ink);font-size:12px;font-weight:550}
+
 /* ── 11. Недоступно — серым, причина в подсказке ── */
 .app button:disabled,.app button[aria-disabled=true]{color:var(--disabled-ink)!important;cursor:not-allowed;box-shadow:none}
 .app button.primary:disabled{background:#c9ced6!important;border-color:#c9ced6!important;color:#fff!important}
@@ -135,6 +184,7 @@
 .library-rail button{width:36px;height:36px;flex:none;padding:0;display:grid;place-items:center;border-radius:7px;color:#4d5864;background:none;border:1px solid transparent;font:650 12px/1 "Golos Text",Arial,sans-serif}
 .library-rail button:hover{background:#f2f4f7;color:var(--accent)}
 .library-rail button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.library-rail button:has(.tool-cap){width:58px;height:auto;padding:4px 1px 3px;display:flex;flex-direction:column;align-items:center;gap:2px}.library-rail .tool-cap{font-size:10px;line-height:11px;font-weight:550} /* Макс 01.11: подпись под значком */
 .library-rail .rail-sep{width:24px;height:1px;background:var(--line);margin:4px 0;flex:none}
 
 /* ── 8. Помещение в левой колонке ── */
@@ -147,10 +197,6 @@
 
 /* Sims: на время перетаскивания боковые колонки приглушены — видны сцена, размер и клавиши */
 .app .library,.app .properties{transition:opacity .15s}html[data-scene-drag] .app .library,html[data-scene-drag] .app .properties{opacity:.45}
-/* переключатели вида (фасады, проёмы) — всегда значками с подсказкой, подписи у четырёх режимов */
-.app .scene-toolbar .interaction-bar .tool-toggle .mode-label{display:none}
-/* подпись иконки вида — для чтения с экрана и сценариев (hasText «Спереди»), на экране не видна */
-.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important}
 
 /* ── ревью 31.10 (визуал): один акцент и читаемые серые ── */
 .app .stage-step.current,.app .stage-bar{--stage:var(--accent)}

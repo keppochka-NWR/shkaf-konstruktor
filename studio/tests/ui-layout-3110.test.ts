@@ -1,10 +1,12 @@
 // Раскладка экрана (Макс 31.10.2026): клавиша P — «План», меню правой кнопки не заходит на колонку быстрых действий слева,
-// иконки видов — все шесть с клавишами в подсказке.
+// виды — все шесть с клавишами в подсказке (Макс 01.11: подписями, не значками), «Параметры» детали ведут к её собственным полям.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {planShortcut,viewShortcut} from '../src/historyShortcuts';
 import {menuArea} from '../src/contextMenu';
 import {VIEW_BUTTONS} from '../src/SceneToolbar';
+import {partKind,partParamTargets,partSetting} from '../src/partParams';
 import {hasHideableFacades,hiddenWithFacades} from '../src/facadeHide';
 import {fitWidths,MIN_SCENE} from '../src/WorkspacePanels';
 import {initialModule} from '../src/model';
@@ -51,7 +53,36 @@ test('запомненные колонки на меньшем окне: сце
   assert.equal(fitWidths(same,1920,same),same,'хватает места — без изменений');
 });
 
-test('верхняя полоса: шесть видов (3D, спереди, слева, сбоку, сверху, план), у каждого своя клавиша',()=>{
-  assert.deepEqual(VIEW_BUTTONS.map(v=>v.label),['3D','Спереди','Слева','Сбоку','Сверху','План']);
+test('верхняя полоса: шесть видов подписями (3D, спереди, слева, справа, сверху, план), у каждого своя клавиша',()=>{
+  assert.deepEqual(VIEW_BUTTONS.map(v=>v.label),['3D','Спереди','Слева','Справа','Сверху','План']);
   assert.equal(new Set(VIEW_BUTTONS.map(v=>v.key)).size,6);
+  for(const v of VIEW_BUTTONS)assert.ok(v.title.length>0);
+});
+
+test('Макс 01.11: подписи не прячутся — в стилях полосы нет скрытия подписей и нулевого шрифта',()=>{
+  const css=readFileSync(new URL('../src/ui-layout.css',import.meta.url),'utf8');
+  assert.doesNotMatch(css,/mode-label\{display:none\}/);
+  assert.doesNotMatch(css,/\.view-button\{[^}]*font-size:0/);
+});
+
+test('Макс 01.11: «Параметры» — у ящика поля ящика, не секции; у каждой детали свой раздел',()=>{
+  assert.equal(partKind('s1:drawer:2:facade'),'drawer');
+  assert.equal(partKind('s1:drawer:2:left'),'drawer');
+  assert.equal(partKind('s1:drawer:0:facade','door'),'drawer','фасад ящика — часть ящика, даже с ролью двери');
+  assert.equal(partKind('s1:shelf:1'),'shelf');
+  assert.equal(partKind('s1:door:0','door'),'door');
+  assert.equal(partKind('s1:handle:0'),'door');
+  assert.equal(partKind('s1:rod'),'rod');
+  assert.equal(partKind('s1:rod:lower'),'rod');
+  assert.equal(partKind('s1:pantograph:rod'),'rod');
+  assert.equal(partKind('s1:pullout:0'),'rod');
+  assert.equal(partKind('s1:flange:0'),'rod');
+  assert.equal(partKind('s1:divider'),'divider');
+  assert.equal(partKind('s1:divider:over'),'divider');
+  assert.equal(partKind('s1:left'),'section');
+  assert.equal(partSetting('s1:drawer:2:facade'),'Ящики');
+  assert.equal(partSetting('s1:divider'),'Перегородки секции');
+  assert.equal(partParamTargets('s1:drawer:2:facade')[0],'.properties [data-part-params="drawer"]');
+  assert.ok(partParamTargets('s1:drawer:2:facade').indexOf('.properties details[data-setting="Ящики"]')<partParamTargets('s1:drawer:2:facade').indexOf('.properties details[data-setting="Секция"]'),'«Секция» — только запасной путь');
+  assert.equal(partParamTargets('s1:left')[0],'.properties details[data-setting="Секция"]');
 });

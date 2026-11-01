@@ -70,7 +70,8 @@ import {KeyHints} from './KeyHints';
 import {PanelLeftClose,PanelLeftOpen,MonitorPlay,UserRound,HardDriveDownload} from 'lucide-react';
 import {hasHideableFacades} from './facadeHide';
 import {GroupFacadePanel,GroupFillingBlock} from './GroupFacadePanel';
-import {highlightControls} from './highlight';
+import {highlightControls,highlightFirst} from './highlight';
+import {partKind,partParamTargets,partSetting} from './partParams';
 import {applyGroupFacade,skippedNote,groupFacadeValue,type GroupFacadeField} from './groupFacades';
 import {matchGroupSize,SIZE_WORD,type SizeKey} from './matchSize';
 import {matchSizeItems,groupSizeItems} from './matchSizeMenu';
@@ -402,11 +403,12 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // Explicit selection opens only the relevant controls; initial module settings stay closed.
   useEffect(()=>{
     if(!selectedDetail)return;
-    const title=selectedDetail.role==='door'?'Фасад':selectedDetail.id.includes(':drawer:')?'Ящики':selectedDetail.id.includes(':shelf:')?'Полки':/:rod|:pantograph:|:pullout:/.test(selectedDetail.id)?'Штанги':'Секция';
+    const title=partSetting(selectedDetail.id,selectedDetail.role);
     propertiesRef.current?.querySelectorAll<HTMLDetailsElement>('details[data-setting]').forEach(d=>{if(d.dataset.setting===title)revealSettings(d);});
   },[selectedDetail?.id]);
   const canRemove=selectedDetail&&(/:door:|:shelf:|:drawer:|:pantograph:|:pullout:|:flange:/.test(selectedDetail.id)||selectedDetail.id.endsWith(':rod'));
   const selectedFillingName=selectedDetail?.id.includes(':drawer:')?'Ящик '+(Number(selectedDetail.id.split(':drawer:')[1].split(':')[0])+1):selectedDetail?.id.includes(':pantograph:')?'Пантограф':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Штанга':selectedDetail?.id.includes(':shelf:')?'Полка '+(Number(selectedDetail.id.split(':shelf:')[1])+1):selectedDetail?.name;
+  const selectedKind=selectedDetail?partKind(selectedDetail.id,selectedDetail.role):null;
   const removalLabel=selectedDetail?.id.includes(':drawer:')?'Удалить ящик':(selectedDetail?.role==='door'||selectedDetail?.id.endsWith(':facade'))?'Удалить выбранный фасад':selectedDetail?.id.includes(':pantograph:')?'Удалить пантограф':selectedDetail?.id.includes(':pullout:')?'Удалить тремпель':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Удалить штангу':'Удалить полку';
   /* круг 3 критика 29.10: «Удалить» и Delete у выбранного ящика (его фасада) — весь ящик, как в заголовке плашки «Ящик N»; только фасад — «Снять фасад» */function removeSelected(){if(!selectedPart||!canRemove)return;try{if(commitProject(removePart(project,selectedPart.mid,selectedPart.sid,wholeDrawerPid(selectedPart.pid))))setSelectedPart(null);}catch(e){setError((e as Error).message);}}
   /** «Да, удалить» на вопросе Delete: корпуса — одной правкой (одна отмена Ctrl+Z); отметки группы снимаются. */
@@ -865,7 +867,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   /** Макс 31.10: показать, где появились параметры выбранной детали (колесо «Параметры», плашка «Параметры»): раскрыть, прокрутить, подсветить. */
   /** Макс 31.10: при отмеченных модулях — один раз в начале «Наполнения» (ревью 31.10: было в «Полках», «Ящиках», «Секции») — что наполнение правится у выбранного и где перенести его на отмеченные. */
   const groupFillNote=liveGroupIds.length>1?<p className="field-note group-fill-hint" role="note" data-testid="group-fill-hint">Наполнение правится у выбранного «{m.name}». Применить к отмеченным ({liveGroupIds.filter(x=>x!==placed.id).length}) — кнопка <button className="text-action" onClick={()=>void highlightControls('[data-testid="group-filling"]')}>«Наполнение как у этого»</button>.</p>:null;
-  function showParams(focus=false){void highlightControls('.properties .selected-filling',{focus}).then(els=>{if(!els.length)void highlightControls('.properties details[data-setting="Секция"]');});}
+  /** Макс 01.11: «параметры ящика открывают параметры секции» — теперь у каждой детали свой блок (partParams.ts); у ящика и номер ящика тот самый, не первый. */
+  function showParams(pid:string,role?:string,focus=false){if(pid.includes(':drawer:'))setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));void highlightFirst(partParamTargets(pid,role),{focus,block:'start'});}
+  /** Макс 01.11: карточка выбранной детали (сдвиг, копия, удаление) — в разделе самой детали: Ящики, Полки, Штанги, Фасад; раньше всегда в «Секции». */
+  const selectedCard=()=>canRemove?(<div className="selected-filling"><span>{selectedFillingName}</span><div style={{display:selectedDetail?.role==='door'?'none':undefined}} className="filling-nudge" role="group" aria-label="Точное перемещение наполнения" onKeyDown={e=>{if(e.ctrlKey||e.metaKey||e.altKey||!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();e.stopPropagation();nudgeSelected((e.key==='ArrowUp'?1:-1)*(e.shiftKey?10:1));}}><button className="outline" aria-label="Опустить выбранный элемент на 10 мм" onClick={()=>nudgeSelected(-10)}>↓ Ниже на 10</button><button className="outline" aria-label="Поднять выбранный элемент на 10 мм" onClick={()=>nudgeSelected(10)}>↑ Выше на 10</button></div>{selectedDetail?.role!=='door'&&<small>На этих кнопках: ↑ / ↓ — 1 мм, Shift — 10 мм.</small>}{selectedDetail?.role==='door'&&(()=>{const did=selectedDetail.id,ds=m.sections.find(x=>x.id===did.split(':')[0]),dk=Number(did.split(':door:')[1]);if(!ds||!parts(m).some(p=>p.id===did.replace(':door:',':handle:')))return null;const cur=doorHandlePos(m,ds,dk),order:HandlePos[]=isUpperModule(m)?['bottomCenter','bottomCorner','topCenter','topCorner','rule']:['topCorner','topCenter','bottomCorner','bottomCenter','rule'];return <label className="hardware-field" data-testid="handle-pos">Расположение ручки<select value={cur} onChange={e=>modify(n=>setDoorHandlePos(n,did,e.target.value as HandlePos))}>{order.map(pos=>{const issue=handlePosIssue(m,did,pos);return <option key={pos} value={pos} disabled={!!issue&&pos!==cur} title={issue}>{HANDLE_POS_LABEL[pos]}{issue?' — не подходит':''}</option>;})}</select></label>;})()}{selectedDetail?.role==='door'&&(()=>{const hf=doorHandleFloorInfo(m,selectedDetail.id),elev=Math.round(placed.y??0),did=selectedDetail.id;if(!hf)return null;return <div className="handle-floor" data-testid="handle-floor"><NumberField label="Высота ручки от пола" value={hf.value+elev} min={Math.min(hf.min,hf.max)+elev} max={Math.max(hf.min,hf.max)+elev} onChange={v=>{modify(n=>setDoorHandleFloor(n,did,v-elev));}}/><small>{hf.long?'Длинная ручка: от пола до её низа':'От пола до центра ручки'}{hf.set?'':hf.long?' · по правилу: 100 мм от пола, не ниже низа двери + 50':' · сейчас по центру фасада'}</small>{hf.set&&<button className="text-action" onClick={()=>modify(n=>setDoorHandleFloor(n,did,null))}>Высота ручки по правилу</button>}</div>;})()}{selectedDetail?.id.includes(':shelf:')&&<><NumberField label="Высота выбранной полки" value={Math.round(selectedDetail.position[1]-b.bottom)} min={80} max={b.top-b.bottom-80} onChange={v=>{if(selectedPart)moveFilling(selectedPart.mid,selectedPart.sid,selectedPart.pid,v-(selectedDetail.position[1]-b.bottom));}}/><small>От дна проёма до центра полки.</small></>}{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="text-action" onClick={copySelected}>Копировать {selectedDetail.id.includes(':drawer:')?'ящик с настройками':'полку'}</button>}<button className="text-action danger" onClick={removeSelected}><Trash2 size={14}/>{removalLabel}</button><small>{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)?"Копия займёт ближайшее свободное место. ":""}Delete — удалить · Ctrl+Z — отменить</small></div>):null;
   function groupFacadeEdit(field:GroupFacadeField,value:string,label:string){
     try{const r=applyGroupFacade(project,liveGroupIds,field,value);if(r.changed.length&&!commitProject(r.project))return false;
       const s=skippedNote(r.skipped);setNotice({title:'Фасады выделенных',text:`${label} — применено к ${r.changed.length} из ${liveGroupIds.length}.`+(s?' '+s:'')});return true;}
@@ -1005,7 +1010,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       up:{id:'up',label:'Выше',icon:ArrowUp,hint:'Поднять на 32 мм (шаг полкодержателя)',run:()=>moveFilling(a.id,c.sid,pid,32)} as RadialItem,
       down:{id:'down',label:'Ниже',icon:ArrowDown,hint:'Опустить на 32 мм',run:()=>moveFilling(a.id,c.sid,pid,-32)} as RadialItem,
       // Макс 31.10: «Параметры» из колеса — поля выбранной детали справа раскрываются, прокручиваются и подсвечиваются (highlight.ts)
-      params:{id:'params',label:'Параметры',icon:SlidersHorizontal,hint:'Все настройки справа',run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid});setTab('section');setMode('fill');showParams();}} as RadialItem});
+      params:{id:'params',label:'Параметры',icon:SlidersHorizontal,hint:'Все настройки справа',run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid});setTab('section');setMode('fill');showParams(pid);}} as RadialItem});
     if(/:shelf:\d+$/.test(pid)){
       const j=Number(pid.split(':shelf:')[1]),isFixed=!!sec.fixed?.includes(j),p=part('Полка');
       return {title:'Полка '+(j+1),subtitle:mod.name,items:[p.up,p.down,p.copy,{id:'fixed',label:isFixed?'Съёмная':'Жёсткая',icon:isFixed?LockOpen:Lock,hint:isFixed?'Сделать съёмной: на полкодержателях':'Закрепить на конфирматах: держит корпус',run:()=>modifyAt(a.id,n=>{const s=n.sections.find(x=>x.id===c.sid)!;const f=new Set(s.fixed??[]);if(isFixed)f.delete(j);else f.add(j);s.fixed=f.size?[...f].sort((x,z)=>x-z):undefined;})},cutItem,...cutCopy,p.params,body,p.remove]};
@@ -1050,7 +1055,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       return {title:'Фасад',subtitle:mod.name,items:[...facadeMenu([editFacade,doorHandle,
         hinges,doorOpening,cutItem,...cutCopy,...doorQuickItems(mod,c.sid,quickOps),{id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
         {id:'doors-toggle',label:openDoors?'Закрыть створки':'Открыть створки',icon:openDoors?DoorClosed:DoorOpen,hint:'Только вид: распахнуть створки на экране, чтобы показать, что внутри. Настройка фасада — «Редактировать фасад»',run:()=>userDoors(!openDoors)},
-        {...p.params,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid:doorId});setTab('section');}},body,
+        {...p.params,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid:doorId});setTab('section');showParams(doorId,'door');}},body,
         {...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,doorId)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}]),...groupItem]};
     }
     // Перегородка (решение Макса 23.10.2026): во всю высоту или частичная — «от … до …» мм от пола, от полки / до полки
@@ -1331,17 +1336,6 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {environmentSelection&&!presentation&&<RoomObjectProperties room={project.room} selection={environmentSelection} onChange={room=>commitProject({...project,room})} onClose={()=>setEnvironmentSelection(null)}/>}
       {!presentation&&<StageBar stage={stage} advanced={advanced} onStage={goStage} onAdvanced={setAdvanced} done={stageDone} rawSelected={!!m.raw}/>}
       {/* окно «Вырезы» открыто (в т. ч. правой кнопкой — деталь выбрана): плашку не показываем, иначе она закрывает «Сохранить вырезы» */}
-      {!presentation&&stage==='bodies'&&canRemove&&!cutHost&&<div className="selection-action-bar" role="group" aria-label="Действия с выбранной деталью">
-        <div className="selection-context"><strong>{selectedFillingName}</strong><span>{m.name} · секция {idx+1}</span></div>
-        <button className="outline" onClick={()=>{setTab('section');showParams(true);}}>Параметры</button>
-        {selectedDetail?.role!=='door'&&<><button className="outline" aria-label="Быстро опустить элемент на 10 мм" onClick={()=>nudgeSelected(-10)}>↓ 10 мм</button>
-        <button className="outline" aria-label="Быстро поднять элемент на 10 мм" onClick={()=>nudgeSelected(10)}>↑ 10 мм</button></>}
-        {selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="outline" onClick={copySelected}>Копировать</button>}
-        {selectedDetail&&(selectedDetail.id.includes(':door:')||selectedDetail.id.endsWith(':facade'))&&<button className="outline" onClick={()=>{setHandleFace(selectedDetail.id);setMaterialScope('active');setModal('handles');}}>Ручка этого фасада</button>}
-        {selectedDetail&&cutAllowed(m,selectedDetail.id)&&<button className="outline" onClick={()=>setCutHost({mid:placed.id,pid:selectedDetail.id})}>Вырез…</button>}
-        {selectedDetail?.id.includes(':drawer:')?<><button className="text-action danger" onClick={removeSelected}>Удалить ящик</button>{selectedDetail.id.endsWith(':facade')&&<button className="text-action" onClick={removeSelectedFacade}>Снять фасад</button>}</>:<button className="text-action danger" onClick={removeSelected}>Удалить</button>}
-        <button className="text-action" aria-label="Снять выделение детали" onClick={()=>setSelectedPart(null)}>Закрыть</button>
-      </div>}
       <input
         ref={upload}
         hidden
@@ -1453,12 +1447,12 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         <aside className="library"><SafeBoundary label="Палитра и модули" resetKey={project}>
           {/* свёрнутая колонка (Макс 31.10): значки одного размера с подсказками — развернуть, мебель, корпуса проекта, помощь */}
           {leftCollapsed&&<nav className="library-rail" aria-label="Свёрнутая левая панель">
-            <button data-testid="left-expand" aria-label="Развернуть левую панель" title="Развернуть левую панель" onClick={()=>setLeftCollapsed(false)}><PanelLeftOpen size={18}/></button>
+            <button data-testid="left-expand" aria-label="Развернуть левую панель" title="Развернуть левую панель" onClick={()=>setLeftCollapsed(false)}><PanelLeftOpen size={18}/><span className="tool-cap">Открыть</span></button>
             <span className="rail-sep" aria-hidden="true"/>
-            {stage==='room'?<button aria-label="Размеры помещения" title="Размеры помещения" onClick={()=>setLeftCollapsed(false)}><Ruler size={18}/></button>:<button aria-label="Добавить мебель" title="Добавить мебель" onClick={()=>{setLeftCollapsed(false);requestAnimationFrame(()=>{const d=document.querySelector<HTMLDetailsElement>('.library .module-palette');if(d){d.open=true;d.scrollIntoView({block:'start'});}});}}><Plus size={18}/></button>}
+            {stage==='room'?<button aria-label="Размеры помещения" title="Размеры помещения" onClick={()=>setLeftCollapsed(false)}><Ruler size={18}/><span className="tool-cap">Размеры</span></button>:<button aria-label="Добавить мебель" title="Добавить мебель" onClick={()=>{setLeftCollapsed(false);requestAnimationFrame(()=>{const d=document.querySelector<HTMLDetailsElement>('.library .module-palette');if(d){d.open=true;d.scrollIntoView({block:'start'});}});}}><Plus size={18}/><span className="tool-cap">Добавить</span></button>}
             {stage!=='room'&&project.modules.map((a,i)=><button key={a.id} aria-pressed={!deselected&&a.id===placed.id} aria-label={'Корпус '+(i+1)+': '+a.module.name} title={(i+1)+'. '+a.module.name+' · '+a.module.width+' × '+a.module.height+' × '+a.module.depth} onClick={e=>{if(isMarkClick(e)){toggleModuleGroup(a.id);return;}setGroupIds(g=>groupAfterPlainClick(g,a.id));selectModule(a.id);}}>{i+1}</button>)}
             <span className="rail-sep" aria-hidden="true"/>
-            <button aria-label="Как пользоваться" title="Как пользоваться" onClick={()=>setModal('help')}><HelpCircle size={18}/></button>
+            <button aria-label="Как пользоваться" title="Как пользоваться" onClick={()=>setModal('help')}><HelpCircle size={18}/><span className="tool-cap">Справка</span></button>
           </nav>}
           {!presentation&&<button className="library-collapse" data-testid="left-collapse" aria-label="Свернуть левую панель" title="Свернуть левую панель" onClick={()=>setLeftCollapsed(true)}><PanelLeftClose size={16}/></button>}
           <div className="panel-heading">
@@ -1615,9 +1609,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
         </SafeBoundary></aside>
         <section className="viewport" aria-label="Рабочая область">
-          {/* Макс 31.10: одна строка как в Базисе — иконки видов, затем режимы и переключатели; сплошной фон, сцена под полосой */}
+          {/* Макс 31.10: полоса как в Базисе — виды, затем режимы и переключатели; сплошной фон, сцена под полосой (высота полосы — SceneToolbar) */}
           <SceneToolbar views={<ViewButtons active={roomPlan?'plan':view} onView={chooseView} hidden={presentation?['plan']:[]}/>}>
-            {!presentation&&!roomPlan&&!(!advanced&&stage==='fixtures')&&<div className="interaction-bar" data-tour="modes" role="group" aria-label="Режим">{([{id:'select',label:'Выбрать',icon:Check,hint:'Выбрать деталь щелчком'},{id:'move',label:'Двигать корпуса',icon:Move3D,hint:'Тянуть корпуса мышью'},{id:'fill',label:'Наполнение',icon:Rows3,hint:'Двигать полки, ящики и перегородки (створки открываются)'},{id:'orbit',label:'Свободная камера',icon:RotateCcw,hint:'Вращать камеру левой кнопкой'}] as const).map(t=><button key={t.id} aria-label={t.label} title={t.hint} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true);else if(!doorsByUser.current)setOpenDoors(false);}}><t.icon size={16}/><span className="mode-label">{t.label}</span></button>)}<span className="mode-sep" aria-hidden="true"/>{(()=>{const none=!hideableFacades;return <button className="tool-toggle" aria-label={hideFacades?'Показать фасады':'Скрыть фасады'} aria-pressed={hideFacades} disabled={none&&!hideFacades} title={none&&!hideFacades?'Недоступно: в проекте нет фасадов':hideFacades?'Показать фасады — вернуть двери на место':'Скрыть фасады — видно наполнение'} onClick={()=>setHideFacades(v=>!v)}>{hideFacades?<Eye size={16}/>:<EyeOff size={16}/>}<span className="mode-label">{hideFacades?'Показать фасады':'Скрыть фасады'}</span></button>;})()}{stage==='bodies'&&!m.corner&&<button className="gap-toggle tool-toggle" aria-label="Размеры проёмов между полками" title="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}><Columns2 size={16}/><span className="mode-label">Проёмы</span></button>}</div>}
+            {/* Макс 01.11: «иконки непонятные, вернём текст» — режимы и переключатели подписями, без значков; группы переносятся целиком */}
+            {!presentation&&!roomPlan&&!(!advanced&&stage==='fixtures')&&<><div className="interaction-bar" data-tour="modes" role="group" aria-label="Режим">{([{id:'select',label:'Выбрать',hint:'Выбрать деталь щелчком'},{id:'move',label:'Двигать корпуса',hint:'Тянуть корпуса мышью'},{id:'fill',label:'Наполнение',hint:'Двигать полки, ящики и перегородки (створки открываются)'},{id:'orbit',label:'Свободная камера',hint:'Вращать камеру левой кнопкой'}] as const).map(t=><button key={t.id} aria-label={t.label} title={t.hint} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true);else if(!doorsByUser.current)setOpenDoors(false);}}><span className="mode-label">{t.label}</span></button>)}</div><span className="toolbar-sep toolbar-sep-toggles" aria-hidden="true"/><div className="interaction-bar tool-toggles" role="group" aria-label="Показ">{(()=>{const none=!hideableFacades;return <button className="tool-toggle" aria-label={hideFacades?'Показать фасады':'Скрыть фасады'} aria-pressed={hideFacades} disabled={none&&!hideFacades} title={none&&!hideFacades?'Недоступно: в проекте нет фасадов':hideFacades?'Показать фасады — вернуть двери на место':'Скрыть фасады — видно наполнение'} onClick={()=>setHideFacades(v=>!v)}><span className="mode-label">{hideFacades?'Показать фасады':'Скрыть фасады'}</span></button>;})()}{stage==='bodies'&&!m.corner&&<button className="gap-toggle tool-toggle" aria-label="Размеры проёмов между полками" title="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}><span className="mode-label">Проёмы</span></button>}</div></>}
           </SceneToolbar>
           {hiddenIds.length>0&&!presentation&&<button className="restore-modules" onClick={()=>setHiddenModules([])}><Eye size={16}/>Показать все скрытые ({hiddenIds.length})</button>}
           <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} stretchable={!widthLock(m)&&!deselected} cornerPlan={pull=>planCorner(pull)} onCorner={commitCorner} guides={project.guides} onGuides={commitGuides} onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject} shapeEdit={shapeEdit} onShapeEdit={shapeStage?setShapeEdit:undefined}/>:<Scene onToggleModule={toggleModuleGroup} onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} hiddenModuleIds={hiddenIds} viewKey={viewKey}
@@ -1762,10 +1757,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <button role="menuitem" title="Модуль сдвигается, ширина та же" onClick={()=>{close();askGapShift(placed.id,side,g);}}>Задать зазор — сдвинуть модуль…</button>
                 <button role="menuitem" title={`Меняется ширина, ${side==='right'?'левый':'правый'} край на месте`} onClick={()=>{close();askGap(placed.id,side,g);}}>Задать зазор — изменить ширину…</button>
               </div></div>;})()}
-          {/* Макс 31.10: колонка быстрых действий — у левого края сцены, сверху «Назад / Вперёд» (на «Плане» — только они) */}
+          {/* Макс 31.10: колонка быстрых действий — у левого края сцены, сверху «Назад / Вперёд» (на «Плане» — только они). Макс 01.11: под каждым значком подпись */}
           {!presentation&&<div className={'scene-tools'+(roomPlan?' plan-only':'')} role="toolbar" aria-orientation="vertical" aria-label="Быстрые действия">
-            <button className="history-tool" aria-label="Отменить" title="Отменить ↶ · Ctrl+Z" disabled={managedHistory?managedHistory.undoCount===0:cursor===0} onClick={undo}><Undo2 size={18}/></button>
-            <button className="history-tool" aria-label="Повторить" title="Повторить ↷ · Ctrl+Y" disabled={managedHistory?managedHistory.redoCount===0:cursor===history.length-1} onClick={redo}><Redo2 size={18}/></button>
+            <button className="history-tool" aria-label="Отменить" title="Отменить ↶ · Ctrl+Z" disabled={managedHistory?managedHistory.undoCount===0:cursor===0} onClick={undo}><Undo2 size={18}/><span className="tool-cap">Отменить</span></button>
+            <button className="history-tool" aria-label="Повторить" title="Повторить ↷ · Ctrl+Y" disabled={managedHistory?managedHistory.redoCount===0:cursor===history.length-1} onClick={redo}><Redo2 size={18}/><span className="tool-cap">Повторить</span></button>
             <span className="tools-sep" aria-hidden="true"/>
             <button
               aria-label="Прозрачный корпус"
@@ -1773,7 +1768,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               aria-pressed={transparent}
               onClick={() => setTransparent((v) => !v)}
             >
-              <Layers size={19} />
+              <Layers size={19} /><span className="tool-cap">Прозрачный корпус</span>
             </button>
             <button
               aria-label="Прозрачные фасады"
@@ -1781,7 +1776,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               aria-pressed={clearFacades}
               onClick={() => setClearFacades((v) => !v)}
             >
-              <PanelTop size={19} />
+              <PanelTop size={19} /><span className="tool-cap">Прозрачные фасады</span>
             </button>
             <button
               aria-label="Показать помещение"
@@ -1792,16 +1787,16 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 setFit((f) => f + 1);
               }}
             >
-              <Box size={19} />
+              <Box size={19} /><span className="tool-cap">Помещение</span>
             </button>
-            {showRoom&&<button aria-label="Ближние стены: скрыть" title={cutaway?'Ближние стены: показать (сейчас скрыты — стена между камерой и комнатой не видна)':'Ближние стены: скрыть (сейчас видны все стены)'} aria-pressed={cutaway} onClick={toggleCutaway}><BrickWall size={19}/></button>}
-            <button aria-label="Приблизить выбранный корпус" title="Приблизить выбранный корпус" aria-pressed={focusActive} onClick={()=>{setFocusActive(v=>!v);setFit(f=>f+1);}}><Search size={19}/></button>
+            {showRoom&&<button aria-label="Ближние стены: скрыть" title={cutaway?'Ближние стены: показать (сейчас скрыты — стена между камерой и комнатой не видна)':'Ближние стены: скрыть (сейчас видны все стены)'} aria-pressed={cutaway} onClick={toggleCutaway}><BrickWall size={19}/><span className="tool-cap">Стены</span></button>}
+            <button aria-label="Приблизить выбранный корпус" title="Приблизить выбранный корпус" aria-pressed={focusActive} onClick={()=>{setFocusActive(v=>!v);setFit(f=>f+1);}}><Search size={19}/><span className="tool-cap">Приблизить</span></button>
             <button
               aria-label="Вписать модель"
               title="Вписать модель"
               onClick={() => {setFocusActive(false);setFit((f) => f + 1);}}
             >
-              <Maximize size={19} />
+              <Maximize size={19} /><span className="tool-cap">Вписать</span>
             </button>
             <button
               aria-label="Показать размеры"
@@ -1809,7 +1804,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               aria-pressed={dimensions}
               onClick={() => setDimensions((v) => !v)}
             >
-              <Ruler size={19} />
+              <Ruler size={19} /><span className="tool-cap">Размеры</span>
             </button>
             <button
               aria-label="Разнести детали"
@@ -1817,7 +1812,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               aria-pressed={exploded}
               onClick={() => setExploded((v) => !v)}
             >
-              <Move3D size={19} />
+              <Move3D size={19} /><span className="tool-cap">Разнести</span>
             </button>
             {/* Макс 31.10: недоступное — серым с причиной в подсказке, а не ошибкой после щелчка */}
             <button
@@ -1826,7 +1821,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               disabled={nothingSelected}
               onClick={() => turnSelected(placed.id,'ccw')}
             >
-              <RotateCcw size={19} />
+              <RotateCcw size={19} /><span className="tool-cap">Влево 90°</span>
             </button>
             <button
               aria-label="Повернуть корпус на 90° по часовой"
@@ -1834,7 +1829,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               disabled={nothingSelected}
               onClick={() => turnSelected(placed.id,'cw')}
             >
-              <RotateCw size={19} />
+              <RotateCw size={19} /><span className="tool-cap">Вправо 90°</span>
             </button>
             {(()=>{return <button
                 aria-label="Открыть фасады"
@@ -1843,7 +1838,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 disabled={!anyDoors}
                 onClick={() => userDoors(!openDoors)}
               >
-                <DoorOpen size={19} />
+                <DoorOpen size={19} /><span className="tool-cap">Открыть фасады</span>
               </button>;})()}
           </div>}
           <div className="section-picker" style={{display:!!m.worktop||roomPlan||(!advanced&&stage!=='filling')?"none":undefined}}>
@@ -1861,6 +1856,18 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               </button>
             ))}
           </div>
+          {/* Макс 01.11: плашка детали — в сцене (не шире её и не на строке клавиш), в общем стиле; «Параметры» — главная кнопка */}
+      {!presentation&&stage==='bodies'&&canRemove&&!cutHost&&<div className="selection-action-bar" role="group" aria-label="Действия с выбранной деталью">
+        <div className="selection-context"><strong>{selectedFillingName}</strong><span>{m.name} · секция {idx+1}</span></div>
+        <button className="primary" data-testid="selection-params" onClick={()=>{if(!selectedDetail)return;setTab('section');showParams(selectedDetail.id,selectedDetail.role,selectedKind==='shelf');}}>Параметры</button>
+        {selectedDetail?.role!=='door'&&<><button className="outline" aria-label="Быстро опустить элемент на 10 мм" onClick={()=>nudgeSelected(-10)}>↓ 10 мм</button>
+        <button className="outline" aria-label="Быстро поднять элемент на 10 мм" onClick={()=>nudgeSelected(10)}>↑ 10 мм</button></>}
+        {selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="outline" onClick={copySelected}>Копировать</button>}
+        {selectedDetail&&(selectedDetail.id.includes(':door:')||selectedDetail.id.endsWith(':facade'))&&<button className="outline" onClick={()=>{setHandleFace(selectedDetail.id);setMaterialScope('active');setModal('handles');}}>Ручка этого фасада</button>}
+        {selectedDetail&&cutAllowed(m,selectedDetail.id)&&<button className="outline" onClick={()=>setCutHost({mid:placed.id,pid:selectedDetail.id})}>Вырез…</button>}
+        {selectedDetail?.id.includes(':drawer:')?<><button className="text-action danger" onClick={removeSelected}>Удалить ящик</button>{selectedDetail.id.endsWith(':facade')&&<button className="text-action" onClick={removeSelectedFacade}>Снять фасад</button>}</>:<button className="text-action danger" onClick={removeSelected}>Удалить</button>}
+        <button className="text-action" aria-label="Снять выделение детали" onClick={()=>setSelectedPart(null)}>Закрыть</button>
+      </div>}
           {lightMode&&!presentation&&(()=>{const lm=project.modules.find(x=>x.id===lightMode)?.module;if(!lm)return null;
             return <LightModeBar module={lm} orient={lightOrient} note={lightNote} onOrient={o=>{setLightOrient(o);setLightNote('');}} onTone={t=>modifyAt(lightMode,n=>applyToAll(n,{tone:t}))} onPanel={()=>setLightPanel(lightMode)} onDone={()=>{setLightMode(null);setLightNote('');}}/>;})()}
           {lightPanel&&(()=>{const lp=project.modules.find(x=>x.id===lightPanel)?.module;if(!lp)return null;
@@ -2025,7 +2032,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   </button>
                 </div>
               </SettingsSection>
-<SettingsSection title="Полки">                <Counter
+<SettingsSection title="Полки">                {selectedKind==='shelf'&&<div data-part-params="shelf">{selectedCard()}</div>}
+                <Counter
                   label="Полки"
                   value={s.shelves.length}
                   max={RULES.maxShelves}
@@ -2147,7 +2155,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                         });
                       const meshItem=c.mesh?meshById(c.mesh):undefined;
                       return (
-                        <>
+                        <div className="drawer-own" data-part-params="drawer">{/* Макс 01.11: свой блок ящика — сюда ведёт «Параметры» */}<h4>{meshItem?MESH_KIND_LABEL[meshItem.kind]:'Ящик'} {j+1}</h4>
                           <label className="hardware-field">Тип элемента<select aria-label="Тип ящика" value={c.mesh??(c.tray?'tray':'box')} onChange={e=>{const v=e.target.value;if(v==='tray')update({mesh:undefined,tray:true,slide:'gtv0fpo',height:50,facadeH:50,handle:false});else if(v==='box')update({mesh:undefined,tray:undefined,height:RULES.drawerH,facadeH:undefined,handle:undefined});else{const item=meshById(v)!;update({mesh:v,tray:undefined,height:item.h,handle:undefined});}}}><option value="box">Ящик ЛДСП 16 с фасадом</option><option value="tray">Выкатная полка / лоток 40–60 мм</option>{(['basket','trousers','shoes'] as const).map(kind=><optgroup key={kind} label={MESH_KIND_LABEL[kind]+' · Лемана Про'}>{MESH.filter(i=>i.kind===kind).map(i=><option key={i.id} value={i.id}>{i.label} · проём {i.reqW}×{i.reqD}</option>)}</optgroup>)}</select></label>
                           {meshItem&&<p className="field-note">Арт. {meshItem.art}, высота {meshItem.h} мм, нужен проём {meshItem.reqW}–{meshItem.reqW+60} мм в ширину и глубина от {meshItem.reqD} мм. Направляющие в комплекте, без фасада и ручки; за распашными дверями ставятся фальши.</p>}
                           {meshItem&&<NumberField label="Элемент от дна проёма" value={drawerOffsets(s)[j]} min={0} max={b.top-b.bottom-c.height-40} onChange={v=>update({y:v})}/>}
@@ -2209,7 +2217,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                             </a>
                           )}
                           </>}
-                        </>
+                          {selectedKind==='drawer'&&selectedCard()}
+                        </div>
                       );
                     })()}
                     <details className="drawer-group-tools"><summary>Весь блок ящиков</summary>
@@ -2241,7 +2250,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <div className="kupe-field"><span>Выдвижной тремпель{s.pullouts?' · '+pulloutLength(m)+' мм':''}</span>
                   <div className="kupe-chips" role="group" aria-label="Выдвижные тремпели в секции">{[0,1,2,3].map(n=><button key={n} type="button" aria-pressed={(s.pullouts??0)===n} onClick={()=>modifySection(a=>{if(n)a.pullouts=n;else delete a.pullouts;})}>{n?n:'нет'}</button>)}</div>
                 </div>
+                <div data-part-params="rod">{/* Макс 01.11: свой блок штанги, пантографа, тремпеля */}
                 {(s.rod||s.pantograph)&&<NumberField label="Высота штанги от дна" selected={selectedPart?.pid===(s.pantograph?s.id+':pantograph:rod':s.id+':rod')} onSelect={()=>{setSelectedPart({mid:placed.id,sid:s.id,pid:s.pantograph?s.id+':pantograph:rod':s.id+':rod'});setDrawerIndex(null);setDrawerPreview(false);setMode('fill');setOpenDoors(true);}} value={Math.round((parts(m).find(p=>p.id===s.id+':rod'||p.id===s.id+':pantograph:rod')?.position[1]??b.bottom)-b.bottom)} min={100} max={b.top-b.bottom-50} onChange={v=>modifySection(a=>a.rodAt=v/(b.top-b.bottom))}/>}
+                {selectedKind==='rod'&&selectedCard()}</div>
                 {/* правка Макса 29.10: штанга ставится и без нормы места под ней — предупреждение, не отказ */}
                 {s.rod&&rodClearanceWarnings(m).filter(w=>w.startsWith(`Секция ${idx+1}:`)).map(w=><p key={w} className="field-note" role="status" data-testid="rod-clearance-warning">⚠ {w.replace(/^Секция \d+: /,'')}</p>)}
 </SettingsSection>
@@ -2303,10 +2314,12 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 )}
               {m.doors&&<details className="section-facades" open={stage==='facades'||selectedDetail?.role==='door'||undefined}><summary>Фасады секции {idx+1}</summary>
 <div className="facade-pick-list" role="group" aria-label="Выбрать отдельный фасад">{parts(m).filter(p=>p.sectionId===s.id&&(p.role==='door'||p.id.endsWith(':facade'))).map((p,i)=><button key={p.id} className="outline" aria-pressed={selectedPart?.pid===p.id} onClick={()=>{setSelectedPart({mid:placed.id,sid:s.id,pid:p.id});setDrawerIndex(p.id.includes(':drawer:')?Number(p.id.split(':drawer:')[1].split(':')[0]):null);setMode('select');}}>{p.role==='door'?'Дверь '+(i+1):p.name} · {Math.round(p.width)}×{Math.round(p.length)}</button>)}</div>
+<div data-part-params="door">{/* Макс 01.11: свой блок выбранной двери */}
 {selectedDetail?.role==='door'&&<button className="outline full" onClick={()=>{setHandleFace(selectedDetail.id);setHandleTarget('doors');setModal('handles');}}>Ручка выбранной двери</button>}
 {selectedDetail?.role==='door'&&<label className="hardware-field">Открывание выбранной двери<select aria-label="Открывание выбранной двери" value={selectedDetail.hinge??'left'} onChange={e=>modify(n=>setDoorHinge(n,selectedDetail.id,e.target.value as 'left'|'right'|'top'|'bottom'))}><option value="left">Петли слева</option><option value="right">Петли справа</option><option value="top">Петли сверху · подъёмный</option><option value="bottom">Петли снизу · откидной</option></select></label>}
 {selectedDetail?.role==='door'&&/:door:\d+$/.test(selectedDetail.id)&&m.doors&&!m.kitchen&&(()=>{const did=selectedDetail.id,ds=m.sections.find(x=>x.id===did.split(':')[0]),dk=Number(did.split(':door:')[1]);if(!ds)return null;const cur=ds.hingeAngles?.[dk]??0;return <label className="hardware-field" data-testid="hinge-angle">Угол открывания петель этой створки<select aria-label="Угол открывания петель" value={cur} onChange={e=>modify(n=>{const sec=n.sections.find(x=>x.id===ds.id);if(!sec)return;const v=Number(e.target.value),arr=[...(sec.hingeAngles??[])];while(arr.length<=dk)arr.push(null);arr[dk]=v===90||v===165?v:null;if(arr.some(Boolean))sec.hingeAngles=arr;else delete sec.hingeAngles;})}><option value={0}>Стандарт 110°</option>{HINGE_ANGLES.map(a=><option key={a} value={a}>{HINGE_ANGLE_LABEL[a]}</option>)}</select></label>;})()}
 {selectedDetail?.role==='door'&&selectedDetail.hinge==='top'&&<label className="hardware-field">Подъёмный механизм<select aria-label="Подъёмный механизм фасада" value={s.doorLifts?.[Number(selectedDetail.id.split(':door:')[1])]??''} onChange={e=>{if(e.target.value)modify(n=>setDoorHinge(n,selectedDetail.id,'top',e.target.value as 'adagio'|'sempre'));}}><option value="" disabled>Как в исходном проекте</option><option value="adagio">Premial АДАЖИО · газлифты</option><option value="sempre">Premial СЕМПРЕ · механический</option></select><small>Артикул, усилие, присадка и цена — после подбора по фасаду.</small></label>}
+{selectedKind==='door'&&selectedCard()}</div>
 {s.doorHinges?.includes('top')&&m.kitchen&&!s.doorLifts?.some(Boolean)&&<label className="rail-row"><input type="checkbox" aria-label="Газлифт PD-G-N02 подъёмного фасада" checked={!!m.kitchenLift} onChange={e=>{const on=e.target.checked;modify(n=>{if(on)n.kitchenLift={system:'pd-g-n02'};else delete n.kitchenLift;});}}/>Газлифт PD-G-N02 на обе боковины (как в Базисе)</label>}
 {s.doorHinges?.includes('top')&&m.kitchen&&m.kitchenLift&&<p className="construction-note" role="status">Подъёмный фасад по Базису: петли на крыше, {m.kitchenLift.system==='gl104'?'газлифт GL104':'газлифт PD-G-N02'} на обеих боковинах (присадка рассчитана, цена газлифта не задана).</p>}
 {s.doorHinges?.includes('top')&&!m.kitchenLift&&!s.doorLifts?.some(Boolean)&&m.bazis&&<p className="construction-note" role="status">Подъёмный фасад по проекту Базиса: петли на крыше, подъёмника в проекте нет — студия его не добавляет.</p>}
@@ -2343,7 +2356,6 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 </div>
                 <div className="section-copy"><button className="text-action" data-search="copy-filling" onClick={()=>{try{setFillingCopy(captureSectionFilling(project,placed.id,s.id));}catch(e){setError((e as Error).message);}}}>Копировать наполнение секции</button>{fillingCopy&&<><p className="field-note">Скопировано: {fillingCopy.name}</p><button className="outline full" onClick={()=>{try{if(commitProject(pasteSectionFilling(project,placed.id,s.id,fillingCopy))){setSelectedPart(null);setDrawerIndex(null);setDrawerPreview(false);setMode('fill');setOpenDoors(true);}}catch(e){setError((e as Error).message);}}}>{s.drawers||s.shelves.length||s.rod||s.pantograph?'Заменить наполнение копией':'Вставить наполнение секции'}</button><p className="field-note">Высоты от дна и фурнитура сохранятся. Корпус и материалы остаются его собственными. Ctrl+Z отменит вставку.</p></>}</div>
                 {selectedDetail?.id.includes(':drawer:')&&<button className="text-action danger" onClick={()=>{/* отказ операции (ящики до крыши не встают поровну) — в плашку ошибки, а не необработанным исключением */try{if(selectedPart&&commitProject(removePart(project,placed.id,s.id,selectedPart.pid.replace(':facade',':bottom'))))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}>Удалить ящик целиком</button>}
-                {canRemove&&<div className="selected-filling"><span>{selectedFillingName}</span><div style={{display:selectedDetail?.role==='door'?'none':undefined}} className="filling-nudge" role="group" aria-label="Точное перемещение наполнения" onKeyDown={e=>{if(e.ctrlKey||e.metaKey||e.altKey||!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();e.stopPropagation();nudgeSelected((e.key==='ArrowUp'?1:-1)*(e.shiftKey?10:1));}}><button className="outline" aria-label="Опустить выбранный элемент на 10 мм" onClick={()=>nudgeSelected(-10)}>↓ Ниже на 10</button><button className="outline" aria-label="Поднять выбранный элемент на 10 мм" onClick={()=>nudgeSelected(10)}>↑ Выше на 10</button></div>{selectedDetail?.role!=='door'&&<small>На этих кнопках: ↑ / ↓ — 1 мм, Shift — 10 мм.</small>}{selectedDetail?.role==='door'&&(()=>{const did=selectedDetail.id,ds=m.sections.find(x=>x.id===did.split(':')[0]),dk=Number(did.split(':door:')[1]);if(!ds||!parts(m).some(p=>p.id===did.replace(':door:',':handle:')))return null;const cur=doorHandlePos(m,ds,dk),order:HandlePos[]=isUpperModule(m)?['bottomCenter','bottomCorner','topCenter','topCorner','rule']:['topCorner','topCenter','bottomCorner','bottomCenter','rule'];return <label className="hardware-field" data-testid="handle-pos">Расположение ручки<select value={cur} onChange={e=>modify(n=>setDoorHandlePos(n,did,e.target.value as HandlePos))}>{order.map(pos=>{const issue=handlePosIssue(m,did,pos);return <option key={pos} value={pos} disabled={!!issue&&pos!==cur} title={issue}>{HANDLE_POS_LABEL[pos]}{issue?' — не подходит':''}</option>;})}</select></label>;})()}{selectedDetail?.role==='door'&&(()=>{const hf=doorHandleFloorInfo(m,selectedDetail.id),elev=Math.round(placed.y??0),did=selectedDetail.id;if(!hf)return null;return <div className="handle-floor" data-testid="handle-floor"><NumberField label="Высота ручки от пола" value={hf.value+elev} min={Math.min(hf.min,hf.max)+elev} max={Math.max(hf.min,hf.max)+elev} onChange={v=>{modify(n=>setDoorHandleFloor(n,did,v-elev));}}/><small>{hf.long?'Длинная ручка: от пола до её низа':'От пола до центра ручки'}{hf.set?'':hf.long?' · по правилу: 100 мм от пола, не ниже низа двери + 50':' · сейчас по центру фасада'}</small>{hf.set&&<button className="text-action" onClick={()=>modify(n=>setDoorHandleFloor(n,did,null))}>Высота ручки по правилу</button>}</div>;})()}{selectedDetail?.id.includes(':shelf:')&&<><NumberField label="Высота выбранной полки" value={Math.round(selectedDetail.position[1]-b.bottom)} min={80} max={b.top-b.bottom-80} onChange={v=>{if(selectedPart)moveFilling(selectedPart.mid,selectedPart.sid,selectedPart.pid,v-(selectedDetail.position[1]-b.bottom));}}/><small>От дна проёма до центра полки.</small></>}{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="text-action" onClick={copySelected}>Копировать {selectedDetail.id.includes(':drawer:')?'ящик с настройками':'полку'}</button>}<button className="text-action danger" onClick={removeSelected}><Trash2 size={14}/>{removalLabel}</button><small>{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)?"Копия займёт ближайшее свободное место. ":""}Delete — удалить · Ctrl+Z — отменить</small></div>}
 
                 {!m.doors&&!m.desk&&<button className="primary full" onClick={()=>{if(modify(n=>{n.doors=true;n.sections.forEach(s=>delete s.removedDoors);})){setHideFacades(false);setOpenDoors(false);}}}>Добавить распашные фасады</button>}
 <NumberField

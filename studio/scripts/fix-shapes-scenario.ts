@@ -48,7 +48,7 @@ async function findMenuPoint(re: RegExp): Promise<[number, number] | null> {
   return null;
 }
 async function views(prefix: string) {
-  for (const [v, n] of [["3D", "3d"], ["Спереди", "front"], ["Сверху", "top"], ["Сбоку", "side"]] as const) { await view(v); await zoom(); await shot(`${prefix}-${n}`); }
+  for (const [v, n] of [["3D", "3d"], ["Спереди", "front"], ["Сверху", "top"], ["Справа", "side"]] as const) { await view(v); await zoom(); await shot(`${prefix}-${n}`); }
   await view("3D"); await zoom();
 }
 

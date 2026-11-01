@@ -33,7 +33,7 @@ const again = await frame("04-front-again");
 check("тот же вид — без перехода", again.equals(end));
 
 // виды подряд без пауз (новый переход стартует из текущего промежуточного кадра)
-for (const v of ["Сверху", "Сбоку", "Спереди", "3D"]) await page.getByRole("button", { name: v, exact: true }).first().click();
+for (const v of ["Сверху", "Справа", "Спереди", "3D"]) await page.getByRole("button", { name: v, exact: true }).first().click();
 await page.waitForTimeout(1200);
 const back3d = await frame("05-quick-3d");
 check("подряд — без ошибок, в конце 3D", !back3d.equals(end));

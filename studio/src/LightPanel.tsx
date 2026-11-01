@@ -26,7 +26,7 @@ export function LightModeBar(p: { module: Module; orient: LightOrient; note: str
       <span><b>Подсветка</b>: кликайте детали, чтобы добавить/убрать подсветку, Esc — выйти
         <small>Стойки: {s.vertical.count} шт., {m2(s.vertical.meters)} пог. м · Полки и крыша: {s.horizontal.count} шт., {m2(s.horizontal.meters)} пог. м</small>
         {p.note && <small className="warn">{p.note}</small>}</span>
-      <button onClick={p.onDone}>Готово</button>
+      <button className="primary" onClick={p.onDone}>Готово</button>
     </div>
     <div className="lmb-row lmb-tools">
       <span className="lmb-group" role="group" aria-label="Ставить подсветку">Ставить:

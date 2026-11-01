@@ -73,8 +73,8 @@ export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload
  {roomLeft?<div className="room-left-panel">{roomSection}</div>:palette}
  <div className="library-bottom"><p>Другие комнаты сохранены и скрыты. Переключение комнаты — в панели заказа сверху.</p></div></aside>
  <section className="viewport" aria-label="Рабочая область">
- {/* Макс 31.10: та же полоса, что в редакторе, — иконки видов как в Базисе и режимы в одну строку */}
- <SceneToolbar views={<ViewButtons active={plan?'plan':view} onView={v=>{if(v==='plan'){setPlan(true);return;}setView(v);setPlan(false);setFit(f=>f+1);}}/>}><div className="interaction-bar"><button aria-label="Свободная камера" aria-pressed={!plan} onClick={()=>setPlan(false)}><RotateCcw size={16}/><span className="mode-label">Свободная камера</span></button><button aria-label="Вписать комнату" onClick={()=>setFit(f=>f+1)}><Maximize size={16}/><span className="mode-label">Вписать комнату</span></button></div></SceneToolbar>
+ {/* Макс 31.10: та же полоса, что в редакторе; Макс 01.11 — подписями, без значков */}
+ <SceneToolbar views={<ViewButtons active={plan?'plan':view} onView={v=>{if(v==='plan'){setPlan(true);return;}setView(v);setPlan(false);setFit(f=>f+1);}}/>}><div className="interaction-bar"><button aria-label="Свободная камера" aria-pressed={!plan} onClick={()=>setPlan(false)}><span className="mode-label">Свободная камера</span></button><button aria-label="Вписать комнату" onClick={()=>setFit(f=>f+1)}><span className="mode-label">Вписать комнату</span></button></div></SceneToolbar>
  {plan?<RoomPlan project={project} active="" moveAll={false} snapping={false} onSelect={()=>{}} onRoom={()=>{}} onObstacleSelect={id=>pick('obstacle',id)} onOpeningSelect={id=>pick('opening',id)} onFixtureSelect={id=>pick('fixture',id)} onEnvironmentContext={pick} update={update} shapeEdit={shapeEdit} onShapeEdit={setShapeEdit}/>:(          <Scene key={viewKey}
             viewKey={viewKey}
             module={dummy.module}

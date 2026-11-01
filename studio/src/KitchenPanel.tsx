@@ -76,7 +76,7 @@ const Check = ({ label, checked, change }: { label: string; checked: boolean; ch
 /** stages — этапы пошагового режима, на которых группа видна (data-stages, фильтр style.css); без него группа видна на всех этапах.
  *  open не применяется: категории закрыты по умолчанию (ручная приёмка Codex 15.10). */
 function Group({ icon, title, children, note, stages }: { icon: ReactNode; title: string; open?: boolean; children: ReactNode; note?: string; stages?: string }) {
-  return <details className="property-section kitchen-group" data-stages={stages}><summary>{icon}<span>{title}</span>{note && <small>{note}</small>}</summary>{children}</details>;
+  return <details className="property-section kitchen-group" data-setting={title} data-stages={stages}><summary>{icon}<span>{title}</span>{note && <small>{note}</small>}</summary>{children}</details>;
 }
 
 /** Цвета модуля образцами (как выбор материала в общей панели): корпус, фасады, фасады ящиков — открывают каталог декоров. */

@@ -1,4 +1,4 @@
-﻿import { test, expect } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 test("complete editing, persistence, validation, undo and download", async ({
   page,
 }) => {
@@ -30,7 +30,7 @@ test("complete editing, persistence, validation, undo and download", async ({
     page.getByRole("switch", { name: "Распашные фасады" }),
   ).toHaveAttribute("aria-checked", "true");
   await page.getByLabel("Открыть фасады", { exact: true }).click();
-  for (const name of ["Спереди", "Сбоку", "Сверху", "3D"])
+  for (const name of ["Спереди", "Справа", "Сверху", "3D"])
     await page.getByRole("button", { name, exact: true }).click();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Скачать", exact: true }).click();
