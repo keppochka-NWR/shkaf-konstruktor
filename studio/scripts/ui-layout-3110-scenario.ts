@@ -25,6 +25,7 @@ async function open(w: number, h: number, stage: string, opts: { p?: Project; wi
   page.setDefaultTimeout(15000);
   page.on("pageerror", (e) => errors.push(`${w}: ${e.message}`));
   await page.goto(url, { timeout: 120000, waitUntil: "domcontentloaded" });
+  await page.waitForSelector("canvas", { timeout: 60000 }); await page.waitForTimeout(500); // иначе приложение успеет перезаписать этап после evaluate
   await page.evaluate(([raw, s, key, ws]) => { localStorage.clear(); localStorage.setItem("module-studio-v3", raw as string); localStorage.setItem("studio-stage", s as string); localStorage.setItem("studio-tip-rmb", "1"); if (ws) localStorage.setItem(key as string, ws as string); }, [JSON.stringify(opts.p ?? project()), stage, WIDTHS, opts.widths ? JSON.stringify(opts.widths) : ""]);
   await page.goto(url, { timeout: 120000, waitUntil: "domcontentloaded" });
   await page.waitForSelector("canvas", { timeout: 60000 }); await page.waitForTimeout(1500);
