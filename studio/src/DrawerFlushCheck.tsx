@@ -16,6 +16,7 @@ export function DrawerFlushCheck({ m, s, set, setToRow }: { m: Module; s: Sectio
     {row && <label className="hardware-field" data-testid="drawer-to-row"><span><input type="checkbox" aria-label="Верх ящиков по ряду соседней секции" checked={!!s.drawersToRow} onChange={(e) => setToRow(e.target.checked)} /> Верх ящиков по ряду соседней секции</span>
       <small>{!s.drawersToRow ? "Снято: ящики стоят по своей высоте. Высоту ящика задали вручную — привязка снимается сама." : "seam" in row ? `Верх ящиков на стыке рядов соседа: ${Math.round(row.seam)} мм от низа. Сосед меняет ряды — ящики идут за ними.` : row.none}</small></label>}
     {flush && !!m.alu && m.doorMount !== "inset" && <p className="field-note" role="note">Двери в рамке: фасады ящиков тоже в рамке, иначе лицо на 4 мм глубже. Цена — как у рамки.</p>}
+    {flush && !!m.alu && m.doorMount === "inset" && <p className="field-note" role="note">Двери в рамке, вкладные: фасады ящиков из ЛДСП в той же плоскости — рамка на вкладной ящик не ставится.</p>}
     {flush && !!m.mirror && <p className="field-note" role="note">Зеркало на дверях добавляет 4 мм поверх плоскости фасадов.</p>}
   </div>;
 }

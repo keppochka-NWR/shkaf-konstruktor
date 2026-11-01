@@ -2,18 +2,19 @@
 // 2) «Фасад ящика вровень с распашными фасадами»: лицо фасада ящика = лицо двери (накладные, вкладные, ALU, МДФ), зазоры как у двери, петли, короб.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {doorBands,doorRowCount,doorRowsBlock,drawersFlush,drawersFlushBlock,facadeBottom,facadeTop,initialModule,parseModule,parts,RULES,setDoorHandlePos,validate,type Module,type Part,type Section} from '../src/model';
+import {doorBands,doorRowCount,doorRowsBlock,drawerCapTop,drawersFlush,drawersFlushBlock,facadeBottom,facadeTop,initialModule,parseModule,parts,RULES,setDoorHandlePos,validate,type Module,type Part,type Section} from '../src/model';
 import {newProject,type Project} from '../src/project';
 import {estimate} from '../src/pricing';
 import {nest} from '../src/exports';
 import {partCollisions} from '../src/collisions';
 import {setDrawersOverlay,setDoorMount,fullSectionDrawer} from '../src/drawerModes';
-import {doorPickLabel,doorRowHeights,MAX_DOOR_ROWS,maxDoorRows,setDoorRowCount,setDoorSplit} from '../src/doorRows';
+import {doorPickLabel,doorRowHeights,fitDoorRowsAfterResize,MAX_DOOR_ROWS,maxDoorRows,setDoorRowCount,setDoorSplit} from '../src/doorRows';
 import {doorQuickItems,drawerQuickItems,type QuickMenuOps} from '../src/quickMenu';
 import {setDoorHinge,singleLeafDoors} from '../src/facadeEditing';
 import {applyGroupFacade,groupFacadeValue} from '../src/groupFacades';
-import {captureSectionFilling,pasteSectionFilling,removePart} from '../src/operations';
+import {captureSectionFilling,mirrorModule,pasteSectionFilling,removePart} from '../src/operations';
 import {DEFAULT_ALU} from '../src/alu';
+import {setModuleSize} from '../src/matchSize';
 import {HANDLES} from '../src/handles';
 import {drawerRowInfo,keepDrawersOnRows,neighbourRowSeams,setDrawersToRow} from '../src/drawerRowAlign';
 import {DEFAULT_VERNISSAGE} from '../src/facadesVernissage';
@@ -225,7 +226,7 @@ test('сосед меняет ряды — ящики идут за стыком
  const c=capGap(ma);assert.ok(Math.abs(lo(c.up)-lo(c.near))<0.35,'пошли за соседом');
  // соседа сделали цельным: стыков нет — ящики как есть, заметка
  const b=edit(a,n=>{setDoorSplit(n,'s2',false);});const mb=b.modules[0].module;assert.deepEqual(validate(mb),[]);
- assert.deepEqual(mb.sections[0].drawerConfigs,ma.sections[0].drawerConfigs,'как есть');assert.match((drawerRowInfo(mb,mb.sections[0]) as {none:string}).none,/не разделены/);
+ assert.deepEqual(mb.sections[0].drawerConfigs,ma.sections[0].drawerConfigs,'как есть');assert.match((drawerRowInfo(mb,mb.sections[0]) as {none:string}).none,/нет рядов/);
  // вручную задали высоту ящика — привязка снята, правка не откатилась
  const d=edit(a,n=>{const s=n.sections[0];s.drawerConfigs=s.drawerConfigs!.map((x,j)=>j===0?{...x,height:x.height-40}:x);});
  assert.equal(d.modules[0].module.sections[0].drawersToRow,undefined);assert.equal(d.modules[0].module.sections[0].drawerConfigs![0].height,ma.sections[0].drawerConfigs![0].height-40);
@@ -237,15 +238,15 @@ test('сосед меняет ряды — ящики идут за стыком
 
 test('стыка не найти: нет разумного — ящики как есть и заметка; проверка не ломается; фасад выше короба при большом стыке',()=>{
  // ящиков много, стык низко и высоко недостижимо: 5 ящиков на 201 мм не встанут, следующий стык слишком высоко для своей двери нет — как есть или ближайший подходящий
- const m=sideBySide([201],5);const before=parts(m).length;setDrawersOverlay(m,'s1',true);assert.deepEqual(validate(m),[]);void before;
+ const m=sideBySide([280],5);const before=parts(m).length;setDrawersOverlay(m,'s1',true);assert.deepEqual(validate(m),[]);void before;
  const info=drawerRowInfo(m,m.sections[0])!;assert.ok('none' in info||'seam' in info);
  if('none' in info)assert.match(info.none,/оставлены как есть/);
- // большой стык: короб 300, фасад выше короба, верх всё равно на стыке
- const big=sideBySide([900]);setDrawersOverlay(big,'s1',true);assert.deepEqual(validate(big),[]);
- const c=capGap(big);assert.ok(Math.abs(lo(c.up)-lo(c.near))<0.35,'большой стык: '+lo(c.up)+' / '+lo(c.near));assert.ok(fronts(big).every(f=>f.size[1]<=800));
- assert.ok(parts(big).filter(p=>/:drawer:\d+:left$/.test(p.id)).every(p=>p.size[1]<=300),'короб не выше 300');assert.deepEqual(realHits(big),[]);
+ // большой стык: короб вышел бы выше 300 — ящики как есть, заметка, а не фасад на 400+ мм
+ const big=sideBySide([900]),plain=wardrobe(1200,2400);plain.sections=[section({drawers:2}),section({id:'s2'})];setDrawersOverlay(big,'s1',true);assert.deepEqual(validate(big),[]);
+ setDrawersOverlay(plain,'s1',true);assert.deepEqual(big.sections[0].drawerConfigs,plain.sections[0].drawerConfigs,'стопка не тронута');
+ assert.match((drawerRowInfo(big,big.sections[0]) as {none:string}).none,/короб вышел бы выше 300/);assert.ok(fronts(big).every(f=>f.size[1]<=345));
  // сосед без рядов — ящики не меняются
- const flat=wardrobe(1200,2400);flat.sections=[section({drawers:2}),section({id:'s2'})];const ref=structuredClone(flat);setDrawersOverlay(ref,'s1',true);delete ref.sections[0].drawersToRow;setDrawersOverlay(flat,'s1',true);assert.deepEqual(flat.sections[0].drawerConfigs,ref.sections[0].drawerConfigs);
+ assert.match((drawerRowInfo(plain,plain.sections[0]) as {none:string}).none,/нет рядов/);
 });
 
 test('вкладные двери: дверь над ящиками на низу ряда соседа; старый проект с ящиками снаружи не двигается, пока не коснулись галочки',()=>{
@@ -254,6 +255,70 @@ test('вкладные двери: дверь над ящиками на низ�
  assert.equal(JSON.stringify(out.modules[0].module),was,'флага нет — без изменений');
  assert.equal(JSON.stringify(parseModule(JSON.parse(was))),JSON.stringify(parseModule(JSON.parse(JSON.stringify(out.modules[0].module)))));
  const fl=sideBySide([500,600]);setDrawersOverlay(fl,'s1',true);assert.equal(parseModule(JSON.parse(JSON.stringify(fl))).sections[0].drawersToRow,true,'файл хранит привязку');
+});
+
+// ── критик 01.11 ──
+test('блокер 1: две секции с рядами и ящиками: вровень в обеих не гонит двери вверх, фасады и ряды на месте',()=>{
+ const m=wardrobe(1200,2400);m.sections=[section({drawers:2}),section({id:'s2',drawers:2})];setDoorRowCount(m,'s1',3);setDoorRowCount(m,'s2',3);assert.deepEqual(validate(m),[]);
+ const hs=(sid:string,x:Module)=>fronts(x,sid).map(f=>Math.round(f.size[1]));
+ let p=project(m);const tick=(q:Project,sid:string)=>{const n=structuredClone(q);setDrawersOverlay(n.modules[0].module,sid,true);return keepDrawersOnRows(q,n);};
+ p=tick(p,'s1');const a=p.modules[0].module;assert.deepEqual(validate(a),[]);assert.ok(hs('s1',a).every(h=>h<=345),'s1 '+hs('s1',a));
+ p=tick(p,'s2');const b=p.modules[0].module;assert.deepEqual(validate(b),[]);
+ assert.deepEqual(b.sections[0].drawerConfigs,a.sections[0].drawerConfigs,'s1 не сдвинулась от галочки в s2');assert.deepEqual(hs('s2',b),hs('s1',b),'s2 встала по верху ящиков s1');
+ assert.ok(Math.abs(drawerCapTop(b,b.sections[0])-drawerCapTop(b,b.sections[1]))<0.35,'верх ящиков — общий');
+ assert.ok(doorRowHeights(b,b.sections[0]).every(h=>h>600)&&doorRowHeights(b,b.sections[1]).every(h=>h>600),'ряды не сжаты: '+doorRowHeights(b,b.sections[0])+' / '+doorRowHeights(b,b.sections[1]));
+ assert.deepEqual(drawerRowInfo(b,b.sections[1]),{seam:Math.round(drawerCapTop(b,b.sections[1])*10)/10});
+ // правка рядов одной привязанной секции не двигает ящики другой
+ const q=structuredClone(p);q.modules[0].module.sections[1].doorSplit=q.modules[0].module.sections[1].doorSplit!-50;const r=keepDrawersOnRows(p,q);assert.deepEqual(r.modules[0].module.sections[0].drawerConfigs,a.sections[0].drawerConfigs);
+ // сосед на недостижимом ряду: привязанная не идёт и говорит почему
+ const s=sideBySide([500,600]);setDrawersOverlay(s,'s1',true);const was=s.sections[0].drawerConfigs,ps=project(s),t=structuredClone(ps);t.modules[0].module.sections[1].doorSplit=1500;delete t.modules[0].module.sections[1].doorRows;const u=keepDrawersOnRows(ps,t).modules[0].module;
+ assert.deepEqual(u.sections[0].drawerConfigs,was);assert.match((drawerRowInfo(u,u.sections[0]) as {none:string}).none,/оставлены как есть/);
+});
+
+test('блокер 2: 2 ряда над ящиками вровень: нижний ряд съел верхний — отказ, дверь не вылезает за корпус',()=>{
+ const m=wardrobe(600,2400,600,{drawers:3});setDrawersOverlay(m,'s1',true);setDoorSplit(m,'s1',true);assert.deepEqual(validate(m),[]);
+ m.sections[0].doorSplit=2100;assert.ok(validate(m).some(e=>/верхний ряд фасадов не помещается/.test(e)),validate(m).join('|'));
+ m.sections[0].doorSplit=1700;const rest=doorRowHeights(m,m.sections[0]).at(-1)!;if(rest<200)assert.ok(validate(m).some(e=>/верхний ряд фасадов \d+ мм/.test(e)));
+ // снятый верхний ряд не мешает
+ const r=wardrobe(600,2400,600,{doorSplit:1000,removedDoors:[2]});assert.deepEqual(validate(r),[]);
+});
+
+test('блокер 3: низкий ряд у перегородки: петли не внахлёст; не встают — отказ с причиной',()=>{
+ let refused=0,ok=0;
+ for(let sp=202;sp<=300;sp++){
+  const m=wardrobe(1200,2400);m.sections=[section(),section({id:'s2',doorSplit:sp})];const e=validate(m),d=doors(m).filter(x=>x.sectionId==='s2').sort((a,b)=>a.position[1]-b.position[1])[0];
+  if(e.length){assert.ok(e.some(x=>/петлям не хватает места/.test(x)),sp+': '+e.join('|'));refused++;continue;}
+  const ys=parts(m).filter(p=>p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')).map(p=>p.position[1]).sort((a,b)=>a-b);
+  assert.equal(ys.length,2);assert.ok(ys[1]-ys[0]>=RULES.hingeMinPitch,sp+': '+ys);assert.deepEqual(realHits(m),[],String(sp));ok++;
+ }
+ assert.ok(refused>0&&ok>0,`отказов ${refused}, годных ${ok}`);
+ // средние ряды у перегородки и у боковины
+ const f=wardrobe(1200,1400);f.sections=[section(),section({id:'s2'})];setDoorRowCount(f,'s2',5);if(!validate(f).length)assert.deepEqual(realHits(f),[]);else assert.match(validate(f).join('|'),/петлям не хватает места/);
+});
+
+test('мелочи: смена монтажа и поднятые ящики; ряды при смене высоты; рамка снимается; зеркало и угол петель',()=>{
+ // 4. поднятые вровень → вкладные: двери не наезжают, лицо одно, проверка смотрит и вкладные
+ const raised=(over:Partial<Section>={})=>wardrobe(600,2200,600,{drawers:2,drawerConfigs:[{slide:'ball',height:140,length:500,y:500},{slide:'ball',height:140,length:500,y:680}],...over});
+ const r=raised();setDrawersOverlay(r,'s1',true);setDoorMount(r,'inset');assert.deepEqual(validate(r),[]);assert.ok(drawersFlush(r,r.sections[0]));
+ const ds=doors(r).sort((a,b)=>lo(a)-lo(b)),fs=fronts(r);assert.ok(hi(ds[0])<lo(fs[0])&&hi(fs[1])<lo(ds[1]),'двери не наезжают');assert.ok(fs.every(f=>faceZ(f)===faceZ(ds[0])));
+ setDoorMount(r,'overlay');assert.deepEqual(validate(r),[]);assert.ok(fronts(r).every(f=>faceZ(f)===faceZ(doors(r)[0])));
+ const bad=raised();setDrawersOverlay(bad,'s1',true);bad.doorMount='inset';bad.sections[0].drawerMount='inset';bad.sections[0].doorSplit=700;assert.ok(validate(bad).length>0,'руками наехали — проверка видит и у вкладных');
+ // 5. уже разделённая и вкладная: своя дверь снизу, фасад не тянется; совсем низко при вкладных — отказ
+ const sp=raised({doorSplit:1000});setDrawersOverlay(sp,'s1',true);assert.deepEqual(validate(sp),[]);assert.equal(doors(sp).length,2);assert.ok(fronts(sp)[0].size[1]<200,'фасад '+fronts(sp)[0].size[1]);
+ const ins=raised();ins.doorMount='inset';setDrawersOverlay(ins,'s1',true);assert.deepEqual(validate(ins),[]);assert.equal(doors(ins).length,2);assert.ok(lo(doors(ins).sort((a,b)=>lo(a)-lo(b))[0])<lo(fronts(ins)[0]));
+ const tight=wardrobe(600,2200,600,{drawers:1,drawerConfigs:[{slide:'ball',height:140,length:500,y:100}]});tight.doorMount='inset';assert.throws(()=>setDrawersOverlay(tight,'s1',true),/зона под ящиками останется открытой/);
+ // 6. высота: равные ряды равны, ручные стоят; верхний не ниже 200 — иначе в пропорции
+ const eq=wardrobe(600,2400);setDoorRowCount(eq,'s1',5);const a=structuredClone(eq);a.height=2000;fitDoorRowsAfterResize(a,eq);assert.deepEqual(validate(a),[]);let hs=doorRowHeights(a,a.sections[0]);assert.ok(Math.max(...hs)-Math.min(...hs)<=4,'равные: '+hs);
+ const c=structuredClone(eq);c.height=3000;fitDoorRowsAfterResize(c,eq);hs=doorRowHeights(c,c.sections[0]);assert.ok(Math.max(...hs)-Math.min(...hs)<=4,'рост: '+hs);
+ const man=wardrobe(600,2400);setDoorRowCount(man,'s1',3);man.sections[0].doorRows=[500];const d=structuredClone(man);d.height=2300;fitDoorRowsAfterResize(d,man);assert.deepEqual(d.sections[0].doorRows,[500],'ручной ряд стоит');
+ const e=structuredClone(man);e.height=1500;fitDoorRowsAfterResize(e,man);assert.deepEqual(validate(e),[],'верхнему не хватило — в пропорции');
+ // через поле «Высота» проекта (тот же расчёт, что панель)
+ const pe=project(eq);hs=doorRowHeights(setModuleSize(pe,pe.modules[0].id,'height',2000).project.modules[0].module,setModuleSize(pe,pe.modules[0].id,'height',2000).project.modules[0].module.sections[0]);assert.ok(Math.max(...hs)-Math.min(...hs)<=4,'поле высоты: '+hs);
+ // 7. рамка: снял вровень — снята, если на ящиках её больше не видно; поставленная вручную при открытых ящиках остаётся
+ const alu=wardrobe(600,2200,600,{drawers:2});alu.alu={...DEFAULT_ALU};setDrawersOverlay(alu,'s1',true);assert.equal(alu.aluDrawers,true);setDrawersOverlay(alu,'s1',false);assert.equal(alu.aluDrawers,undefined);
+ const two=wardrobe(1200,2200);two.alu={...DEFAULT_ALU};two.sections=[section({drawers:2}),section({id:'s2',drawers:2})];setDrawersOverlay(two,'s1',true);setDrawersOverlay(two,'s2',true);setDrawersOverlay(two,'s2',false);assert.equal(two.aluDrawers,true,'в s1 рамка ещё нужна');
+ // 8. зеркало: угол петель за своей створкой
+ const mir=wardrobe(1000,2200,600,{doorLeaves:2,hingeAngles:[165,null]});const pm=project(mir);const out=mirrorModule(pm,pm.modules[0].id).modules[0].module;assert.deepEqual(out.sections[0].hingeAngles,[null,165]);
 });
 
 // ── вровень ──

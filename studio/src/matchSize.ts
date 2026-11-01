@@ -3,6 +3,7 @@
 // Правка — та же, что поле «Высота»/«Глубина» панели корпуса (App.tsx modify → commit): ящики подгоняются (fitDrawersAfterResize),
 // малый корпус снимает невлезающее (resizeSmall), ширина в ряду не меняется, корпус под потолком растёт вниз (верх остаётся у потолка),
 // стоящий на полу — вверх. Нарушение пределов — понятная причина, проект не меняется.
+import {fitDoorRowsAfterResize} from './doorRows';
 import {fitDrawersAfterResize,shelfMaxDepth,validate,type Module} from './model';
 import {projectErrors,applyAutoFillers,bounds,type Project,type PlacedModule} from './project';
 import {placeInRow,gaps} from './rowResize';
@@ -17,7 +18,7 @@ type Side='left'|'right';
 export function setModuleSize(p:Project,id:string,key:SizeKey,value:number):{project:Project;notes:string[]}{
  const a=p.modules.find(x=>x.id===id);if(!a)throw Error('Модуль не найден.');
  const m=a.module,next=structuredClone(m);next[key]=value;
- if(key==='height'&&next.height!==m.height&&!next.corner){fitDrawersAfterResize(next,m);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}
+ if(key==='height'&&next.height!==m.height&&!next.corner){fitDrawersAfterResize(next,m);fitDoorRowsAfterResize(next,m);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}
  if(key==='depth'&&next.kitchen)for(const s of next.sections){if(s.shelfDepth!==undefined){const old=m.sections.find(v=>v.id===s.id)?.shelfDepth;if(!s.shelves.length)delete s.shelfDepth;else s.shelfDepth=Math.max(60,Math.min(shelfMaxDepth(next),next.depth-(m.depth-(old??s.shelfDepth))));}}
  const notes=resizeSmall(m,next,undefined,fitDrawersAfterResize).notes;
  const err=validate(next)[0];if(err)throw Error(`«${m.name}»: ${err}`);

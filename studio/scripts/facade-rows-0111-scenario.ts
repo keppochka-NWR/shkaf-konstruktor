@@ -184,13 +184,21 @@ try {
   const toRow = page.locator('.drawer-selection input[aria-label="Верх ящиков по ряду соседней секции"]').first();
   check("галочка «Верх ящиков по ряду соседней секции» стоит", await toRow.isChecked());
   await page.keyboard.press("Escape"); await view("Спереди"); await shot("flush-on-neighbour-row-front");
-  // сосед меняет нижний ряд — ящики идут за ним; Ctrl+Z — один шаг
-  await pickSec(1); await openFacades(); await type(field("Высота нижнего ряда фасадов"), 800);
+  // сосед меняет нижний ряд в пределах короба 300 мм — ящики идут за ним; Ctrl+Z — один шаг
+  await pickSec(1); await openFacades(); await type(field("Высота нижнего ряда фасадов"), 700);
   p = await saved(); m = p.modules[3].module; q0 = pair(m);
-  check("сосед 800: ящики пошли за рядом", m.sections[1].doorSplit === 800 && Math.abs(lo(q0.a) - lo(q0.near)) < 0.4, `${lo(q0.a)} / ${lo(q0.near)}`);
+  check("сосед 700: ящики пошли за рядом", m.sections[1].doorSplit === 700 && Math.abs(lo(q0.a) - lo(q0.near)) < 0.4, `${lo(q0.a)} / ${lo(q0.near)}`);
   await page.keyboard.press("Escape"); await view("Спереди"); await shot("flush-follows-neighbour-front");
   await undo(); p = await saved(); m = p.modules[3].module; q0 = pair(m);
   check("Ctrl+Z одним шагом: и ряд соседа, и ящики вернулись", m.sections[1].doorSplit === 600 && Math.abs(lo(q0.a) - lo(q0.near)) < 0.4, `${m.sections[1].doorSplit}`);
+  // критик 01.11: нижний ряд над ящиками вровень съел верхний — отказ с причиной, модель прежняя
+  await pickSec(0); await openFacades();
+  await click(page.getByText("Разделить фасады по высоте", { exact: true }));
+  p = await saved(); const splitWas = p.modules[3].module.sections[0].doorSplit;
+  await type(field("Высота нижнего ряда фасадов"), 2100); await page.waitForTimeout(500);
+  p = await saved();
+  const bodyText = await page.locator("body").innerText(), said = /[^\n]*(?:ряд фасадов|Распашной фасад)[^\n]*/i.exec(bodyText)?.[0] ?? "(нет текста)"; await shot("row-2100-refused");
+  check("ряд 2100 над ящиками: отказ с причиной, разрез прежний", p.modules[3].module.sections[0].doorSplit === splitWas && /верхний ряд фасадов/i.test(bodyText), `${splitWas} → ${p.modules[3].module.sections[0].doorSplit}; ${said}`);
   check("ошибок страницы нет", errors.length === 0, errors.slice(0, 3).join(" | "));
 } catch (e) { check("сценарий дошёл до конца", false, (e as Error).message); await shot("error"); }
 writeFileSync(`${out}/result.json`, JSON.stringify(results, null, 1));

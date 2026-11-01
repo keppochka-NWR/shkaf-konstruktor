@@ -1,7 +1,7 @@
 // Ящики секции (fix-drawers, правки Макса 29.10.2026): число ящиков с пересчётом расстановки «по правилу», выкатной ящик на всю
 // секцию (антресоль) и переключатель «ящики в накладку / за дверью». Только правки модели — те же для панели справа и меню правой
 // кнопки; геометрию строит parts() (model.ts), цены — смета по деталям (направляющие комплектами на ящик — guideKits).
-import { boxes, doorBands, drawerConfig, drawerOffsets, drawersFillRoof, drawersFlushBlock, drawerStackHeight, drawersToRoof, evenDrawerConfigs, facadeBottom, facadeTop, fb, hasDrawerCap, isAutoDrawerLayout, nicheDrawers, parts, rearClear, RULES, type Module, type Section } from "./model";
+import { aluDrawerFronts, boxes, doorBands, drawerConfig, drawerOffsets, drawersFillRoof, drawersFlushBlock, drawerStackHeight, drawersToRoof, evenDrawerConfigs, facadeBottom, facadeTop, fb, fe, hasDrawerCap, isAutoDrawerLayout, nicheDrawers, parts, rearClear, RULES, type Module, type Section } from "./model";
 import { SLIDES, type DrawerConfig } from "./hardware";
 import { rescaleDoorRows } from "./doorRows";
 import { alignDrawersToRow } from "./drawerRowAlign";
@@ -101,9 +101,22 @@ export function setDrawersOverlay(m: Module, sid: string, on: boolean): void {
   overlay(m, sid, on);
   // Макс 01.11: вровень — верх ящиков ещё и на ряду соседней секции (drawerRowAlign.ts); снято — привязки нет
   const s = sectionOf(m, sid);
-  if (!on) delete s.drawersToRow;
+  // критик 01.11: рамка, поставленная ради плоскости, снимается, когда на ящиках её больше не видно (иначе держала запрет на групповой цвет ящиков)
+  if (!on) { delete s.drawersToRow; if (m.alu && m.aluDrawers && !aluDrawerFronts(m).length) delete m.aluDrawers; }
   else if (s.externalDrawers) { s.drawersToRow = true; alignDrawersToRow(m, s); }
 }
+/** Ниже ящиков, поднятых от дна, встаёт своя дверь: низ двери — по монтажу (вкладная — внутри проёма), верх — через зазор под фасадом ящика. */
+const doorFloor = (m: Module, b: { bottom: number }) => m.doorMount === "inset" ? b.bottom + fe(m) : facadeBottom(m);
+const doorBelowFits = (m: Module, s: Section, b: { bottom: number }, low: number) => b.bottom + low - doorFloor(m, b) - (s.doorGap ?? fb(m)) >= RULES.doorRowMinH;
+/** Ряды вокруг поднятых ящиков (проём заказа 7442203): дверь снизу и дверь сверху, зазоры как между фасадами. Посадка фасада — как у двери. */
+function fitNiche(m: Module, s: Section, b: { bottom: number }, low: number) {
+  const g = s.doorGap ?? fb(m);
+  s.doorSplit = b.bottom + low - doorFloor(m, b) - g / 2; s.doorNiche = drawerStackHeight(s) - low + g;
+  delete s.externalDrawers; delete s.drawersToRow; delete s.removedDoors;
+  if (m.doorMount === "inset") s.drawerMount = "inset"; else delete s.drawerMount;
+  if (m.alu && m.doorMount !== "inset") m.aluDrawers = true;
+}
+const raisedOpen = (low: number) => `Ящики подняты на ${Math.round(low)} мм: снизу двери не встать (нужен ряд от ${RULES.doorRowMinH} мм), а при вкладных дверях фасад ящика вниз не тянется — зона под ящиками останется открытой. Опустите ящики на дно или поднимите выше.`;
 function overlay(m: Module, sid: string, on: boolean): void {
   const s = sectionOf(m, sid);
   if (on) { const why = drawersFlushBlock(m, s); if (why) throw Error(why); }
@@ -113,13 +126,14 @@ function overlay(m: Module, sid: string, on: boolean): void {
   // Макс 01.11: ящики подняты от дна на высоту двери — снизу своя дверь, над ящиками своя (тот же механизм, что проём заказа 7442203), иначе нижний
   // фасад растягивался бы до пола на всю высоту под ящиками. Ниже ряда doorRowMinH двери снизу не встать — фасад тянется к цоколю, как было.
   const low = s.drawers > 0 ? Math.min(...drawerOffsets(s)) : 0, b = boxes(m).find((x) => x.id === sid)!;
-  if (on && m.doorMount !== "inset" && s.doorSplit === undefined && b.bottom + low - facadeBottom(m) >= RULES.doorRowMinH + (s.doorGap ?? fb(m))) {
-    if (m.alu) m.aluDrawers = true;
-    const g = s.doorGap ?? fb(m); // зазор двери к фасаду ящика снизу и сверху — как между фасадами
-    s.doorSplit = b.bottom + low - facadeBottom(m) - g / 2; s.doorNiche = drawerStackHeight(s) - low + g; delete s.externalDrawers; delete s.drawerMount;
+  // критик 01.11: и при уже разделённой секции (нижний фасад тянулся на 744 мм), и при вкладных дверях; вкладным нечем закрыть низ — отказ с причиной
+  if (on && low > 0.5 && doorBelowFits(m, s, b, low)) {
+    if (!nicheDrawers(m, s)) delete s.doorRows;
+    fitNiche(m, s, b, low);
     if (s.drawerConfigs) s.drawerConfigs = s.drawerConfigs.slice(0, s.drawers).map((c) => fitLength(m, s, c));
     return;
   }
+  if (on && low > 0.5 && m.doorMount === "inset") throw Error(raisedOpen(low));
   // снять, когда ящики стоят между рядами (проём): дверь снова одна на секцию, ящики за ней
   if (!on && nicheDrawers(m, s)) { delete s.doorSplit; delete s.doorNiche; delete s.doorRows; delete s.removedDoors; }
   if (on) { s.externalDrawers = true; if (m.doorMount === "inset") s.drawerMount = "inset"; else delete s.drawerMount; if (m.alu && m.doorMount !== "inset") m.aluDrawers = true; }
@@ -137,7 +151,14 @@ function overlay(m: Module, sid: string, on: boolean): void {
 /** «Монтаж фасадов» корпуса (панель и меню «Тип петли»): ящики вровень остаются вровень — фасад ящика уходит в проём вместе с дверью (Макс 01.11). */
 export function setDoorMount(m: Module, mount: "overlay" | "inset"): void {
   if (mount === "inset") m.doorMount = "inset"; else delete m.doorMount;
-  for (const s of m.sections) if (s.externalDrawers && s.drawers > 0) { if (mount === "inset") s.drawerMount = "inset"; else delete s.drawerMount; }
+  for (const s of m.sections) {
+    if (!(s.drawers > 0) || !(s.externalDrawers || nicheDrawers(m, s))) continue;
+    const b = boxes(m).find((x) => x.id === s.id)!, low = Math.min(...drawerOffsets(s));
+    // критик 01.11: ящики между рядами — ряды заново под новый монтаж (иначе дверь 98…662 наезжала на фасад 596…774 без ошибки); поднятые снаружи — так же
+    if (nicheDrawers(m, s) || (low > 0.5 && doorBelowFits(m, s, b, low))) { if (!nicheDrawers(m, s)) delete s.doorRows; fitNiche(m, s, b, low); continue; }
+    if (low > 0.5 && mount === "inset") throw Error(raisedOpen(low));
+    if (mount === "inset") s.drawerMount = "inset"; else { delete s.drawerMount; if (m.alu) m.aluDrawers = true; }
+  }
 }
 
 /** «Выкатной ящик на всю секцию» (правка 2, 29.10.2026; антресоль): наполнение секции убирается, один ящик на всю высоту проёма —

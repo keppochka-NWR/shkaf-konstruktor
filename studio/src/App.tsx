@@ -24,7 +24,7 @@ import { configureColumn } from "./kitchenTall";
 import { syncKitchenLift } from "./kitchenLift";
 import {fb,drawersBehindDoors,doorRowsBlock,drawersFlush,facadeHandleId,setFacadeHandle,mirrorEdgeHandles,mirrorBracketDoors,doorHandleFloorInfo,setDoorHandleFloor,doorHandlePos,handlePosIssue,setDoorHandlePos,setModuleHandlePos,isUpperModule,HANDLE_POS_LABEL,type HandlePos,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue,drawerFaceSpan,drawerGripOn,aluDrawersAvailable,evenDrawerConfigs,drawerFacesEqual} from './model';
 import {setDrawerCount,setDrawersOverlay,setDoorMount,fullSectionDrawer,fullDrawerFacadeH,drawerFaceGap,setDrawerGap} from './drawerModes';
-import {setDoorSplit,setDoorRowCount,doorRowHeights,doorPickLabel,maxDoorRows,MAX_DOOR_ROWS} from './doorRows';
+import {fitDoorRowsAfterResize,setDoorSplit,setDoorRowCount,doorRowHeights,doorPickLabel,maxDoorRows,MAX_DOOR_ROWS} from './doorRows';
 import {DrawerFlushCheck} from './DrawerFlushCheck';
 import {keepDrawersOnRows,setDrawersToRow} from './drawerRowAlign';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
@@ -769,7 +769,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
    *  ящики по высоте, малый корпус. Память малого корпуса не трогает (keepMemo — применить её), бросает Error. */
   function preparedModule(base:Module,mid:string,update:(draft:Module)=>void,keepMemo:boolean){
     const next = structuredClone(base);let small:string[]=[],restored=false;
-    update(next);if(next.kitchen&&next.width!==base.width&&/^(Нижний кухонный|Нижний с ящиками|Под мойку|Под духовку|Бутылочница|Навесной кухонный|Навесной открытый|Антресоль|Пенал) \d+$/.test(base.name))next.name=base.name.replace(/ \d+$/,` ${next.width}`);if(next.kitchen&&next.depth!==base.depth)for(const s of next.sections){if(s.shelfDepth!==undefined){const old=base.sections.find(v=>v.id===s.id)?.shelfDepth;if(!s.shelves.length)delete s.shelfDepth;else s.shelfDepth=Math.max(60,Math.min(shelfMaxDepth(next),next.depth-(base.depth-(old??s.shelfDepth))));}}if(next.height!==base.height&&!next.corner){fitDrawersAfterResize(next,base);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}/* волна 29.10: корпус от 100 мм — что в него не входит, снимается с сообщением (smallSize.ts) */if(next.width!==base.width||next.height!==base.height){
+    update(next);if(next.kitchen&&next.width!==base.width&&/^(Нижний кухонный|Нижний с ящиками|Под мойку|Под духовку|Бутылочница|Навесной кухонный|Навесной открытый|Антресоль|Пенал) \d+$/.test(base.name))next.name=base.name.replace(/ \d+$/,` ${next.width}`);if(next.kitchen&&next.depth!==base.depth)for(const s of next.sections){if(s.shelfDepth!==undefined){const old=base.sections.find(v=>v.id===s.id)?.shelfDepth;if(!s.shelves.length)delete s.shelfDepth;else s.shelfDepth=Math.max(60,Math.min(shelfMaxDepth(next),next.depth-(base.depth-(old??s.shelfDepth))));}}if(next.height!==base.height&&!next.corner){fitDrawersAfterResize(next,base);fitDoorRowsAfterResize(next,base);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}/* волна 29.10: корпус от 100 мм — что в него не входит, снимается с сообщением (smallSize.ts) */if(next.width!==base.width||next.height!==base.height){
         // критик 29.10 (п.9): снятое малым корпусом наполнение запоминается; вернули размер — оно возвращается (опечатка 100 вместо 1000)
         const r=resizeSmall(base,next,smallMemos.current.get(mid),fitDrawersAfterResize);small=r.notes;restored=r.restored;
         if(keepMemo){if(r.memo)smallMemos.current.set(mid,r.memo);else if(!r.restored)smallMemos.current.delete(mid);}
@@ -899,7 +899,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   function modifyAt(mid:string,update:(draft:Module)=>void){
     const a=project.modules.find(x=>x.id===mid);if(!a)return false;
     const next=structuredClone(a.module);
-    try{update(next);if(next.height!==a.module.height&&!next.corner)fitDrawersAfterResize(next,a.module);return commitProject(placeInRow(project,mid,next));}catch(e){setError((e as Error).message);return false;}
+    try{update(next);if(next.height!==a.module.height&&!next.corner){fitDrawersAfterResize(next,a.module);fitDoorRowsAfterResize(next,a.module);}return commitProject(placeInRow(project,mid,next));}catch(e){setError((e as Error).message);return false;}
   }
   /** Полка над ящиками секции (п.29 волны 22.10): auto — есть, если над ящиками есть место; on — есть (ящики, дошедшие до крыши, опускаются
    *  под полку с проёмом 80 мм, как при уменьшении высоты); off — нет, ящики остаются на месте. */

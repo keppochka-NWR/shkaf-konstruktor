@@ -8,15 +8,21 @@ import { boxes, doorBands, drawerCapTop, drawerConfig, drawerOffsets, drawersFil
 import type { DrawerConfig } from "./hardware";
 
 const SNAP = 0.3; // округление фасадов (по 0,1…0,5 мм) не считаем сдвигом стыка
-const MAX_BOX = 300;
+const MAX_BOX = 300; // короб ящика, как в distributeDrawers
 
-/** Стыки рядов соседних секций: верх нижнего из двух соседних рядов, мм от низа модуля. Только настоящие стыки: над проёмом (doorNiche) ряд продолжается не сразу. */
-export function neighbourRowSeams(m: Module, s: Section): number[] {
+/** Стыки соседних секций, мм от низа модуля: верх нижнего из двух соседних рядов (над проёмом doorNiche ряд продолжается не сразу) и верх ящиков соседа вровень —
+ *  над ними у соседа тоже стык (критик 01.11: без этого секция прыгала на следующий ряд соседа). Сосед сам привязан к ряду: его ряды ходят за его ящиками, поэтому
+ *  из них берётся только верх ящиков, а автоматическая правка (auto) не смотрит на него вовсе — две привязанные секции не гоняют друг друга. */
+export function neighbourRowSeams(m: Module, s: Section, auto = false): number[] {
   if (!m.doors) return [];
   const i = m.sections.findIndex((x) => x.id === s.id), out = new Set<number>();
   for (const j of [i - 1, i + 1]) {
     const n = m.sections[j];
-    if (!n || n.doorSplit === undefined) continue;
+    if (!n) continue;
+    const tied = !!n.drawersToRow && applicable(m, n);
+    if (auto && tied) continue;
+    if (applicable(m, n)) out.add(Math.round(drawerCapTop(m, n) * 10) / 10);
+    if (tied || n.doorSplit === undefined) continue;
     const bs = doorBands(m, n), g = n.doorGap ?? fb(m);
     for (let k = 0; k < bs.length - 1; k++) if (Number.isFinite(bs[k][1]) && bs[k + 1][0] - bs[k][1] <= g + 0.5) out.add(Math.round(bs[k][1] * 10) / 10);
   }
@@ -32,39 +38,33 @@ function applicable(m: Module, s: Section): boolean {
   return !Array.from({ length: s.drawers }, (_, j) => drawerConfig(m, s, j)).some((c) => c.mesh || c.tray || c.noFacade);
 }
 
-/** Верх полки над ящиками = стык: своя дверь начинается через зазор, как следующий ряд соседа. Ящики — поровну; короб не выше 300, выше — фасадом. */
-function stackUpTo(m: Module, s: Section, seam: number): Pick<Section, "drawerConfigs" | "drawerGap"> | null {
+/** Верх полки над ящиками = стык: своя дверь начинается через зазор, как следующий ряд соседа. Ящики — поровну. Предел — правило короба 68…300 (то же, что у поля
+ *  «От дна до верха полки над ящиками»): критик 01.11, фасад 857 мм вместо 177 — выше короба ящик не растягиваем, ящики остаются как есть, в панели заметка. */
+function stackUpTo(m: Module, s: Section, seam: number): DrawerConfig[] | null {
   const b = boxes(m).find((x) => x.id === s.id)!, n = s.drawers, stack = seam - b.bottom - RULES.panel, step = RULES.drawerStep;
   const pitch = Math.floor((stack / n) * 2) / 2, last = stack - (n - 1) * pitch;
-  if (pitch - step < 68) return null;
+  if (pitch - step < 68 || last - step > MAX_BOX) return null;
   const plain = Array.from({ length: n }, (_, j) => { const { facadeH: _f, y: _y, ...c } = drawerConfig(m, s, j); void _f; void _y; return c; });
-  if (last - step <= MAX_BOX) {
-    const cs: DrawerConfig[] = plain.map((c, j) => ({ ...c, height: (j < n - 1 ? pitch : last) - step, y: j * pitch }));
-    const even = withEvenFaces(m, { ...s, drawerConfigs: cs }, cs);
-    return { drawerConfigs: even, drawerGap: s.drawerGap };
-  }
-  const gap = s.drawerGap ?? fb(m); // шаг по фасаду: тот же зазор, что у дверей (без поля шаг считался бы с зазором вкладного ящика)
-  return { drawerConfigs: plain.map((c, j) => ({ ...c, height: MAX_BOX, y: j * pitch, facadeH: (j < n - 1 ? pitch : last) - gap })), drawerGap: gap };
+  const cs: DrawerConfig[] = plain.map((c, j) => ({ ...c, height: (j < n - 1 ? pitch : last) - step, y: j * pitch }));
+  return withEvenFaces(m, { ...s, drawerConfigs: cs }, cs);
 }
 
 const onSeam = (m: Module, s: Section, seams: number[]) => seams.some((a) => Math.abs(drawerCapTop(m, s) - a) <= SNAP);
 
 /** Поставить ящики секции на ближайший стык соседа, где модель остаётся верной; true — ящики сдвинулись. Не встали — ящики как были. */
-export function alignDrawersToRow(m: Module, s: Section): boolean {
-  if (!applicable(m, s)) return false;
-  const seams = neighbourRowSeams(m, s);
-  if (!seams.length || onSeam(m, s, seams)) return false;
+export function alignDrawersToRow(m: Module, s: Section, auto = false): boolean {
+  if (!applicable(m, s) || onSeam(m, s, neighbourRowSeams(m, s))) return false;
+  const seams = neighbourRowSeams(m, s, auto);
+  if (!seams.length) return false;
   const top = drawerCapTop(m, s), base = new Set(validate(m)), idx = m.sections.indexOf(s);
   const whole = doorBands(m, { ...s, doorSplit: undefined, doorRows: undefined })[0], was = whole[1] - whole[0];
   for (const seam of [...seams].sort((a, c) => Math.abs(a - top) - Math.abs(c - top))) {
     const t = structuredClone(m), st = t.sections[idx], next = stackUpTo(t, st, seam);
     if (!next) continue;
-    st.drawerConfigs = next.drawerConfigs;
-    if (next.drawerGap !== undefined) st.drawerGap = next.drawerGap;
+    st.drawerConfigs = next;
     rescaleDoorRows(t, st, was); // свои ряды над ящиками — в той же пропорции на новую высоту двери
     if (Math.abs(drawerCapTop(t, st) - seam) > SNAP || validate(t).some((e) => !base.has(e))) continue;
     s.drawerConfigs = st.drawerConfigs;
-    if (st.drawerGap !== undefined) s.drawerGap = st.drawerGap;
     if (st.doorSplit !== undefined) s.doorSplit = st.doorSplit;
     if (st.doorRows) s.doorRows = st.doorRows;
     return true;
@@ -85,9 +85,9 @@ export function setDrawersToRow(m: Module, sid: string, on: boolean): void {
 export function drawerRowInfo(m: Module, s: Section): { seam: number } | { none: string } | null {
   if (m.sections.length < 2 || !applicable(m, s)) return null;
   const seams = neighbourRowSeams(m, s);
-  if (!seams.length) return { none: "У соседних секций фасады не разделены на ряды — ящики оставлены как есть." };
+  if (!seams.length) return { none: "У соседних секций нет рядов и ящиков вровень — ящики оставлены как есть." };
   const hit = seams.find((a) => Math.abs(drawerCapTop(m, s) - a) <= SNAP);
-  return hit !== undefined ? { seam: hit } : { none: "Ни на один ряд соседней секции ящики не встают по размерам — оставлены как есть." };
+  return hit !== undefined ? { seam: hit } : { none: "До ряда соседней секции ящикам не дотянуться: короб вышел бы выше 300 мм или ниже 68 мм — оставлены как есть." };
 }
 
 const stackShape = (s: Section) => JSON.stringify(Array.from({ length: s.drawers }, (_, j) => { const c = s.drawerConfigs?.[j]; return [c?.height, c?.y, c?.facadeH]; }));
@@ -100,11 +100,11 @@ export function keepDrawersOnRows<P extends { modules: { id: string; module: Mod
     if (!a.module.sections.some((s) => s.drawersToRow)) return;
     const was = prev.modules.find((x) => x.id === a.id)?.module, n = structuredClone(a.module);
     let changed = false;
-    for (let pass = 0; pass < 2; pass++) for (const s of n.sections) { // два прохода: секция с рядами над ящиками сама бывает соседом другой
+    for (const s of n.sections) { // один проход: секции идут только за соседом без привязки (auto), поэтому друг друга не гоняют
       if (!s.drawersToRow) continue;
       const w = was?.sections.find((x) => x.id === s.id), own = next.modules[i].module.sections.find((x) => x.id === s.id)!;
-      if (pass === 0 && w?.drawersToRow && w.drawers === own.drawers && stackShape(w) !== stackShape(own)) { delete s.drawersToRow; changed = true; continue; }
-      if (alignDrawersToRow(n, s)) changed = true;
+      if (w?.drawersToRow && w.drawers === own.drawers && stackShape(w) !== stackShape(own)) { delete s.drawersToRow; changed = true; continue; }
+      if (alignDrawersToRow(n, s, true)) changed = true;
     }
     if (changed) { if (modules === next.modules) modules = [...next.modules]; modules[i] = { ...a, module: n }; }
   });
