@@ -54,6 +54,7 @@ export function copyFilling(n:Module,src:Module):string|null{
   const t=n.sections[i],s=src.sections[i],hs=bs[i].top-bs[i].bottom,ht=bt[i].top-bt[i].bottom,same=Math.abs(hs-ht)<0.5;
   const rec=t as Record<string,unknown>,from=s as Record<string,unknown>;
   for(const k of FILL_KEYS)put(rec,k,from[k]);
+  if(t.externalDrawers&&n.doorMount==="inset")t.drawerMount="inset"; // Макс 01.11: вровень с дверьми цели: у вкладных фасад ящика тоже вкладной
   if(hasLights(s))for(const k of LIGHT_KEYS)put(rec,k,from[k]);
   else keepOwnLights(t);
   // постоянные id полок/ящиков (вырезы) — у нового наполнения свои; вырезов на наполнении цели нет (fillingCompat)

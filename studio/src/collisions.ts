@@ -87,7 +87,8 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     // Направляющая ящика — между своим коробом и стойкой корпуса.
     if (!p.id.startsWith("kd:") && p.id.includes(":slide:") && (q.role === "body" || q.role === "drawer") && (q.role === "body" || q.id.split(":slide:")[0] === q.id.replace(/:[a-z]+$/, ""))) return true;
     // Детали одного ящика стыкуются между собой (короб, дно в пазу, фасад на передней стенке).
-    if (p.role === "drawer" && q.role === "drawer" && !p.id.startsWith("kd:") && !q.id.startsWith("kd:") && p.id.replace(/:[a-z0-9]+(:\d+)?$/, "") === q.id.replace(/:[a-z0-9]+(:\d+)?$/, "")) return true;
+    // у углового шкафа направляющие названы :slide:left/:slide:right — приводим к тому же виду, что :slide:0/:slide:1 (Макс 01.11)
+    if (p.role === "drawer" && q.role === "drawer" && !p.id.startsWith("kd:") && !q.id.startsWith("kd:") && p.id.replace(/:slide:(?:left|right)$/, ":slide:0").replace(/:[a-z0-9]+(:\d+)?$/, "") === q.id.replace(/:slide:(?:left|right)$/, ":slide:0").replace(/:[a-z0-9]+(:\d+)?$/, "")) return true;
     // ХДФ задника в пазу стоек/дна/крыши: проникновение не глубже паза.
     if (p.material === "hdf" && p.role === "body" && isBoard(q) && q.role === "body" && m?.backType === "groove" && depth <= (m.grooveDepth ?? 8) + 0.5) return true;
     // боковины разной глубины (kitchen.sideRecess, пакет 4): набивной ХДФ заходит в паз длинной боковины на groove.into, как в Базисе (k28 m16)
@@ -177,6 +178,25 @@ const bazisHoleInGroove = (p: Part, q: Part, m?: Module) => !!m?.bazis && !!m.ki
   return (m.kitchen!.grooveHoles ?? []).map((h) => grooveHoleAt(h, m)).some((h) => Math.hypot(h[0] - o[0], h[1] - o[1], h[2] - o[2]) <= 0.5);
 });
 
+/** План детали в координатах модуля: контур planContour или прямоугольник габарита; поворот rotY как в box(). */
+function planPolygon(p: Part): [number, number][] {
+  const a = ((p.rotY ?? 0) * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a), w = p.size[0], d = p.size[2];
+  return (p.planContour ?? [[0, 0], [w, 0], [w, d], [0, d]]).map(([x, z]) => { const lx = x - w / 2, lz = z - d / 2; return [p.position[0] + lx * c + lz * s, p.position[2] - lx * s + lz * c] as [number, number]; });
+}
+/** Макс 01.11: у углового шкафа дно, крыша и полки — выпуклые многоугольники. Короб габарита накрывал диагональные двери и давал ложную красную плашку
+ *  «пересекаются детали» у каждого углового шкафа; здесь — призма по настоящему контуру (SAT в плане + перекрытие по высоте). */
+function contourPenetration(a: Part, b: Part): number {
+  const A = planPolygon(a), B = planPolygon(b);
+  let min = Math.min(a.position[1] + a.size[1] / 2, b.position[1] + b.size[1] / 2) - Math.max(a.position[1] - a.size[1] / 2, b.position[1] - b.size[1] / 2);
+  for (const P of [A, B]) for (let i = 0; i < P.length; i++) {
+    const [x0, z0] = P[i], [x1, z1] = P[(i + 1) % P.length], n = Math.hypot(x1 - x0, z1 - z0);
+    if (n < 1e-6) continue;
+    const nx = (z1 - z0) / n, nz = (x0 - x1) / n, pa = A.map(([x, z]) => x * nx + z * nz), pb = B.map(([x, z]) => x * nx + z * nz);
+    min = Math.min(min, Math.min(Math.max(...pa), Math.max(...pb)) - Math.max(Math.min(...pa), Math.min(...pb)));
+  }
+  return min;
+}
+
 /** Все неразрешённые пересечения деталей модуля. */
 export function partCollisions(ps: Part[], m?: Module, tol = 0.1): Collision[] {
   const out: Collision[] = [];
@@ -193,7 +213,7 @@ export function partCollisions(ps: Part[], m?: Module, tol = 0.1): Collision[] {
     const A = boxes[i], B = boxes[j];
     if(canonical&&kupeSeat(ps[i],ps[j])&&canonicalPart(ps[i])&&canonicalPart(ps[j]))continue;
     if (Math.hypot(B.c[0] - A.c[0], B.c[1] - A.c[1], B.c[2] - A.c[2]) > rad[i] + rad[j]) continue;
-    const depth = ps[i].collide || ps[j].collide || ps[i].planHoles || ps[j].planHoles ? partPenetration(ps[i], ps[j]) : penetration(A, B);
+    const depth = m?.corner && (ps[i].planContour || ps[j].planContour) ? contourPenetration(ps[i], ps[j]) : ps[i].collide || ps[j].collide || ps[i].planHoles || ps[j].planHoles ? partPenetration(ps[i], ps[j]) : penetration(A, B);
     if (depth <= tol) continue;
     if (allowedContact(ps[i], ps[j], depth, m)) continue;
     out.push({ a: ps[i].id, b: ps[j].id, names: [ps[i].name, ps[j].name], depth: Math.round(depth * 10) / 10, ...(bazisHoleInGroove(ps[i], ps[j], m) ? { bazis: true as const } : {}) });

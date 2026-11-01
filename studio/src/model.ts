@@ -214,7 +214,7 @@ export type Section = {
   /** Кухня (пенал с doorSplit): открытая ниша под технику между рядами фасадов — от верха нижнего ряда до низа верхнего, мм.
    *  Без поля между рядами — обычный зазор фасадов. */
   doorNiche?: number;
-  /** Кухня (пенал с doorSplit в 3+ ряда): высоты фасадов средних рядов снизу вверх, мм; верхний ряд — до верха фасадов. */
+  /** Секция с doorSplit в 3+ ряда (пенал кухни; шкафы — Макс 01.11): высоты фасадов средних рядов снизу вверх, мм; верхний ряд — до верха фасадов. */
   doorRows?: number[];
   /** Кухня (doorRows): высоты петель средних рядов от низа фасада, по ряду doorRows; пустой ряд — по правилу (не hingeY нижнего). */
   hingeYMid?: number[][];
@@ -222,7 +222,7 @@ export type Section = {
   hingeYMidFor?: number[];
   /** Кухня: номера створок (row*2+col) без петель — фасад холодильника крепится к двери техники, в Базисе петель нет. */
   hingeless?: number[];
-  /** Наружные ящики снизу, распашные двери только над обязательной полкой. */
+  /** Фасады ящиков вровень с распашными фасадами (не за дверью): наружные ящики снизу, распашные двери только над обязательной полкой (см. drawersFlush). */
   externalDrawers?: boolean;
   /** Полка над ящиками (п.29 волны 22.10): true — есть, false — нет; без поля — есть, если над блоком ящиков остаётся проём
    *  (полка + 80 мм), и нет, если ящики доходят до крыши (комод). См. hasDrawerCap. */
@@ -936,8 +936,51 @@ export function drawersBehindDoors(m:Module,s:Section){return m.doors&&!s.extern
 /** Шкаф (не кухня) с открытым проёмом между рядами фасадов (doorSplit + doorNiche, заказ 7442203 — пенал): ящики секции стоят в этом
  *  проёме, их фасады накладные вровень с дверями (не за дверью), нижний фасад не тянется к цоколю. */
 export function nicheDrawers(m:Module,s:Section){return !m.kitchen&&m.doors&&s.doorSplit!==undefined&&s.doorNiche!==undefined;}
-/** Рядов распашных фасадов секции: 1, с разрезом 2, у кухни — плюс средние ряды doorRows. */
-export function doorRowCount(m:Module,s:Section){return s.doorSplit===undefined?1:2+(m.kitchen?s.doorRows?.length??0:0);}
+/** Рядов распашных фасадов секции: 1, с разрезом 2, плюс средние ряды doorRows (Макс 01.11: и у шкафа, а не только у кухни). */
+export function doorRowCount(_m:Module,s:Section){return s.doorSplit===undefined?1:2+(s.doorRows?.length??0);}
+/** Ряды распашных фасадов секции снизу вверх: [низ, верх] фасада, мм от низа модуля. Одно место для parts() и проверки: ящики вровень
+ *  поднимают низ двери над собой (externalDrawerBoundary), ниша doorNiche встаёт между нижним рядом и следующим. */
+export function doorBands(m:Module,s:Section,b:SectionBox=boxes(m).find(x=>x.id===s.id)!):[number,number][]{
+  const inset=m.doorMount==='inset',gap=s.doorGap??fb(m),extB=inset?undefined:externalDrawerBoundary(m,s,b);
+  const baseY=inset?b.bottom+fe(m):facadeBottom(m),doorBottom=extB?Math.max(baseY,extB.doorBottom):s.externalDrawers&&s.drawers?Math.max(baseY,drawerCapTop(m,s)+gap):baseY,y1flat=inset?b.top-fe(m)-(m.topStrip?m.topStrip+fe(m):0):facadeTop(m);
+  if(s.doorSplit===undefined)return [[doorBottom,y1flat]];
+  // ниша под технику (кухня, doorNiche): верхний ряд начинается выше верха нижнего на высоту ниши, а не на зазор
+  // шкаф (заказ 7442203, пенал): открытый проём между рядами фасадов — ящики с накладными фасадами и открытая ниша (nicheDrawers)
+  const bands:[number,number][]=[[doorBottom,doorBottom+s.doorSplit-gap/2]];
+  // средние ряды (пенал кухни и шкаф, Макс 01.11) — своей высоты фасада, через зазор; верхний — до верха фасадов
+  let y=bands[0][1]+(s.doorNiche!==undefined?s.doorNiche:gap);
+  for(const h of s.doorRows??[]){bands.push([y,y+h]);y+=h+gap;}
+  bands.push([y,y1flat]);
+  return bands;
+}
+/** Почему секцию нельзя делить на ряды фасадов (Макс 01.11): у этих модулей свои двери, а не ряды секции. null — можно. */
+export function doorRowsBlock(m:Module):string|null{
+  if(m.corner)return 'Угловой шкаф: фасады угла идут на всю высоту, ряды считает его проём. Нужны ряды — поставьте рядом прямой модуль.';
+  if(m.kupe)return 'Двери купе делятся вставками в панели купе, рядов распашных фасадов у них нет.';
+  if(m.casework)return 'У этого изделия свои фасады — ряды не задаются.';
+  if(m.raw)return 'Импорт Базиса как есть: фасады правятся в Базисе.';
+  if(m.desk||m.worktop||m.radius)return 'У этого изделия нет распашных фасадов.';
+  return null;
+}
+/** Фасады ящиков секции в одной плоскости с распашными (Макс 01.11, «вровень»): двери накладные — фасады ящиков накладные, двери вкладные —
+ *  вкладные; ALU — той же рамкой (рамка толще ЛДСП: иначе лицо ящика на 4 мм глубже двери). */
+export function drawersFlush(m:Module,s:Section):boolean{
+  if(m.doors&&nicheDrawers(m,s)&&m.doorMount!=='inset')return !m.alu||!!m.aluDrawers; // ящики в проёме между рядами (заказ 7442203) — накладные вровень с дверями
+  if(!m.doors||!s.externalDrawers)return false;
+  const inset=m.doorMount==='inset';
+  if(inset!==(s.drawerMount==='inset'))return false;
+  return inset||!m.alu||!!m.aluDrawers;
+}
+/** Ящики вровень с вкладными дверями: фасад внутри проёма (drawerMount inset), лицо по лицу двери. */
+export function insetFlush(m:Module,s:Section):boolean{return !!m.doors&&m.doorMount==='inset'&&!!s.externalDrawers&&s.drawerMount==='inset'&&!m.kupeZone;}
+/** Почему фасады ящиков секции нельзя поставить вровень с дверями; null — можно. */
+export function drawersFlushBlock(m:Module,s:Section):string|null{
+  if(!m.doors)return 'У корпуса нет распашных фасадов — выравнивать не с чем.';
+  if(m.skew)return 'Фронт со скосом: двери идут по косой, фасады ящиков — прямо, в одной плоскости они не встанут.';
+  if(m.kupeZone)return 'Шкаф-купе с дверями внутри: фасады ящиков всегда внутри проёма.';
+  if(s.drawers>0&&Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).every(c=>c.mesh||c.noFacade))return 'У этих ящиков нет фасада: корзина или внутренний ящик.';
+  return null;
+}
 function fillerSidesBase(m:Module,s:Section){
  if(!drawersBehindDoors(m,s)||!s.drawers)return {left:0,right:0};
  const count=doorCount(m,s),hinges=Array.from({length:doorRowCount(m,s)},(_,row)=>Array.from({length:count},(_,col)=>s.doorHinges?.[row*2+col]??(count===2?(col===0?'left':'right'):(s.hingeSide??m.hingeSide??'left')))).flat();
@@ -1526,7 +1569,8 @@ function partsCore(m: Module): Part[] {
         bh = drawerBoxHeight(m, s, cfg), grip = drawerGripOn(m, s, cfg);
       const bx = b.x + f.left + sideGap,
         y = b.bottom + (cfg.tray?2:RULES.drawerStep/2) + drawerOffsets(s)[j],
-        z = d - (drawersBehindDoors(m,s) ? 44 : 20) - boxD;
+        // Макс 01.11: вровень с вкладной дверью фасад стоит внутри проёма — толстый МДФ не должен въехать в короб (передняя стенка на 3 мм за фасадом)
+        z = d - (drawersBehindDoors(m,s) ? 44 : insetFlush(m,s) ? Math.max(20, (m.facadeT??t)+3) : 20) - boxD;
       nextY += bh + RULES.drawerStep;
       const mesh = cfg.mesh ? meshById(cfg.mesh) : undefined;
       if (mesh) {
@@ -1601,6 +1645,8 @@ function partsCore(m: Module): Part[] {
           add(s.id + ":drawer:" + j + ":slide:" + side, "Направляющая · " + slideLabel(cfg), [hidden ? 20 : 12, hidden ? 12 : 45, cfg.length], [hidden ? bx + (side ? boxW - 10 : 10) : bx + (side ? boxW + 6 : -6), hidden ? y + 6 : y + bh / 2, z + boxD - cfg.length / 2], cfg.length, 20, 12, "drawer", s.id, "metal");
         continue;
       }
+      // Макс 01.11: вровень с вкладной дверью — зазоры фасада как у двери (fe к стойкам и ко дну), а не 3 мм вкладного ящика
+      if(insetFlush(m,s)){fw=b.width-filler-2*fe(m);if(drawerOffsets(s).every((o,k)=>k===j||o>=drawerOffsets(s)[j])&&fy-fh/2<b.bottom+fe(m)){const top=fy+fh/2,bot=b.bottom+fe(m);fh=top-bot;fy=(top+bot)/2;}}
       if(!drawersBehindDoors(m,s)&&!drawerFaceInset(m,s)){
         const sp=facadeSpan(m,i,b);fw=sp.right-sp.left;fx=(sp.left+sp.right)/2;
         fh=span[1]-span[0];fy=pitchBottom+(span[0]+span[1])/2;
@@ -1682,19 +1728,9 @@ function partsCore(m: Module): Part[] {
       // Скос фронта: фасады лежат вдоль наклонной линии фронта, их суммарная ширина — по косой (длиннее проёма).
       const cosK=Math.cos(skewAngle(m)),frontLen=(spanR-spanL)/cosK;
       const gap=s.doorGap??fb(m),count=doorCount(m,s),dw=(frontLen-(count-1)*gap)/count;
-      const extB=inset?undefined:externalDrawerBoundary(m,s,b); // ящики в накладку: дверь над ними через обычный зазор фасадов (правка 29.10)
-      const baseY=inset?b.bottom+fe(m):facadeBottom(m),doorBottom=extB?Math.max(baseY,extB.doorBottom):s.externalDrawers&&s.drawers?Math.max(baseY,drawerCapTop(m,s)+gap):baseY,y1flat=inset?b.top-fe(m)-(m.topStrip?m.topStrip+fe(m):0):facadeTop(m);
+      // ящики вровень с дверями: дверь над ними через обычный зазор фасадов (правка 29.10); ряды — doorBands
       const ft=m.facadeT??t,dz=inset?d-ft/2:d+ft/2+(m.faceAir??2);
-      // ниша под технику (кухня, doorNiche): верхний ряд начинается выше верха нижнего на высоту ниши, а не на зазор
-      // шкаф (заказ 7442203, пенал): открытый проём между рядами фасадов — ящики с накладными фасадами и открытая ниша (nicheDrawers)
-      const upGap=s.doorNiche!==undefined?s.doorNiche:gap;
-      const bands=s.doorSplit===undefined?[[doorBottom,y1flat]]:[[doorBottom,doorBottom+s.doorSplit-gap/2]];
-      if(s.doorSplit!==undefined){
-        // кухня (пенал в 3+ ряда, doorRows): средние ряды — своей высоты фасада, через зазор; верхний — до верха фасадов
-        let y=bands[0][1]+upGap;
-        for(const h of m.kitchen?s.doorRows??[]:[]){bands.push([y,y+h]);y+=h+gap;}
-        bands.push([y,y1flat]);
-      }
+      const bands=doorBands(m,s,b);
       for(let row=0;row<bands.length;row++){
       const [y0,yTop]=bands[row];
       if(!(yTop>y0+1))continue; // выкатной ящик на всю секцию (ящики в накладку до крыши) — двери в секции нет
@@ -2781,11 +2817,11 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
     if(s.glassShelves!==undefined&&(!Array.isArray(s.glassShelves)||s.glassShelves.some(j=>!Number.isInteger(j)||j<0||j>=s.shelves.length)))errors.push(prefix+'неверные номера стеклянных полок.');
     if(s.thickShelves!==undefined&&(!Array.isArray(s.thickShelves)||s.thickShelves.some(j=>!Number.isInteger(j)||j<0||j>=s.shelves.length)))errors.push(prefix+'неверные номера полок 32 мм.');
     else if(s.thickShelves?.some(j=>!s.fixed?.includes(j)||s.glassShelves?.includes(j)))errors.push(prefix+'посадочное место 32 мм — только жёсткая полка ЛДСП (на конфирматах).');
-    if(s.hingeAngles!==undefined&&(!Array.isArray(s.hingeAngles)||s.hingeAngles.length>8||s.hingeAngles.some(v=>v!==null&&!HINGE_ANGLES.includes(v))))errors.push(prefix+'неверный угол открывания петель.');
+    if(s.hingeAngles!==undefined&&(!Array.isArray(s.hingeAngles)||s.hingeAngles.length>Math.max(8,2*doorRowCount(m,s))||s.hingeAngles.some(v=>v!==null&&!HINGE_ANGLES.includes(v))))errors.push(prefix+'неверный угол открывания петель.');
     if(s.rodClearance!==undefined&&(!Number.isFinite(s.rodClearance)||s.rodClearance<300||s.rodClearance>1500))errors.push(prefix+'просвет под штангой: 300–1500 мм.');
-    if(s.doorHandles!==undefined&&(!Array.isArray(s.doorHandles)||s.doorHandles.length>4||s.doorHandles.some(h=>h!==null&&!HANDLES.some(a=>a.id===h))))errors.push(prefix+'неверная ручка створки.');
-    if(s.handleFloor!==undefined&&(!Array.isArray(s.handleFloor)||s.handleFloor.length>8||s.handleFloor.some(v=>v!==null&&(typeof v!=='number'||!Number.isFinite(v)||v<0||v>5000))))errors.push(prefix+'неверная высота ручки от пола.');
-    if(s.handlePos!==undefined&&(!Array.isArray(s.handlePos)||s.handlePos.length>8||s.handlePos.some(v=>v!==null&&!HANDLE_POS.includes(v))))errors.push(prefix+'неверное расположение ручки.');
+    if(s.doorHandles!==undefined&&(!Array.isArray(s.doorHandles)||s.doorHandles.length>Math.max(4,2*doorRowCount(m,s))||s.doorHandles.some(h=>h!==null&&!HANDLES.some(a=>a.id===h))))errors.push(prefix+'неверная ручка створки.');
+    if(s.handleFloor!==undefined&&(!Array.isArray(s.handleFloor)||s.handleFloor.length>Math.max(8,2*doorRowCount(m,s))||s.handleFloor.some(v=>v!==null&&(typeof v!=='number'||!Number.isFinite(v)||v<0||v>5000))))errors.push(prefix+'неверная высота ручки от пола.');
+    if(s.handlePos!==undefined&&(!Array.isArray(s.handlePos)||s.handlePos.length>Math.max(8,2*doorRowCount(m,s))||s.handlePos.some(v=>v!==null&&!HANDLE_POS.includes(v))))errors.push(prefix+'неверное расположение ручки.');
     if(s.externalDrawers!==undefined&&typeof s.externalDrawers!=='boolean')errors.push(prefix+'неверное расположение ящиков.');
     if(s.drawerGrip!==undefined&&typeof s.drawerGrip!=='boolean')errors.push(prefix+'неверный зазор между ящиками.');
     if(s.drawerGrip)for(let j=0;j<s.drawers;j++){const c=drawerConfig(m,s,j);if(drawerGripOn(m,s,c)&&drawerBoxHeight(m,s,c)<60)errors.push(prefix+'ящик '+(j+1)+': при зазоре 30 мм короб ниже 60 мм — увеличьте ящик.');}
@@ -2803,9 +2839,11 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
     if(s.doorGap!==undefined&&(!Number.isFinite(s.doorGap)||s.doorGap<2||s.doorGap>10))errors.push(prefix+'зазор створок от 2 до 10 мм.');
     if(s.removedDoors!==undefined&&(!Array.isArray(s.removedDoors)||s.removedDoors.some(k=>!Number.isInteger(k)||k<0||k>2*doorRowCount(m,s)-1)))errors.push(prefix+'неверный список снятых фасадов.');
     if(s.hingeless!==undefined&&(!m.kitchen||!Array.isArray(s.hingeless)||s.hingeless.some(k=>!Number.isInteger(k)||k<0||k>2*doorRowCount(m,s)-1)))errors.push(prefix+'фасады без петель: только у кухни, номера створок секции.');
-    if(s.doorRows!==undefined&&(!m.kitchen||s.doorSplit===undefined||!Array.isArray(s.doorRows)||s.doorRows.length>3||s.doorRows.some(h=>!Number.isFinite(h)||h<100)||s.doorSplit+(s.doorNiche??0)+s.doorRows.reduce((a,h)=>a+h+3,0)>m.height-200))errors.push(prefix+'ряды фасадов: только у кухни с разделёнными фасадами, средний ряд от 100 мм, верхний не ниже 200 мм.');
+    // Макс 01.11: ряды и у шкафа; кухня — фасады от 100/200 (пенал Базиса), шкаф — правило цеха doorMinH для любого ряда
+    const rowMin=m.kitchen?100:RULES.doorMinH,topMin=m.kitchen?200:RULES.doorMinH;
+    if(s.doorRows!==undefined&&(doorRowsBlock(m)||s.doorSplit===undefined||!Array.isArray(s.doorRows)||s.doorRows.length>3||s.doorRows.some(h=>!Number.isFinite(h)||h<rowMin)||s.doorSplit+(s.doorNiche??0)+s.doorRows.reduce((a,h)=>a+h+3,0)>m.height-topMin))errors.push(prefix+(doorRowsBlock(m)??`ряды фасадов: при разделённых фасадах, не больше 5 рядов, средний ряд от ${rowMin} мм, верхний не ниже ${topMin} мм.`));
     // верхний ряд — по фактической высоте фасада (от верха средних рядов до верха фасадов), а не от высоты корпуса
-    else if(s.doorRows!==undefined&&m.doorMount!=='inset'&&!s.externalDrawers){const g=s.doorGap??fb(m),y=facadeBottom(m)+s.doorSplit!-g/2+(s.doorNiche??g)+s.doorRows.reduce((a,h)=>a+h+g,0);if(facadeTop(m)-y<200)errors.push(prefix+`верхний ряд фасадов ${Math.round(facadeTop(m)-y)} мм — меньше 200 мм: уменьшите средние ряды или увеличьте высоту.`);}
+    else if(s.doorRows!==undefined&&(!m.kitchen||(m.doorMount!=='inset'&&!s.externalDrawers))){const up=doorBands(m,s,b).at(-1)!,rest=up[1]-up[0];if(Number.isFinite(up[0])&&rest<topMin)errors.push(prefix+`верхний ряд фасадов ${Math.round(rest)} мм — меньше ${topMin} мм: уменьшите нижние ряды или увеличьте высоту.`);}
     // кухня: ручные высоты петель — в пределах фасада 40…H−40 (H — высота фасада, при которой они записаны); вне — ошибка, а не тихий кламп scaleHingeY (аудит 11.10)
     if(m.kitchen&&s.hingeY?.length){const H=s.hingeYFor??facadeTop(m)-facadeBottom(m);if(s.hingeY.some(y=>!Number.isFinite(y)||y<40-0.5||y>H-40+0.5))errors.push(prefix+`петля вне фасада: высоты петель от 40 до ${Math.round(H-40)} мм от низа фасада.`);}
     if(s.hingeYMid!==undefined&&(!m.kitchen||!Array.isArray(s.hingeYMid)||s.hingeYMid.length>(s.doorRows?.length??0)||s.hingeYMid.some(r=>!Array.isArray(r)||r.some(y=>!Number.isFinite(y)))))errors.push(prefix+'высоты петель средних рядов: только у кухни с рядами фасадов.');

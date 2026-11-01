@@ -27,6 +27,8 @@ const type = async (l: Locator, v: string | number) => { await l.scrollIntoViewI
 const pick = async (l: Locator, label: string | RegExp) => { await l.scrollIntoViewIfNeeded(); const opts = await l.locator("option").allInnerTexts(); const want = opts.find((o) => typeof label === "string" ? o.trim() === label || o.includes(label) : label.test(o)); if (!want) throw Error("нет пункта " + label + " в " + opts.join(" | ")); await l.selectOption({ label: want }); await page.waitForTimeout(400); };
 const field = (label: string) => page.locator(`input[aria-label="${label}"]`).first();
 const sel = (label: string) => page.locator(`select[aria-label="${label}"]`).first();
+/** Макс 01.11: выбор «Фасады ящиков: в накладку» заменён галочкой в настройках ящика (та же галочка — в «Фасадах секции»). */
+const flushCheck = () => page.locator(`.drawer-selection input[aria-label="Фасад ящика вровень с распашными фасадами"]`).first();
 const btn = (name: string | RegExp) => page.getByRole("button", { name, exact: typeof name === "string" }).first();
 async function openCat(cat: string) { const d = page.locator(`details[data-settings-category="${cat}"]`).first(); if (!(await d.count())) throw Error("нет категории " + cat); if ((await d.getAttribute("open")) === null) await click(d.locator("summary").first()); }
 async function openSet(cat: string, title: string) { await openCat(cat); const d = page.locator(`details[data-setting="${title}"]`).first(); if ((await d.getAttribute("open")) === null) await click(d.locator("summary").first()); }
@@ -131,7 +133,7 @@ try {
   await view(/Для одежды\s*800 × 2000/); await shot("wardrobe-behind");
   if (!base) {
     await openSet("Наполнение", "Ящики");
-    await pick(sel("Фасады ящиков"), "В накладку");
+    await flushCheck().check(); await page.waitForTimeout(400);
     p = await saved(); w = mod(p, 1);
     const ps = parts(w), door = ps.find((x) => x.role === "door")!, fs = faces(w), hinges = ps.filter((x) => x.id.includes(":hingecup:"));
     note(`в накладку: дверь ${Math.round(door.size[1])} мм (было ${Math.round(door0.size[1])}), фасады ящиков ${hs(fs)}, петель ${hinges.length}`);
@@ -149,7 +151,7 @@ try {
     p = await saved(); w = mod(p, 1);
     check("ПКМ «За дверью»: дверь снова во всю высоту, ящики за дверью", !w.sections[0].externalDrawers && Math.abs(parts(w).find((x) => x.role === "door")!.size[1] - door0.size[1]) < 0.1);
     await shot("wardrobe-behind-again");
-    await openSet("Наполнение", "Ящики"); await pick(sel("Фасады ящиков"), "В накладку");
+    await openSet("Наполнение", "Ящики"); await flushCheck().check(); await page.waitForTimeout(400);
     p = await saved(); w = mod(p, 1);
     check("панель «Фасады ящиков: в накладку» — снова накладные", !!w.sections[0].externalDrawers && Math.abs(parts(w).find((x) => x.role === "door")!.size[1] - 1524) < 0.1);
   }

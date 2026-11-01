@@ -1,8 +1,9 @@
 // Ящики секции (fix-drawers, правки Макса 29.10.2026): число ящиков с пересчётом расстановки «по правилу», выкатной ящик на всю
 // секцию (антресоль) и переключатель «ящики в накладку / за дверью». Только правки модели — те же для панели справа и меню правой
 // кнопки; геометрию строит parts() (model.ts), цены — смета по деталям (направляющие комплектами на ящик — guideKits).
-import { boxes, drawerConfig, drawersFillRoof, drawersToRoof, evenDrawerConfigs, facadeBottom, facadeTop, hasDrawerCap, isAutoDrawerLayout, parts, rearClear, RULES, type Module, type Section } from "./model";
+import { boxes, doorBands, drawerConfig, drawerOffsets, drawersFillRoof, drawersFlushBlock, drawerStackHeight, drawersToRoof, evenDrawerConfigs, facadeBottom, facadeTop, fb, hasDrawerCap, isAutoDrawerLayout, nicheDrawers, parts, rearClear, RULES, type Module, type Section } from "./model";
 import { SLIDES, type DrawerConfig } from "./hardware";
+import { rescaleDoorRows } from "./doorRows";
 import { drawersUnderMansard } from "./mansardFit";
 import { fitDrawerIds } from "./partIds";
 
@@ -89,15 +90,33 @@ function fitLength(m: Module, s: Section, c: DrawerConfig): DrawerConfig {
   return c.length <= free ? c : { ...c, length: ls.find((l) => l <= free) ?? ls[ls.length - 1] };
 }
 
-/** «Ящики в накладку / за дверью» (правка 3, 29.10.2026): в накладку — фасады ящиков в плоскости распашных дверей, дверь секции
- *  укорачивается и начинается над ящиками через обычный зазор фасадов (externalDrawerBoundary), петли — по новой высоте двери;
- *  за дверью — как было (вкладные фасады ящиков за дверью, фальши у петель). Расстановка «по правилу» пересчитывается: в накладку —
- *  равные фасады (нижний опускается на цоколь), за дверью — поровну по шагу; стопка ящиков и полка над ними не двигаются. */
+/** «Фасад ящика вровень с распашными фасадами» (Макс 01.11; правка 3, 29.10.2026 «ящики в накладку»): фасады ящиков в плоскости распашных дверей,
+ *  дверь секции укорачивается и начинается над ящиками через обычный зазор фасадов (externalDrawerBoundary), петли — по новой высоте двери;
+ *  за дверью — как было (вкладные фасады ящиков за дверью, фальши у петель). Расстановка «по правилу» пересчитывается: вровень —
+ *  равные фасады (нижний опускается на цоколь), за дверью — поровну по шагу; стопка ящиков и полка над ними не двигаются.
+ *  Макс 01.11 «не могу сделать вровень»: у вкладных дверей и у рамки ALU прежняя галочка плоскость не совпадала — вкладная дверь: фасад ящика
+ *  тоже вкладной; рамка: фасад ящика в той же рамке (20 мм), иначе лицо на 4 мм глубже; ряды секции — в той же пропорции на новую высоту двери. */
 export function setDrawersOverlay(m: Module, sid: string, on: boolean): void {
   const s = sectionOf(m, sid);
+  if (on) { const why = drawersFlushBlock(m, s); if (why) throw Error(why); }
   const auto = isAutoDrawerLayout(m, s), stack = s.drawers > 0 ? Array.from({ length: s.drawers }, (_, j) => drawerConfig(m, s, j)) : [];
   const top = stack.reduce((a, c) => a + c.height + RULES.drawerStep, 0);
-  if (on) { s.externalDrawers = true; delete s.drawerMount; } else delete s.externalDrawers;
+  const whole = doorBands(m, { ...s, doorSplit: undefined, doorRows: undefined })[0], wasDoor = whole[1] - whole[0];
+  // Макс 01.11: ящики подняты от дна на высоту двери — снизу своя дверь, над ящиками своя (тот же механизм, что проём заказа 7442203), иначе нижний
+  // фасад растягивался бы до пола на всю высоту под ящиками. Ниже doorMinH двери снизу не встать — фасад тянется к цоколю, как было.
+  const low = s.drawers > 0 ? Math.min(...drawerOffsets(s)) : 0, b = boxes(m).find((x) => x.id === sid)!;
+  if (on && m.doorMount !== "inset" && s.doorSplit === undefined && b.bottom + low - facadeBottom(m) >= RULES.doorMinH) {
+    if (m.alu) m.aluDrawers = true;
+    const g = s.doorGap ?? fb(m); // зазор двери к фасаду ящика снизу и сверху — как между фасадами
+    s.doorSplit = b.bottom + low - facadeBottom(m) - g / 2; s.doorNiche = drawerStackHeight(s) - low + g; delete s.externalDrawers; delete s.drawerMount;
+    if (s.drawerConfigs) s.drawerConfigs = s.drawerConfigs.slice(0, s.drawers).map((c) => fitLength(m, s, c));
+    return;
+  }
+  // снять, когда ящики стоят между рядами (проём): дверь снова одна на секцию, ящики за ней
+  if (!on && nicheDrawers(m, s)) { delete s.doorSplit; delete s.doorNiche; delete s.doorRows; delete s.removedDoors; }
+  if (on) { s.externalDrawers = true; if (m.doorMount === "inset") s.drawerMount = "inset"; else delete s.drawerMount; if (m.alu && m.doorMount !== "inset") m.aluDrawers = true; }
+  else { delete s.externalDrawers; if (m.doorMount === "inset") delete s.drawerMount; }
+  rescaleDoorRows(m, s, wasDoor);
   if (!s.drawers) return;
   if (s.drawerConfigs) s.drawerConfigs = s.drawerConfigs.slice(0, s.drawers).map((c) => fitLength(m, s, c));
   if (!auto) return;
@@ -105,6 +124,12 @@ export function setDrawersOverlay(m: Module, sid: string, on: boolean): void {
   // за дверью фасады по шагу — равные шаги на ту же высоту стопки
   const n = s.drawers, pitch = Math.floor((top / n) * 2) / 2;
   s.drawerConfigs = stack.map((c, j) => fitLength(m, s, { ...c, height: (j < n - 1 ? pitch : top - pitch * (n - 1)) - RULES.drawerStep, y: j * pitch }));
+}
+
+/** «Монтаж фасадов» корпуса (панель и меню «Тип петли»): ящики вровень остаются вровень — фасад ящика уходит в проём вместе с дверью (Макс 01.11). */
+export function setDoorMount(m: Module, mount: "overlay" | "inset"): void {
+  if (mount === "inset") m.doorMount = "inset"; else delete m.doorMount;
+  for (const s of m.sections) if (s.externalDrawers && s.drawers > 0) { if (mount === "inset") s.drawerMount = "inset"; else delete s.drawerMount; }
 }
 
 /** «Выкатной ящик на всю секцию» (правка 2, 29.10.2026; антресоль): наполнение секции убирается, один ящик на всю высоту проёма —
@@ -117,7 +142,7 @@ export function fullSectionDrawer(m: Module, sid: string): void {
   s.shelves = []; s.rod = false;
   for (const k of ["pantograph", "rodAt", "rodLower", "pullouts", "glassShelves", "thickShelves", "fixed", "shelfLight", "shelfLights", "shelfDepth"] as const) delete s[k];
   s.drawers = 1; s.drawerCap = false;
-  delete s.drawerMount; delete s.drawerGrip; delete s.doorSplit; delete s.doorNiche; delete s.removedDoors;
+  delete s.drawerMount; delete s.drawerGrip; delete s.doorSplit; delete s.doorNiche; delete s.doorRows; delete s.removedDoors;
   if (m.doors) s.externalDrawers = true;
   const { y: _y, facadeH: _f, ...base } = drawerConfig(m, { ...s, drawerConfigs: undefined }, 0); void _y; void _f;
   s.drawerConfigs = [fitLength(m, s, base)];

@@ -78,7 +78,8 @@ export function RadialMenu({ x, y, title, subtitle, items, onClose, area }: { x:
         return (
           <button key={item.id} ref={(b) => { buttons.current[i] = b; }} type="button" role="menuitem" className={"radial-item" + (item.danger ? " danger" : "") + (item.active ? " active" : "")}
             style={{ transform: `translate(${px}px, ${py}px)`, animationDelay: i * 18 + "ms" }} disabled={item.disabled} aria-haspopup={item.children ? "menu" : undefined}
-            aria-label={item.label + (item.hint ? ". " + item.hint : "")} onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} onMouseLeave={() => setHover(null)} onClick={() => choose(item)}>
+            /* Макс 01.11: React не шлёт onMouseEnter на disabled — причина серого пункта не показывалась; pointer-события приходят и на него */
+            aria-label={item.label + (item.hint ? ". " + item.hint : "")} onPointerEnter={() => setHover(i)} onFocus={() => setHover(i)} onPointerLeave={() => setHover(null)} onClick={() => choose(item)}>
             <Icon size={18} />
             <span className={"radial-label" + labelSide(px, py, R)}>{item.label}{item.children ? " ›" : ""}</span>
           </button>

@@ -7,6 +7,7 @@ import type { RadialItem } from "./RadialMenu";
 import { RULES, type Module } from "./model";
 import { WORKTOP_CHOICES, setWorktopMaterial, worktopLabel } from "./kitchen";
 import { allStandsLit, setAllStands } from "./lights";
+import { cornerDrawerBlock } from "./cornerWardrobe";
 import type { FillKind } from "./operations";
 import { MESH, MESH_KIND_LABEL, type MeshItem } from "./mesh";
 
@@ -55,7 +56,8 @@ export function addMenuItem(mod: Module, sid: string, ops: AddMenuOps): RadialIt
     fill("shelf", "Полку", Rows3, "На высоте клика, а не по сетке серийного шкафа"),
     { id: "add-split", label: "Перегородку", icon: Columns2, disabled: corner || mod.sections.length >= RULES.maxSections, hint: "Делит секцию — шкаф под ваши вещи, а не типовой", run: ops.split },
     { id: "mesh", label: "Сетку", icon: ShoppingBasket, disabled: corner, hint: "Корзины, брючницы, обувницы — в серийке их нет", children: meshKinds },
-    fill("drawer", "Ящик", Archive, "Под вашу высоту; направляющие с доводчиком или push"),
+    // Макс 01.11: в центр угла и в угловую антресоль ящик физически не встаёт — пункт серый, причина в подсказке
+    fill("drawer", "Ящик", Archive, cornerDrawerBlock(mod, sec, true) ?? "Под вашу высоту; направляющие с доводчиком или push", { disabled: !!cornerDrawerBlock(mod, sec) }),
     { id: "hangers", label: "Вешалки", icon: Shirt, disabled: rodOff && corner, hint: "Штанга, пантограф, тремпель — на удобной высоте", children: [
     fill("rod", "Штангу", Shirt, "На нужной вам высоте — под пальто или рубашки", { disabled: rodOff }),
     sec.pantograph
