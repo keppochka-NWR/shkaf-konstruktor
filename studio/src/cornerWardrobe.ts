@@ -242,3 +242,11 @@ export function cornerParts(m:Module):Part[]{
  }
  return out;
 }
+/** Макс 01.11, критик: выбор ручки, который ничего не меняет ни в модели, ни в смете, — серым с причиной. Ручка углового шкафа — только на втором фасаде нижнего корпуса (cornerParts). */
+export function cornerHandleBlock(m:Module,pid:string):string|undefined{
+ if(!m.corner)return undefined;
+ if(pid.includes(':drawer:'))return 'Фасад ящика вкладной, за дверью: ручка не ставится';
+ if(m.corner.level!=='main')return 'На двери угловой антресоли ручка не ставится';
+ if(/:door:0$/.test(pid))return 'Ручка углового шкафа ставится только на второй фасад';
+ return undefined;
+}

@@ -30,7 +30,7 @@ import {keepDrawersOnRows,setDrawersToRow} from './drawerRowAlign';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
-import {fitCornerFilling} from './cornerWardrobe';
+import {cornerHandleBlock,fitCornerFilling} from './cornerWardrobe';
 import OpeningLayoutEditor from './OpeningLayoutEditor';
 import PartialDividerPanel from './PartialDividerPanel';
 import {setPartialDivider,dividerInfo,dividerBounds,setDividerByShelves,moveDividerEnd,oneLeafAtDivider,announceDividerNotes} from './partialDivider';
@@ -76,6 +76,8 @@ import {hasHideableFacades} from './facadeHide';
 import {GroupFacadePanel,GroupFillingBlock} from './GroupFacadePanel';
 import {highlightControls,highlightFirst} from './highlight';
 import {partKind,partParamTargets,partSetting} from './partParams';
+import {SelectionBar,type BarItem} from './SelectionBar';
+import {scrollCueRef} from './sceneBars';
 import {applyGroupFacade,skippedNote,groupFacadeValue,type GroupFacadeField} from './groupFacades';
 import {matchGroupSize,SIZE_WORD,type SizeKey} from './matchSize';
 import {matchSizeItems,groupSizeItems} from './matchSizeMenu';
@@ -876,6 +878,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   /** Макс 01.11: «параметры ящика открывают параметры секции» — теперь у каждой детали свой блок (partParams.ts); у ящика и номер ящика тот самый, не первый. */
   function showParams(pid:string,role?:string,focus=false){if(pid.includes(':drawer:'))setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));void highlightFirst(partParamTargets(pid,role),{focus,block:'start'});}
   /** Макс 01.11: карточка выбранной детали (сдвиг, копия, удаление) — в разделе самой детали: Ящики, Полки, Штанги, Фасад; раньше всегда в «Секции». */
+  const toolsCue=useMemo(()=>scrollCueRef(),[]);
   const selectedCard=()=>canRemove?(<div className="selected-filling"><span>{selectedFillingName}</span><div style={{display:selectedDetail?.role==='door'?'none':undefined}} className="filling-nudge" role="group" aria-label="Точное перемещение наполнения" onKeyDown={e=>{if(e.ctrlKey||e.metaKey||e.altKey||!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();e.stopPropagation();nudgeSelected((e.key==='ArrowUp'?1:-1)*(e.shiftKey?10:1));}}><button className="outline" aria-label="Опустить выбранный элемент на 10 мм" onClick={()=>nudgeSelected(-10)}>↓ Ниже на 10</button><button className="outline" aria-label="Поднять выбранный элемент на 10 мм" onClick={()=>nudgeSelected(10)}>↑ Выше на 10</button></div>{selectedDetail?.role!=='door'&&<small>На этих кнопках: ↑ / ↓ — 1 мм, Shift — 10 мм.</small>}{selectedDetail?.role==='door'&&(()=>{const did=selectedDetail.id,ds=m.sections.find(x=>x.id===did.split(':')[0]),dk=Number(did.split(':door:')[1]);if(!ds||!parts(m).some(p=>p.id===did.replace(':door:',':handle:')))return null;const cur=doorHandlePos(m,ds,dk),order:HandlePos[]=isUpperModule(m)?['bottomCenter','bottomCorner','topCenter','topCorner','rule']:['topCorner','topCenter','bottomCorner','bottomCenter','rule'];return <label className="hardware-field" data-testid="handle-pos">Расположение ручки<select value={cur} onChange={e=>modify(n=>setDoorHandlePos(n,did,e.target.value as HandlePos))}>{order.map(pos=>{const issue=handlePosIssue(m,did,pos);return <option key={pos} value={pos} disabled={!!issue&&pos!==cur} title={issue}>{HANDLE_POS_LABEL[pos]}{issue?' — не подходит':''}</option>;})}</select></label>;})()}{selectedDetail?.role==='door'&&(()=>{const hf=doorHandleFloorInfo(m,selectedDetail.id),elev=Math.round(placed.y??0),did=selectedDetail.id;if(!hf)return null;return <div className="handle-floor" data-testid="handle-floor"><NumberField label="Высота ручки от пола" value={hf.value+elev} min={Math.min(hf.min,hf.max)+elev} max={Math.max(hf.min,hf.max)+elev} onChange={v=>{modify(n=>setDoorHandleFloor(n,did,v-elev));}}/><small>{hf.long?'Длинная ручка: от пола до её низа':'От пола до центра ручки'}{hf.set?'':hf.long?' · по правилу: 100 мм от пола, не ниже низа двери + 50':' · сейчас по центру фасада'}</small>{hf.set&&<button className="text-action" onClick={()=>modify(n=>setDoorHandleFloor(n,did,null))}>Высота ручки по правилу</button>}</div>;})()}{selectedDetail?.id.includes(':shelf:')&&<><NumberField label="Высота выбранной полки" value={Math.round(selectedDetail.position[1]-b.bottom)} min={80} max={b.top-b.bottom-80} onChange={v=>{if(selectedPart)moveFilling(selectedPart.mid,selectedPart.sid,selectedPart.pid,v-(selectedDetail.position[1]-b.bottom));}}/><small>От дна проёма до центра полки.</small></>}{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="text-action" onClick={copySelected}>Копировать {selectedDetail.id.includes(':drawer:')?'ящик с настройками':'полку'}</button>}<button className="text-action danger" onClick={removeSelected}><Trash2 size={14}/>{removalLabel}</button><small>{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)?"Копия займёт ближайшее свободное место. ":""}Delete — удалить · Ctrl+Z — отменить</small></div>):null;
   function groupFacadeEdit(field:GroupFacadeField,value:string,label:string){
     try{const r=applyGroupFacade(project,liveGroupIds,field,value);if(r.changed.length&&!commitProject(r.project))return false;
@@ -931,7 +934,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     // перенос вырезов на схожие детали (правка Макса 29.10): у детали с вырезом — «Вырез на схожие…» (окно «Вырезы», раздел переноса открыт)
     const cutCount=canCut?(mod.cutouts??[]).filter(x=>cutHostOf(mod,x)===cutPid).length:0,similarN=cutCount?similarCutParts(project,a.id,cutPid).length:0;
     const cutCopy:RadialItem[]=cutCount?[{id:'cutout-copy',label:'Вырез на схожие…',icon:Copy,disabled:!similarN,hint:similarN?`Перенести или скопировать вырезы этой детали на схожие детали (${similarN}): тот же вид и размер, в этом и других корпусах`:'Схожих деталей нет: нужна деталь того же вида и размера',run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid:cutPid});setCutHost({mid:a.id,pid:cutPid,copy:true});}}]:[];
-    const size=(key:'width'|'height'|'depth',label:string)=>({id:'size-'+key,label,icon:Ruler,hint:`Сейчас ${mod[key]} мм. Введите новое значение`,run:()=>{select();editDimension(label+' корпуса, мм',mod[key],v=>modifyAt(a.id,n=>{n[key]=v;}));}});
+    const size=(key:'width'|'height'|'depth',label:string)=>({id:'size-'+key,label,icon:Ruler,hint:`Сейчас ${mod[key]} мм. Введите новое значение`,run:()=>{select();editDimension(label+' корпуса, мм',mod[key],v=>modifyAt(a.id,n=>{/* критик 01.11: как панель — у углового сторона одна на ширину и глубину, иначе ложный отказ «стороны 950–1400» */applyDimension(n,key,v);}));}});
     const hinges:RadialItem={id:'hinges',label:'Петли',icon:Link2,hint:'Бренд петель этого корпуса. Цена меняется сразу',disabled:!mod.doors,children:(Object.keys(HINGE_BRANDS) as HingeBrand[]).map(k=>({id:'hinge-'+k,label:HINGE_BRANDS[k].label,icon:Link2,active:(mod.hingeBrand??'gtv')===k,hint:`${HINGE_BRANDS[k].note}`,run:()=>modifyAt(a.id,n=>{if(k==='gtv')delete n.hingeBrand;else n.hingeBrand=k;})}))};
     const opening:RadialItem={id:'opening',label:'Открывание',icon:MousePointerClick,hint:'С ручками или нажатием на фасад',disabled:!mod.doors,children:[
       {id:'open-handle',label:'С ручками',icon:Hand,active:mod.doorOpen!=='push',hint:'Ручка и петли с доводчиком',run:()=>modifyAt(a.id,n=>{delete n.doorOpen;})},
@@ -999,7 +1002,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       // Двери купе: своё кольцо — наполнение, количество дверей, доводчики, сдвинуть, профиль, размеры, копия, удалить.
       const k=mod.kupe,setK=(patch:Partial<NonNullable<Module['kupe']>>)=>modifyAt(a.id,n=>{n.kupe={...n.kupe!,...patch};});
       const fillItem=(name:string,label:string):RadialItem=>({id:'kf-'+name,label,icon:Palette,active:k.fills.every(f=>f===name),hint:name,run:()=>setK({fills:[name],sectionFills:undefined})});
-      const panel=()=>{selectModule(a.id);setTab('module');void highlightControls('.properties .kupe-panel');};
+      const panel=()=>{selectModule(a.id);setTab('module');if(/^kupe:\d+:fill:/.test(pid))setSelectedPart({mid:a.id,sid:c.sid,pid});/* критик 01.11: со вставки — её редактор, иначе панель купе */void highlightFirst(partParamTargets(pid),{block:'start'});};
       return {title:'Двери купе',subtitle:`${mod.width} × ${mod.height} · ${k.doors} дв.`,items:[hideItem,
         {id:'kupe-fill',label:'Наполнение',icon:Palette,hint:'Зеркало, стекло, ЛДСП — для всех дверей',children:[fillItem('Зеркало Серебро 4мм','Зеркало'),fillItem('Зеркало Бронза 4мм','Бронза'),fillItem('Зеркало Графит 4мм','Графит'),fillItem('Стекло сатин матовый 4мм','Сатин'),fillItem(mod.decor,'ЛДСП корпуса'),{id:'kf-more',label:'Другое…',icon:SlidersHorizontal,hint:'Весь каталог наполнений и разное по дверям',run:panel}]},
         {id:'kupe-doors',label:'Дверей',icon:Columns2,hint:`Сейчас ${k.doors}, полотно ${Math.round(kupeLeafWidth(mod.width,k.doors,kupeSystem(k)).width)} мм с нахлёстом`,children:[2,3,4,5].map(n=>({id:'kd-'+n,label:String(n),icon:Columns2,active:k.doors===n,hint:`Полотно ${Math.round(kupeLeafWidth(mod.width,n,kupeSystem(k)).width)} мм с нахлёстом`,run:()=>setK({doors:n,fills:k.fills.slice(0,n)})}))},
@@ -1054,7 +1057,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       const posItems:RadialItem[]=posOrder.map(pos=>{const issue=handlePosIssue(mod,doorId,pos);return {id:'handle-pos-'+pos,label:HANDLE_POS_LABEL[pos],icon:pos==='rule'?RotateCcw:GripHorizontal,active:curPos===pos,disabled:!!issue,
         hint:issue??(pos==='rule'?'Как раньше: по центру высоты у кромки открывания (или высота от пола, место ручки из проекта Базиса)':pos.endsWith('Corner')?'Вертикально у кромки открывания, напротив петель; перевесили петли — ручка переезжает сама':'Горизонтально по центру ширины фасада'),
         run:()=>modifyAt(a.id,n=>setDoorHandlePos(n,doorId,pos))};});
-      const doorHandle:RadialItem={id:'door-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого фасада: модель, расположение и высота от пола',disabled:mod.doorOpen==='push',children:[
+      const doorHandleNo=cornerHandleBlock(mod,doorId),doorHandle:RadialItem={id:'door-handle',label:'Ручка',icon:GripHorizontal,hint:doorHandleNo??'Ручка этого фасада: модель, расположение и высота от пола',disabled:mod.doorOpen==='push'||!!doorHandleNo,children:[
         ...(upper?posItems.slice(0,2):[]),...handleBase,...(upper?posItems.slice(2):posItems),
         {id:'handle-pos-all',label:'Для всех фасадов модуля',icon:Layers,hint:`Расположение «${HANDLE_POS_LABEL[curPos]}» — всем распашным фасадам этого модуля`,run:()=>modifyAt(a.id,n=>{setModuleHandlePos(n,curPos);})},
       ]};
@@ -1764,7 +1767,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <button role="menuitem" title={`Меняется ширина, ${side==='right'?'левый':'правый'} край на месте`} onClick={()=>{close();askGap(placed.id,side,g);}}>Задать зазор — изменить ширину…</button>
               </div></div>;})()}
           {/* Макс 31.10: колонка быстрых действий — у левого края сцены, сверху «Назад / Вперёд» (на «Плане» — только они). Макс 01.11: под каждым значком подпись */}
-          {!presentation&&<div className={'scene-tools'+(roomPlan?' plan-only':'')} role="toolbar" aria-orientation="vertical" aria-label="Быстрые действия">
+          {!presentation&&<div ref={toolsCue} className={'scene-tools'+(roomPlan?' plan-only':'')} role="toolbar" aria-orientation="vertical" aria-label="Быстрые действия">
             <button className="history-tool" aria-label="Отменить" title="Отменить ↶ · Ctrl+Z" disabled={managedHistory?managedHistory.undoCount===0:cursor===0} onClick={undo}><Undo2 size={18}/><span className="tool-cap">Отменить</span></button>
             <button className="history-tool" aria-label="Повторить" title="Повторить ↷ · Ctrl+Y" disabled={managedHistory?managedHistory.redoCount===0:cursor===history.length-1} onClick={redo}><Redo2 size={18}/><span className="tool-cap">Повторить</span></button>
             <span className="tools-sep" aria-hidden="true"/>
@@ -1863,17 +1866,14 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             ))}
           </div>
           {/* Макс 01.11: плашка детали — в сцене (не шире её и не на строке клавиш), в общем стиле; «Параметры» — главная кнопка */}
-      {!presentation&&stage==='bodies'&&canRemove&&!cutHost&&<div className="selection-action-bar" role="group" aria-label="Действия с выбранной деталью">
-        <div className="selection-context"><strong>{selectedFillingName}</strong><span>{m.name} · секция {idx+1}</span></div>
-        <button className="primary" data-testid="selection-params" onClick={()=>{if(!selectedDetail)return;setTab('section');showParams(selectedDetail.id,selectedDetail.role,selectedKind==='shelf');}}>Параметры</button>
-        {selectedDetail?.role!=='door'&&<><button className="outline" aria-label="Быстро опустить элемент на 10 мм" onClick={()=>nudgeSelected(-10)}>↓ 10 мм</button>
-        <button className="outline" aria-label="Быстро поднять элемент на 10 мм" onClick={()=>nudgeSelected(10)}>↑ 10 мм</button></>}
-        {selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="outline" onClick={copySelected}>Копировать</button>}
-        {selectedDetail&&(selectedDetail.id.includes(':door:')||selectedDetail.id.endsWith(':facade'))&&<button className="outline" onClick={()=>{setHandleFace(selectedDetail.id);setMaterialScope('active');setModal('handles');}}>Ручка этого фасада</button>}
-        {selectedDetail&&cutAllowed(m,selectedDetail.id)&&<button className="outline" onClick={()=>setCutHost({mid:placed.id,pid:selectedDetail.id})}>Вырез…</button>}
-        {selectedDetail?.id.includes(':drawer:')?<><button className="text-action danger" onClick={removeSelected}>Удалить ящик</button>{selectedDetail.id.endsWith(':facade')&&<button className="text-action" onClick={removeSelectedFacade}>Снять фасад</button>}</>:<button className="text-action danger" onClick={removeSelected}>Удалить</button>}
-        <button className="text-action" aria-label="Снять выделение детали" onClick={()=>setSelectedPart(null)}>Закрыть</button>
-      </div>}
+          {!presentation&&stage==='bodies'&&canRemove&&!cutHost&&selectedDetail&&(()=>{const did=selectedDetail.id,isDrawer=did.includes(':drawer:'),handleNo=cornerHandleBlock(m,did),items:BarItem[]=[];
+            if(selectedDetail.role!=='door')items.push({id:'down',label:'↓ 10 мм',aria:'Быстро опустить элемент на 10 мм',tier:'mid',run:()=>nudgeSelected(-10)},{id:'up',label:'↑ 10 мм',aria:'Быстро поднять элемент на 10 мм',tier:'mid',run:()=>nudgeSelected(10)});
+            if(/:shelf:|:drawer:/.test(did))items.push({id:'copy',label:'Копировать',tier:'wide',run:copySelected});
+            if(did.includes(':door:')||did.endsWith(':facade'))items.push({id:'handle',label:'Ручка этого фасада',tier:'wide',disabled:!!handleNo,title:handleNo,run:()=>{setHandleFace(did);setMaterialScope('active');setModal('handles');}});
+            if(cutAllowed(m,did))items.push({id:'cut',label:'Вырез…',tier:'wide',run:()=>setCutHost({mid:placed.id,pid:did})});
+            items.push({id:'remove',label:isDrawer?'Удалить ящик':'Удалить',tier:'mid',danger:true,run:removeSelected});
+            if(isDrawer&&did.endsWith(':facade'))items.push({id:'no-facade',label:'Снять фасад',tier:'mid',run:removeSelectedFacade});
+            return <SelectionBar key={did} title={selectedFillingName??''} subtitle={m.name+' · секция '+(idx+1)} items={items} onClose={()=>setSelectedPart(null)} onParams={()=>{setTab('section');showParams(did,selectedDetail.role,selectedKind==='shelf');}}/>;})()}
           {lightMode&&!presentation&&(()=>{const lm=project.modules.find(x=>x.id===lightMode)?.module;if(!lm)return null;
             return <LightModeBar module={lm} orient={lightOrient} note={lightNote} onOrient={o=>{setLightOrient(o);setLightNote('');}} onTone={t=>modifyAt(lightMode,n=>applyToAll(n,{tone:t}))} onPanel={()=>setLightPanel(lightMode)} onDone={()=>{setLightMode(null);setLightNote('');}}/>;})()}
           {lightPanel&&(()=>{const lp=project.modules.find(x=>x.id===lightPanel)?.module;if(!lp)return null;
@@ -2161,7 +2161,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                         });
                       const meshItem=c.mesh?meshById(c.mesh):undefined;
                       return (
-                        <div className="drawer-own" data-part-params="drawer">{/* Макс 01.11: свой блок ящика — сюда ведёт «Параметры» */}<h4>{meshItem?MESH_KIND_LABEL[meshItem.kind]:'Ящик'} {j+1}</h4>
+                        <div className="drawer-own" data-part-params="drawer" data-part-index={j}>{/* Макс 01.11: свой блок ящика — сюда ведёт «Параметры» */}<h4>{meshItem?MESH_KIND_LABEL[meshItem.kind]:'Ящик'} {j+1}</h4>
                           <label className="hardware-field">Тип элемента<select aria-label="Тип ящика" value={c.mesh??(c.tray?'tray':'box')} onChange={e=>{const v=e.target.value;if(v==='tray')update({mesh:undefined,tray:true,slide:'gtv0fpo',height:50,facadeH:50,handle:false});else if(v==='box')update({mesh:undefined,tray:undefined,height:RULES.drawerH,facadeH:undefined,handle:undefined});else{const item=meshById(v)!;update({mesh:v,tray:undefined,height:item.h,handle:undefined});}}}><option value="box">Ящик ЛДСП 16 с фасадом</option><option value="tray">Выкатная полка / лоток 40–60 мм</option>{(['basket','trousers','shoes'] as const).map(kind=><optgroup key={kind} label={MESH_KIND_LABEL[kind]+' · Лемана Про'}>{MESH.filter(i=>i.kind===kind).map(i=><option key={i.id} value={i.id}>{i.label} · проём {i.reqW}×{i.reqD}</option>)}</optgroup>)}</select></label>
                           {meshItem&&<p className="field-note">Арт. {meshItem.art}, высота {meshItem.h} мм, нужен проём {meshItem.reqW}–{meshItem.reqW+60} мм в ширину и глубина от {meshItem.reqD} мм. Направляющие в комплекте, без фасада и ручки; за распашными дверями ставятся фальши.</p>}
                           {meshItem&&<NumberField label="Элемент от дна проёма" value={drawerOffsets(s)[j]} min={0} max={b.top-b.bottom-c.height-40} onChange={v=>update({y:v})}/>}

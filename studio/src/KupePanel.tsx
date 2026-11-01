@@ -77,7 +77,7 @@ export function KupePanel({ m, modify, openDoors, setOpenDoors, selectedPid }: {
                 onClick={() => setPick({ door: d, sect: si })} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPick({ door: d, sect: si }); } }}><title>{`Дверь ${d + 1} · секция ${si + 1} · ${f.n}`}</title></rect>; }); })}
             <text x={(W + 4) / 2} y={H + 8} textAnchor="middle" className="kupe-leaf-n">{d + 1}</text></svg>;
         })}</div>
-        {active ? <div className="kupe-sect-editor">
+        {active ? <div className="kupe-sect-editor" data-part-params="kupe">
           <label className="hardware-field">Дверь {active.door + 1} · секция {active.sect + 1}{fillSelect(kupeSectionFill(k, active.door, active.sect).n, (v) => setK(withSectionFill(k, active.door, active.sect, v)), "Полотно секции")}</label>
           <div className="kupe-sect-actions">
             <button type="button" className="outline" onClick={() => { const f = kupeSectionFill(k, active.door, active.sect).n, fills = Array.from({ length: k.doors }, (_, j) => kupeDoorFill(k, j).n); fills[active.door] = f; const rows = Array.from({ length: k.doors }, (_, j) => j === active.door ? [] : k.sectionFills?.[j] ?? []); setK({ ...noSect, fills, ...(rows.some((r) => r.length) ? { sectionFills: rows } : {}) }); }}>Ко всем секциям двери</button>

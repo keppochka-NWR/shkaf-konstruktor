@@ -8,10 +8,12 @@
 //  7. Макс 01.11, «иконки непонятные, вернём текст»: у каждой кнопки полосы виден текст, значков в полосе нет; у каждой кнопки колонки — подпись; колонка не уходит на строку клавиш.
 //  8. Макс 01.11, общий стиль: плашка детали и полоса подсветки — белые, в сцене, не на строке клавиш, текст кнопок в одну строку, одна синяя кнопка.
 //  9. Макс 01.11, «параметры ящика открывают параметры секции»: мышью выбрать ящик в сцене → «Параметры» → видны и подсвечены поля этого ящика; то же у полки, штанги и двери.
+// 10. Критик 01.11: плашка в одну строку (узко — «Ещё ▾», без подзаголовка); сообщение не закрывает её при любой высоте; на низком окне у колонки стрелка; вставка купе из колеса — свой редактор.
 import { chromium, type Page } from "playwright";
 import { mkdirSync } from "node:fs";
 import { initialModule, section, id, type Module } from "../src/model";
 import { newProject, type Project } from "../src/project";
+import { createKupeModule } from "../src/paletteBuild";
 
 const [url, out] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
@@ -180,9 +182,9 @@ for (const [w, h] of [[1366, 768], [1100, 700], [1024, 700]] as const) {
 
 // 7–9. Плашки в общем стиле и «Параметры» детали: ящик слева, полки и штанга справа, двери
 const filled = (): Project => { const p = project(); const s = section(); s.drawers = 3; s.drawerConfigs = undefined; const s2 = section(); s2.shelves = [0.3, 0.6]; s2.rod = true; const m: Module = { ...initialModule(), name: "Шкаф", width: 1200, height: 2000, depth: 550, doors: true, sections: [s, s2] }; p.modules = [{ id: id(), x: 100, y: 0, z: 3, rotation: 0, module: m }]; return p; };
-const barCheck = `(function(){var bar=document.querySelector('.selection-action-bar'),keys=document.querySelector('.key-hints'),vp=document.querySelector('.viewport');if(!bar)return null;var r=bar.getBoundingClientRect(),v=vp.getBoundingClientRect();var btns=Array.from(bar.querySelectorAll('button'));
-  return {bg:getComputedStyle(bar).backgroundColor,overKeys:r.bottom>keys.getBoundingClientRect().top+0.5,inScene:r.left>=v.left-0.5&&r.right<=v.right+0.5&&r.top>=v.top-0.5,tall:btns.filter(function(b){return b.getBoundingClientRect().height>36;}).map(function(b){return b.innerText;}),primary:btns.filter(function(b){return getComputedStyle(b).backgroundColor==='rgb(50, 91, 238)';}).map(function(b){return b.innerText;}),danger:btns.filter(function(b){return getComputedStyle(b).color==='rgb(180, 35, 24)';}).map(function(b){return b.innerText;})};})()`;
-type BarInfo = { bg: string; overKeys: boolean; inScene: boolean; tall: string[]; primary: string[]; danger: string[] } | null;
+const barCheck = `(function(){var bar=document.querySelector('.selection-action-bar'),keys=document.querySelector('.key-hints'),vp=document.querySelector('.viewport');if(!bar)return null;var r=bar.getBoundingClientRect(),v=vp.getBoundingClientRect();var btns=Array.from(bar.querySelectorAll(':scope > button, :scope > .sb-more > button')).filter(function(b){return b.getClientRects().length>0;});var sub=bar.querySelector('.selection-context span');
+  return {rows:new Set(btns.map(function(b){return Math.round(b.getBoundingClientRect().top);})).size,barH:Math.round(r.height),subtitle:!!sub&&sub.getClientRects().length>0,more:btns.some(function(b){return b.innerText.indexOf('Ещё')===0;}),bg:getComputedStyle(bar).backgroundColor,overKeys:r.bottom>keys.getBoundingClientRect().top+0.5,inScene:r.left>=v.left-0.5&&r.right<=v.right+0.5&&r.top>=v.top-0.5,tall:btns.filter(function(b){return b.getBoundingClientRect().height>36;}).map(function(b){return b.innerText;}),primary:btns.filter(function(b){return getComputedStyle(b).backgroundColor==='rgb(50, 91, 238)';}).map(function(b){return b.innerText;}),danger:btns.filter(function(b){return getComputedStyle(b).color==='rgb(180, 35, 24)';}).map(function(b){return b.innerText;})};})()`;
+type BarInfo = { rows: number; barH: number; subtitle: boolean; more: boolean; bg: string; overKeys: boolean; inScene: boolean; tall: string[]; primary: string[]; danger: string[] } | null;
 const lit = (page: Page, sel: string) => page.evaluate(`(function(){var el=document.querySelector(${JSON.stringify(sel)});if(!el)return {ok:false,why:'нет блока'};var p=document.querySelector('.properties').getBoundingClientRect(),r=el.getBoundingClientRect();var inner=!!el.closest('details[data-setting]');return {ok:el.classList.contains('ui-highlight')&&el.offsetParent!==null&&r.top>=p.top-1&&r.top<p.bottom-40&&inner,why:(el.classList.contains('ui-highlight')?'':'без подсветки ')+Math.round(r.top)+'/'+Math.round(p.top)+'-'+Math.round(p.bottom),setting:(el.closest('details[data-setting]')||{dataset:{}}).dataset.setting,text:el.innerText.replace(/\\s+/g,' ').slice(0,3000),others:document.querySelectorAll('details[data-setting="Секция"] .ui-highlight,details[data-setting="Секция"].ui-highlight').length};})()`) as Promise<{ ok: boolean; why: string; setting?: string; text?: string; others?: number }>;
 for (const [w, h] of [[1920, 1080], [1366, 768], [1024, 700]] as const) {
   const page = await open(w, h, "bodies", { p: filled() });
@@ -200,12 +202,37 @@ for (const [w, h] of [[1920, 1080], [1366, 768], [1024, 700]] as const) {
   if (picked) {
     const b = (await page.evaluate(barCheck)) as BarInfo;
     check(`${w}: плашка детали белая, в сцене, не на строке клавиш, текст кнопок в одну строку`, !!b && b.bg === "rgb(255, 255, 255)" && !b.overKeys && b.inScene && !b.tall.length, JSON.stringify(b));
-    check(`${w}: одна синяя кнопка «Параметры», «Удалить ящик» красная`, !!b && b.primary.join() === "Параметры" && b.danger.join() === "Удалить ящик", JSON.stringify(b && [b.primary, b.danger]));
+    check(`${w}: плашка в одну строку, не выше 44 px; подзаголовок и «Ещё ▾» — только где сцена уже 1040`, !!b && b.rows === 1 && b.barH <= 44 && b.subtitle === (w === 1920) && b.more === (w !== 1920), JSON.stringify(b && [b.rows, b.barH, b.subtitle, b.more]));
+    check(`${w}: одна синяя кнопка «Параметры»`, !!b && b.primary.join() === "Параметры", JSON.stringify(b && [b.primary, b.danger]));
+    if (w === 1920) check("1920: «Удалить ящик» на плашке красная", !!b && b.danger.join() === "Удалить ящик", JSON.stringify(b && b.danger));
+    if (b?.more) {
+      await page.getByRole("button", { name: "Ещё ▾", exact: true }).click(); await page.waitForTimeout(200);
+      const menu = page.locator(".sb-menu"), items = (await menu.getByRole("button").allInnerTexts()).map((x) => x.trim()), red = await menu.locator("button.danger").evaluateAll((l) => l.filter((e) => e.getClientRects().length).map((e) => getComputedStyle(e).color));
+      const need = w === 1024 ? ["↓ 10 мм", "Копировать", "Удалить ящик", "Снять фасад"] : ["Копировать", "Ручка этого фасада"];
+      check(`${w}: «Ещё ▾» — второстепенное текстом` + (w === 1024 ? ", «Удалить ящик» красная" : ""), need.every((x) => items.includes(x)) && (w !== 1024 || red.join() === "rgb(180, 35, 24)"), items.join(" | "));
+      await page.screenshot({ path: `${out}/bar-more-${w}.png` });
+      await page.keyboard.press("Escape"); await page.waitForTimeout(200);
+      check(`${w}: Esc закрывает только меню, деталь осталась`, (await menu.count()) === 0 && (await page.locator(".selection-action-bar").count()) === 1);
+    }
     await page.screenshot({ path: `${out}/bar-${w}.png` });
     await params();
     const d = await lit(page, '.properties [data-part-params="drawer"]');
     check(`${w}: «Параметры» ящика — поля ${picked} видны и подсвечены, в разделе «Ящики», не в «Секции»`, d.ok && d.setting === "Ящики" && (d.text ?? "").startsWith(picked) && /Высота боковины ящика/.test(d.text ?? "") && /Направляющие/.test(d.text ?? "") && !d.others, `${d.why}; ${d.setting}; ${(d.text ?? "").slice(0, 60)}`);
     await page.screenshot({ path: `${out}/params-drawer-${w}.png` });
+    // сообщение об ошибке над плашкой: «Копировать», пока ящики не упрутся в предел
+    const copy = async () => { const inl = page.locator('.selection-action-bar > button', { hasText: "Копировать" }); if (await inl.isVisible().catch(() => false)) await inl.click(); else { await page.getByRole("button", { name: "Ещё ▾", exact: true }).click(); await page.locator(".sb-menu button", { hasText: "Копировать" }).click(); } await page.waitForTimeout(250); };
+    for (let k = 0; k < 14 && !(await page.locator(".error-banner").isVisible().catch(() => false)); k++) await copy();
+    const clash = `(function(){var a=document.querySelector('.error-banner'),b=document.querySelector('.selection-action-bar'),p=document.querySelector('[data-testid=selection-params]');if(!a||!b)return null;var x=a.getBoundingClientRect(),y=b.getBoundingClientRect(),q=p.getBoundingClientRect(),t=document.elementFromPoint(q.left+q.width/2,q.top+q.height/2);return {overlap:Math.round(Math.min(x.bottom,y.bottom)-Math.max(x.top,y.top)),hit:t===p,varH:document.querySelector('.viewport').style.getPropertyValue('--selbar-h'),barH:b.offsetHeight};})()`;
+    type Clash = { overlap: number; hit: boolean; varH: string; barH: number } | null;
+    const c1 = (await page.evaluate(clash)) as Clash;
+    check(`${w}: сообщение не закрывает плашку, «Параметры» под мышью`, !!c1 && c1.overlap <= 0 && c1.hit && c1.varH === c1.barH + "px", JSON.stringify(c1));
+    await page.screenshot({ path: `${out}/banner-${w}.png` });
+    // плашка выросла (перенос, длинное название) — сообщение уходит вместе с её настоящей высотой
+    await page.evaluate(`document.querySelector('.selection-action-bar').style.paddingTop='70px'`); await page.waitForTimeout(200);
+    const c2 = (await page.evaluate(clash)) as Clash;
+    check(`${w}: плашка выше на 70 px — сообщение всё равно над ней`, !!c2 && c2.overlap <= 0 && c2.varH === c2.barH + "px", JSON.stringify(c2));
+    await page.evaluate(`document.querySelector('.selection-action-bar').style.paddingTop=''`);
+    await page.locator(".error-banner button").first().click().catch(() => {}); await page.waitForTimeout(200);
   }
   if (w === 1366) {
     // полка, штанга, дверь — своим блоком
@@ -237,6 +264,39 @@ for (const [w, h] of [[1920, 1080], [1366, 768], [1024, 700]] as const) {
   const l = await page.evaluate(`(function(){var bar=document.querySelector('.light-mode-bar'),keys=document.querySelector('.key-hints'),vp=document.querySelector('.viewport'),tools=document.querySelector('.scene-tools');if(!bar)return null;var r=bar.getBoundingClientRect(),v=vp.getBoundingClientRect(),t=tools.getBoundingClientRect();var btns=Array.from(bar.querySelectorAll('button'));return {bg:getComputedStyle(bar).backgroundColor,overKeys:r.bottom>keys.getBoundingClientRect().top+0.5,inScene:r.left>=v.left-0.5&&r.right<=v.right+0.5,overTools:r.left<t.right,tall:btns.filter(function(b){return b.getBoundingClientRect().height>36;}).map(function(b){return b.innerText;}),done:getComputedStyle(bar.querySelector('button.primary')).backgroundColor};})()`) as { bg: string; overKeys: boolean; inScene: boolean; overTools: boolean; tall: string[]; done: string } | null;
   check(`${w}: полоса подсветки белая, «Готово» синяя, в сцене, не на колонке и не на клавишах`, !!l && l.bg === "rgb(255, 255, 255)" && l.done === "rgb(50, 91, 238)" && l.inScene && !l.overTools && !l.overKeys && !l.tall.length, JSON.stringify(l));
   await page.screenshot({ path: `${out}/light-bar-${w}.png` });
+  await page.close();
+}
+
+// 10. Колонка на низком окне: все кнопки на месте, есть стрелка, прокрутка колесом доводит до последней
+for (const [w, h] of [[1366, 640], [1280, 600]] as const) {
+  const page = await open(w, h, "bodies", { p: filled() });
+  const st = () => page.evaluate(`(function(){var t=document.querySelector('.scene-tools'),b=Array.from(t.querySelectorAll('button')),l=b[b.length-1].getBoundingClientRect(),r=t.getBoundingClientRect(),k=document.querySelector('.key-hints').getBoundingClientRect();return {over:t.scrollHeight-t.clientHeight,more:t.dataset.more||'',after:getComputedStyle(t,'::after').content,before:getComputedStyle(t,'::before').content,lastIn:l.bottom<=r.bottom+0.5&&l.top>=r.top,overKeys:r.bottom>k.top+0.5,n:b.length};})()`) as Promise<{ over: number; more: string; after: string; before: string; lastIn: boolean; overKeys: boolean; n: number }>;
+  const a = await st();
+  check(`${w}×${h}: не влезло — стрелка вниз; влезло — стрелки нет; колонка не на строке клавиш`, !a.overKeys && (a.over > 1 ? a.more === "below" && a.after.includes("▾") : a.more === "" && a.after === "none"), JSON.stringify(a));
+  await page.screenshot({ path: `${out}/tools-${w}x${h}-top.png` });
+  if (a.over > 1) {
+    const tb = (await page.locator(".scene-tools").boundingBox())!; await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2); await page.mouse.wheel(0, 400); await page.waitForTimeout(500);
+    const e = await st();
+    check(`${w}×${h}: колесом до конца — «Открыть фасады» видна целиком, стрелка только вверх`, e.lastIn && e.more === "above" && e.after === "none" && e.before.includes("▴"), JSON.stringify(e));
+    await page.screenshot({ path: `${out}/tools-${w}x${h}-end.png` });
+  }
+  await page.close();
+}
+// 10. Купе: правой кнопкой по вставке → «Профиль» — редактор этой секции; щелчок по вставке — он же
+{
+  const kp = project(); const km = createKupeModule(1800, 2400, initialModule()); kp.modules = [{ id: id(), x: 100, y: 0, z: 3, rotation: 0, module: km }];
+  const page = await open(1366, 768, "bodies", { p: kp });
+  await page.getByRole("button", { name: "Спереди", exact: true }).click(); await page.waitForTimeout(900);
+  await page.getByRole("button", { name: "Приблизить выбранный корпус" }).click(); await page.waitForTimeout(1200);
+  const box = (await page.locator(".scene canvas").first().boundingBox())!; let got = false;
+  for (let dy = 0.4; dy <= 0.7 && !got; dy += 0.1) for (let dx = 0.35; dx <= 0.65 && !got; dx += 0.1) { await page.mouse.click(box.x + box.width * dx, box.y + box.height * dy, { button: "right" }); await page.waitForTimeout(350); if ((await page.locator(".radial-center b").first().innerText({ timeout: 300 }).catch(() => "")).includes("купе")) got = true; else { await page.keyboard.press("Escape"); await page.waitForTimeout(100); } }
+  check("купе: меню правой кнопкой открылось", got);
+  if (got) {
+    await page.locator(".radial-item").filter({ has: page.locator(".radial-label", { hasText: /^Профиль( ›)?$/ }) }).first().click(); await page.waitForTimeout(600);
+    const k = await page.evaluate(`(function(){var e=document.querySelector('.properties [data-part-params="kupe"]'),l=document.querySelector('.properties .ui-highlight'),p=document.querySelector('.properties').getBoundingClientRect(),r=l&&l.getBoundingClientRect();return {editor:!!e,lit:l?l.className:'',text:e?e.innerText.slice(0,40):'',seen:!!r&&r.top>=p.top-1&&r.top<p.bottom-40};})()`) as { editor: boolean; lit: string; text: string; seen: boolean };
+    check("купе: «Профиль» со вставки — подсвечен редактор этой секции, виден", k.editor && k.lit.includes("kupe-sect-editor") && k.seen && /Дверь \d/.test(k.text), JSON.stringify(k));
+    await page.screenshot({ path: `${out}/kupe-params.png` });
+  }
   await page.close();
 }
 

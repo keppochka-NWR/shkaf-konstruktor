@@ -1,7 +1,8 @@
 // Верхняя полоса сцены (Макс 31.10: «"Двигать корпуса" и прочее в одну линию с видами»; долг 30.10 — без прозрачной подложки).
 // Макс 01.11: «иконки мне всё же не нравятся, они непонятные, давай вернём текстовое описание» — виды и режимы подписями (клавиша — в подсказке).
 // Не влезает в строку — переносится, а не прячет подписи: высота полосы уходит в --toolbar-h, сцена и плашки встают под неё.
-import {useLayoutEffect,useRef,type ReactNode} from 'react';
+import {useMemo,type ReactNode} from 'react';
+import {heightVarRef} from './sceneBars';
 
 export type ToolbarView='iso'|'front'|'left'|'side'|'top'|'plan';
 export const VIEW_BUTTONS:{id:ToolbarView;label:string;title:string;key:string}[]=[
@@ -20,9 +21,6 @@ export function ViewButtons({active,onView,hidden=[]}:{active:ToolbarView;onView
 
 /** Полоса над сценой: виды, затем режимы/переключатели. Сплошной фон, сцена начинается под полосой. */
 export function SceneToolbar({views,children,end}:{views:ReactNode;children?:ReactNode;end?:ReactNode}){
- const ref=useRef<HTMLDivElement>(null);
- useLayoutEffect(()=>{const bar=ref.current,host=bar?.parentElement;if(!bar||!host)return;
-  const sync=()=>host.style.setProperty('--toolbar-h',bar.offsetHeight+'px');sync();
-  if(typeof ResizeObserver==='undefined')return;const o=new ResizeObserver(sync);o.observe(bar);return()=>o.disconnect();},[]);
+ const ref=useMemo(()=>heightVarRef('--toolbar-h'),[]);
  return <div ref={ref} className="scene-toolbar" role="toolbar" aria-label="Вид и режим сцены">{views}{children&&<span className="toolbar-sep" aria-hidden="true"/>}{children}{end&&<span className="toolbar-end">{end}</span>}</div>;
 }

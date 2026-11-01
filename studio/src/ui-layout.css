@@ -48,6 +48,11 @@
 .app .viewport .scene-tools button{width:100%;height:auto;min-height:0;flex:none;padding:3px 1px 2px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:1px;border:1px solid transparent;border-radius:6px;color:var(--text-muted)}.app .viewport .scene-tools button svg{width:15px;height:15px;flex:none}
 .scene-tools .tool-cap{display:block;width:100%;text-align:center;font-size:10px;line-height:11px;font-weight:550;white-space:normal;overflow-wrap:normal;hyphens:none}
 @media (max-height:860px){.app .viewport .scene-tools button{padding:2px 1px 1px;gap:0}.app .viewport .scene-tools button svg{width:13px;height:13px}.scene-tools .tool-cap{font-size:9.5px;line-height:10.5px}}
+@media (max-height:700px){.app .viewport .scene-tools button{padding:1px;border-width:0}.app .viewport .scene-tools button svg{width:12px;height:12px}.app .viewport .scene-tools .tools-sep{margin:1px 4px}.scene-tools .tool-cap{line-height:10px}}
+/* критик 01.11: не влезло — стрелка и затухание у края, щелчок по стрелке листает (data-more, sceneBars.ts) */
+.app .viewport .scene-tools[data-more~=below]::after,.app .viewport .scene-tools[data-more~=above]::before{content:'▾';position:sticky;z-index:1;flex:none;height:20px;display:block;text-align:center;font-size:16px;font-weight:700;line-height:24px;color:var(--accent);cursor:pointer}
+.app .viewport .scene-tools[data-more~=below]::after{order:99;bottom:-3px;margin-top:-20px;background:linear-gradient(#fff0,#fff 55%)}
+.app .viewport .scene-tools[data-more~=above]::before{content:'▴';order:-1;top:-3px;margin-bottom:-20px;line-height:16px;background:linear-gradient(#fff 45%,#fff0)}
 .app .viewport .scene-tools button:hover:not(:disabled){background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
 .app .viewport .scene-tools button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent)}
 .app .viewport .scene-tools .tools-sep{flex:none;height:1px;margin:2px 4px;background:var(--line)}
@@ -114,8 +119,8 @@
 .app .viewport .light-mode-bar2 button.lmb-chip:hover{background:var(--accent-soft);border-color:var(--accent-line)}
 .app .viewport .light-mode-bar2 button.lmb-chip[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
 /* плашка выбранной детали — в сцене над строкой клавиш: перенос кнопок целиком, текст в кнопке в одну строку */
-.app .viewport .selection-action-bar{bottom:calc(var(--keys-h) + 8px);z-index:7;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px;padding:5px 6px}
-.app.advanced .viewport .selection-action-bar{bottom:calc(var(--keys-h) + 66px)} /* «Все настройки»: ниже стоят кнопки секций */
+.app .viewport{--selbar-b:calc(var(--keys-h) + 8px)}.app.advanced .viewport{--selbar-b:calc(var(--keys-h) + 66px)} /* «Все настройки»: ниже стоят кнопки секций */
+.app .viewport .selection-action-bar{bottom:var(--selbar-b);z-index:7;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px;padding:5px 6px}
 .app .viewport .selection-action-bar .selection-context{flex:0 1 auto;min-width:0;max-width:220px;margin:0 4px;gap:1px;font-size:12px;line-height:1.25}
 .app .viewport .selection-action-bar .selection-context strong{font-weight:650;white-space:nowrap}
 .app .viewport .selection-action-bar .selection-context span{max-width:none;color:var(--text-muted);font-size:11px}
@@ -125,9 +130,17 @@
 .app .viewport .selection-action-bar button.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
 .app .viewport .selection-action-bar button.danger{color:var(--danger);border-color:var(--danger-line)}
 .app .viewport .selection-action-bar button.danger:hover{background:#fef3f2;border-color:var(--danger)}
+/* критик 01.11: узкая сцена — без подзаголовка, второстепенное в «Ещё ▾» (пороги: всё в строку ~1000 px, средний набор ~640 px от ширины полки с колонкой); подписи остаются текстом */
+.selection-action-bar .sb-more{display:none;position:relative;flex:none;pointer-events:auto}
+.app .viewport .selection-action-bar .sb-menu{position:absolute;right:0;bottom:calc(100% + 8px);z-index:8;display:flex;flex-direction:column;align-items:stretch;gap:2px;min-width:170px;padding:4px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 16px #1d2b3a29;pointer-events:auto}
+.app .viewport .selection-action-bar .sb-menu button{width:100%;border-color:transparent;text-align:left;justify-content:flex-start}
+.app .viewport .selection-action-bar .sb-menu .sb-mid{display:none}
+@container scene (max-width:1040px){.app .viewport .selection-action-bar .selection-context span{display:none}.app .viewport .selection-action-bar>button.sb-wide{display:none}.selection-action-bar .sb-more{display:block}.selection-action-bar .sb-more.sb-more-narrow{display:none}}
+@container scene (max-width:740px){.app .viewport .selection-action-bar>button.sb-mid{display:none}.selection-action-bar .sb-more.sb-more-narrow{display:block}.app .viewport .selection-action-bar .sb-menu .sb-mid{display:block}}
 /* плашка детали заняла низ сцены: кнопка линий Q — вверх, сообщения — над ней, разовая подсказка ждёт */
 .viewport:has(.selection-action-bar) .clear-guides{top:calc(var(--toolbar-h) + 8px);bottom:auto}
-.viewport:has(.selection-action-bar) .error-banner,.viewport:has(.selection-action-bar) .restore-modules{bottom:calc(var(--keys-h) + 60px)}
+/* критик 01.11: запас в px перекрывал плашку на переносе — считаем от её настоящей высоты (--selbar-h, sceneBars.ts) */
+.viewport:has(.selection-action-bar) .error-banner,.viewport:has(.selection-action-bar) .restore-modules{bottom:calc(var(--selbar-b) + var(--selbar-h,44px) + 6px)}
 .viewport:has(.selection-action-bar) .rmb-tip{display:none}
 /* «Понятно» — та же белая плашка */
 .app .rmb-tip{bottom:calc(var(--keys-h) + 8px);background:#fff;color:var(--neutral-ink);border:1px solid var(--line);border-radius:8px;box-shadow:var(--bar-shadow);font-size:12px;padding:6px 8px 6px 10px}

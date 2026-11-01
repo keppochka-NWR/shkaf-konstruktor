@@ -6,7 +6,9 @@ import {readFileSync} from 'node:fs';
 import {planShortcut,viewShortcut} from '../src/historyShortcuts';
 import {menuArea} from '../src/contextMenu';
 import {VIEW_BUTTONS} from '../src/SceneToolbar';
-import {partKind,partParamTargets,partSetting} from '../src/partParams';
+import {partKind,partIndex,partParamTargets,partSetting} from '../src/partParams';
+import {moreState} from '../src/sceneBars';
+import {cornerHandleBlock} from '../src/cornerWardrobe';
 import {hasHideableFacades,hiddenWithFacades} from '../src/facadeHide';
 import {fitWidths,MIN_SCENE} from '../src/WorkspacePanels';
 import {initialModule} from '../src/model';
@@ -85,4 +87,32 @@ test('Макс 01.11: «Параметры» — у ящика поля ящик
   assert.equal(partParamTargets('s1:drawer:2:facade')[0],'.properties [data-part-params="drawer"]');
   assert.ok(partParamTargets('s1:drawer:2:facade').indexOf('.properties details[data-setting="Ящики"]')<partParamTargets('s1:drawer:2:facade').indexOf('.properties details[data-setting="Секция"]'),'«Секция» — только запасной путь');
   assert.equal(partParamTargets('s1:left')[0],'.properties details[data-setting="Секция"]');
+});
+
+test('критик 01.11: угловой — номер ящика и «Наполнение угла» раньше первого раздела; купе — редактор вставки',()=>{
+  assert.equal(partIndex('s1:drawer:2:facade'),2);assert.equal(partIndex('s1:shelf:1'),1);assert.equal(partIndex('s1:door:0'),null);
+  const d=partParamTargets('s1:drawer:2:bottom');
+  assert.equal(d[0],'.properties [data-part-params="drawer"][data-part-index="2"]');
+  const list=partParamTargets('s1:left');
+  assert.ok(list.indexOf('.properties details[data-setting="Наполнение угла"]')<list.indexOf('.properties .property-section'),'вступление углового — .property-section — только последним');
+  assert.equal(partKind('kupe:1:fill:0:2'),'kupe');
+  assert.equal(partParamTargets('kupe:1:fill:0:2')[0],'.properties [data-part-params="kupe"]');
+  assert.equal(partKind('kupe:1:side:l'),'section');
+  assert.ok(partParamTargets('kupe:1:side:l').includes('.properties .kupe-panel'));
+});
+
+test('критик 01.11: ручка углового — серая там, где ничего не меняет; обычный шкаф не затронут',()=>{
+  const main={corner:{level:'main'}} as never,upper={corner:{level:'upper'}} as never;
+  assert.match(cornerHandleBlock(main,'c:drawer:0:facade')!,/вкладной/);
+  assert.match(cornerHandleBlock(main,'c:door:0')!,/второй фасад/);
+  assert.equal(cornerHandleBlock(main,'c:door:1'),undefined);
+  assert.match(cornerHandleBlock(upper,'c:door:1')!,/антресоли/);
+  assert.equal(cornerHandleBlock({} as never,'s1:drawer:0:facade'),undefined);
+});
+
+test('критик 01.11: стрелки колонки — только с той стороны, где скрыто',()=>{
+  assert.equal(moreState(0,400,400),'');
+  assert.equal(moreState(0,300,400),'below');
+  assert.equal(moreState(40,300,400),'above below');
+  assert.equal(moreState(100,300,400),'above');
 });

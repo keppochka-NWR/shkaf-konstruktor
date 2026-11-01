@@ -46,7 +46,9 @@ export function pulse(els: readonly HTMLElement[], duration = 1300) {
 /** Первый найденный из списка селекторов — после кадра (React успел дорисовать выбор детали). «Параметры» детали, Макс 01.11. */
 export function highlightFirst(selectors: readonly string[], opts: HighlightOptions = {}): Promise<HTMLElement[]> {
   return new Promise((done) => {
-    const pick = () => { for (const s of selectors) { const el = document.querySelector(s); if (el) return void highlightControls(el, opts).then(done); } done([]); };
+    // свой блок детали может появиться не в первый кадр (купе: выбор вставки уходит в эффект панели) — запасной путь не раньше чем через ~0,1 с
+    let wait = 6;
+    const pick = () => { if (wait-- > 0 && !document.querySelector(selectors[0]) && typeof requestAnimationFrame === "function") { requestAnimationFrame(pick); return; } for (const s of selectors) { const el = document.querySelector(s); if (el) return void highlightControls(el, opts).then(done); } done([]); };
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(pick); else pick();
   });
 }

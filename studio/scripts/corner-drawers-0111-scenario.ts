@@ -103,9 +103,22 @@ if (opened) {
   await esc();
 }
 // 6. ПКМ по фасаду ящика: ручка не обещает того, чего нет
-{ let got = false; const box2 = (await page.locator("[data-testid=scene] canvas").first().boundingBox())!; for (let dy = 40; dy <= 280 && !got; dy += 15) for (let dx = -160; dx <= 160 && !got; dx += 20) { const t = await radialAt(box2.x + box2.width / 2 + dx, box2.y + box2.height / 2 + dy); if (/Ящик/.test(t)) { got = true; break; } await esc(); }
+let lastSpot: { x: number; y: number } | null = null;
+{ let got = false; const box2 = (await page.locator("[data-testid=scene] canvas").first().boundingBox())!; for (let dy = 40; dy <= 280 && !got; dy += 15) for (let dx = -160; dx <= 160 && !got; dx += 20) { const q = { x: box2.x + box2.width / 2 + dx, y: box2.y + box2.height / 2 + dy }, t = await radialAt(q.x, q.y); if (/Ящик/.test(t)) { got = true; lastSpot = q; break; } await esc(); }
   check("фасад ящика: меню ПКМ открылось", got);
-  if (got) { const h = radialItem("Ручка"), lab = (await h.getAttribute("aria-label").catch(() => "")) ?? ""; expectNew("фасад ящика: «Ручка» серая с причиной", (await h.isDisabled().catch(() => false)) && lab.includes("вкладной"), lab); await shot("drawer-menu"); await esc(); } }
+  if (got) { const h = radialItem("Ручка"), lab = (await h.getAttribute("aria-label").catch(() => "")) ?? ""; expectNew("фасад ящика: «Ручка» серая с причиной", (await h.isDisabled().catch(() => false)) && lab.includes("вкладной"), lab); await shot("drawer-menu"); await esc(); }
+  // критик 01.11: тот же ящик левой кнопкой — плашка и «Параметры»
+  if (got) {
+    const spot = lastSpot!; await page.mouse.click(spot.x, spot.y, { delay: 60 }); await page.waitForTimeout(500);
+    const name = (await page.locator(".selection-context strong").first().innerText({ timeout: 1500 }).catch(() => "")).trim(), n = Number(/\d+/.exec(name)?.[0] ?? 0);
+    expectNew("ящик в угловом: плашка выбранного ящика", /^Ящик \d/.test(name), name);
+    const hb = page.locator(".selection-action-bar button", { hasText: "Ручка этого фасада" }).first();
+    if (await hb.count()) expectNew("плашка: «Ручка этого фасада» серая с причиной", (await hb.isDisabled()) && ((await hb.getAttribute("title")) ?? "").includes("вкладной"), (await hb.getAttribute("title")) ?? "");
+    await page.getByTestId("selection-params").click(); await page.waitForTimeout(600);
+    const st = await page.evaluate((j) => { const d = document.querySelector<HTMLDetailsElement>(`.properties details.corner-drawer[data-part-index="${j}"]`), intro = document.querySelector(".properties .corner-properties > .property-section, .properties .corner-properties .property-section"), cat = document.querySelector<HTMLDetailsElement>('.properties details[data-settings-category="Наполнение"]'), fillD = document.querySelector<HTMLDetailsElement>('.properties details[data-setting="Наполнение угла"]'), p = document.querySelector(".properties")!.getBoundingClientRect(), r = d?.getBoundingClientRect(); return { open: !!d?.open, lit: !!d?.classList.contains("ui-highlight"), summary: d?.querySelector("summary")?.textContent ?? "", cat: !!cat?.open, fill: !!fillD?.open, seen: !!r && r.top >= p.top - 1 && r.top < p.bottom - 40, introLit: !!intro?.classList.contains("ui-highlight") }; }, n - 1);
+    expectNew("«Параметры» ящика углового: раскрыт и подсвечен «Ящик N» в «Наполнении угла», не вступление", st.open && st.lit && st.cat && st.fill && st.seen && !st.introLit && st.summary.startsWith(name), JSON.stringify(st));
+    await shot("corner-drawer-params"); await esc();
+  } }
 // 7. габариты: всё заявленное строится
 await page.getByRole("button", { name: /^Настройки «/ }).click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(500);
 await open(body); await open(geom);
@@ -114,6 +127,14 @@ await type(geom.locator('input[aria-label="Глубина боковин угл�
 await viewBtn("3D").click(); await shot("side-400");
 await open(body); await open(geom);
 await type(geom.locator('input[aria-label="Глубина боковин угла"]'), 450);
+// критик 01.11: колесо «Размеры › Ширина» 950 — как панель, без ложного отказа «стороны 950–1400»
+{ await esc(); await page.waitForTimeout(300); const box3 = (await page.locator("[data-testid=scene] canvas").first().boundingBox())!; let sizeItem = false;
+  for (let dy = 40; dy <= 280 && !sizeItem; dy += 30) for (let dx = -160; dx <= 160 && !sizeItem; dx += 40) { await radialAt(box3.x + box3.width / 2 + dx, box3.y + box3.height / 2 + dy); if ((await page.locator(".radial-menu").count()) && (await radialItem("Корпус").count())) { await radialItem("Корпус").click(); await page.waitForTimeout(300); } if (await radialItem("Размеры").count()) { sizeItem = true; break; } await esc(); }
+  check("колесо: «Размеры» у углового открылось", sizeItem);
+  if (sizeItem) { await radialItem("Размеры").click(); await page.waitForTimeout(300); await radialItem("Ширина").click(); await page.waitForTimeout(300); const ed = page.locator(".dimension-editor input").first(); await ed.fill("950"); await page.keyboard.press("Enter"); await page.waitForTimeout(700);
+    const e = await page.locator(".error-banner").allInnerTexts().catch(() => [] as string[]), p = await saved(), m = p.modules[0].module; expectNew("колесо «Ширина» 950: принято, ширина и глубина вместе, отказа нет", m.width === 950 && m.depth === 950 && !e.join(" ").includes("950"), `${m.width}×${m.depth}; ${e.join(" ").slice(0, 120)}`); }
+  await page.keyboard.press("Control+z"); await page.waitForTimeout(700);
+  await page.getByRole("button", { name: /^Настройки «/ }).click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(400); await open(body); await open(geom); }
 await type(geom.locator('input[aria-label="Сторона угла"]'), 950);
 { const p = await saved(), m = p.modules[0].module; expectNew("сторона 950: принято", m.width === 950 && m.depth === 950, `сторона ${m.width}, блок ${m.corner!.bayDepth}`); expectNew("сторона 950: ошибок модели нет", validate(m).length === 0, validate(m).join("; ")); }
 await shot("side-950");
