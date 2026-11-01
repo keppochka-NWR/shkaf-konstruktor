@@ -879,11 +879,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     catch(e){setError((e as Error).message);}
   }
   /** Поворот на 90° по часовой / против (кнопки, круговое меню, R / Shift+R). Корпус в отмеченной группе — поворачивается группа. */
-  function turnSelected(mid:string,dir:Turn,fit=false){
+  function turnSelected(mid:string,dir:Turn){
     // Макс 31.10: на месте не помещается — повёрнут и сдвинут в ближайшее свободное положение (сообщение — на сколько)
     try{const ids=inGroup(mid)?liveGroupIds:null,r:{project:Project;moved:number;loose?:string[]}=ids?rotateGroupNear(project,ids,dir):turnNear(project,mid,dir);if(commitProject(r.project)){
       const parts=[r.moved?`На месте ${ids?'группа не помещалась':'корпус не помещался'} — ${ids?'повёрнута и сдвинута':'повёрнут и сдвинут'} на ${r.moved} мм в ближайшее свободное место.`:'',r.loose?.length?`Навесные не у стены: ${r.loose.map(n=>'«'+n+'»').join(', ')} — «Повесить к стене» в «Проверьте расстановку».`:''].filter(Boolean);
-      if(parts.length)setNotice({title:'Поворот',text:parts.join(' ')});if(fit||ids){if(ids)setFocusActive(false);setFit(f=>f+1);}}}catch(e){setError((e as Error).message);}
+      if(parts.length)setNotice({title:'Поворот',text:parts.join(' ')});/* камера на месте (Макс 01.11: дёргалась — кадр вписывался заново); заново — только если был крупный вид одного корпуса, а поворачивается группа */if(ids&&focusActive){setFocusActive(false);setFit(f=>f+1);}}}catch(e){setError((e as Error).message);}
   }
   function modifyAt(mid:string,update:(draft:Module)=>void){
     const a=project.modules.find(x=>x.id===mid);if(!a)return false;
@@ -968,7 +968,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         hinges,opening,...doorQuickItems(mod,c.sid,quickOps)]},...groupItem,...groupSize,
       {id:'copy',label:'Копия',icon:Copy,hint:'Такой же корпус рядом',run:()=>{const r=copyModuleGroup(project,[a.id]);if(commitProject(r.project))selectModule(r.ids[0]);}},
       // поворот в обе стороны (решение Макса 29.10); корпус в отмеченной группе — поворачивается вся группа, стыки сохраняются
-      ...(['cw','ccw'] as const).map(dir=>({id:dir==='cw'?'rotate':'rotate-ccw',label:dir==='cw'?'Повернуть ↻':'Повернуть ↺',icon:dir==='cw'?RotateCw:RotateCcw,hint:(dir==='cw'?'На 90° по часовой (вид сверху) · клавиша R':'На 90° против часовой (вид сверху) · Shift+R')+(inGroup(a.id)?` · вся отмеченная группа (${liveGroupIds.length})`:''),run:()=>turnSelected(a.id,dir,true)} as RadialItem)),
+      ...(['cw','ccw'] as const).map(dir=>({id:dir==='cw'?'rotate':'rotate-ccw',label:dir==='cw'?'Повернуть ↻':'Повернуть ↺',icon:dir==='cw'?RotateCw:RotateCcw,hint:(dir==='cw'?'На 90° по часовой (вид сверху) · клавиша R':'На 90° против часовой (вид сверху) · Shift+R')+(inGroup(a.id)?` · вся отмеченная группа (${liveGroupIds.length})`:''),run:()=>turnSelected(a.id,dir)} as RadialItem)),
       // w-lwing (23.10): постановка второго крыла — к стене одним действием и продолжение ряда за угол
       ...(mod.worktop?[]:[{id:'to-wall',label:'Поставить к стене',icon:BrickWall,hint:'Фасадом в комнату, вплотную к стене — в ближайшее свободное место',children:(['back','left','right'] as Wall[]).map(w=>({id:'to-wall-'+w,label:`К ${WALL_LABEL[w]}`,icon:BrickWall,active:false,hint:`Повернуть фасадом в комнату и поставить вплотную к ${WALL_LABEL[w]} стене`,run:()=>moduleToWall(a.id,w)}))} as RadialItem]),
       ...(()=>{const turns=mod.worktop?[]:cornerTurns(project,a.id);if(!turns.length)return [];const other=active!==a.id&&project.modules.some(x=>x.id===active)?project.modules.find(x=>x.id===active):undefined;
