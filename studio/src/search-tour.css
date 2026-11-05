@@ -52,3 +52,10 @@
 @media (prefers-reduced-motion:reduce){.tour-spot,.tour-card{transition:none}}
 .help-tour{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 
+
+/* Keep tour controls inside the viewport, including short windows and browser zoom. */
+.studio-tour .tour-card{box-sizing:border-box;display:flex;flex-direction:column;overflow:auto;transition:none}
+.studio-tour .tour-head,.studio-tour .tour-actions{flex-shrink:0}
+.studio-tour .tour-card p{min-height:0;overflow:auto}
+.studio-tour .tour-actions{position:sticky;bottom:0;background:#fff;padding-top:8px;flex-wrap:wrap}
+

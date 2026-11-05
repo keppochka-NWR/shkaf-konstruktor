@@ -12,10 +12,24 @@ import "./search-tour.css";
 
 type Box = { left: number; top: number; width: number; height: number };
 const PAD = 6, GAP = 14, CARD_W = 340;
+function visibleViewport() {
+  const v = window.visualViewport;
+  return { left: v?.offsetLeft ?? 0, top: v?.offsetTop ?? 0,
+    width: Math.min(window.innerWidth, document.documentElement.clientWidth, v?.width ?? Infinity),
+    height: Math.min(window.innerHeight, document.documentElement.clientHeight, v?.height ?? Infinity) };
+}
 
 export function StudioTour({ nav }: { nav: StudioNav }) {
   const [step, setStep] = useState<number | null>(null), [offer, setOffer] = useState(false);
   const [box, setBox] = useState<Box | null>(null), [cardH, setCardH] = useState(180);
+  const [viewport, setViewport] = useState(visibleViewport);
+  useEffect(() => {
+    const update = () => setViewport(visibleViewport());
+    window.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('scroll', update);
+    return () => { window.removeEventListener('resize', update); window.visualViewport?.removeEventListener('resize', update); window.visualViewport?.removeEventListener('scroll', update); };
+  }, []);
   const navRef = useRef(nav); navRef.current = nav;
   const dir = useRef(1), startStage = useRef<Stage>("room"), tourStage = useRef<Stage | null>(null), before = useRef<HTMLElement | null>(null), target = useRef<HTMLElement | null>(null), card = useRef<HTMLDivElement>(null), next = useRef<HTMLButtonElement>(null);
   const start = () => { setOffer(false); markTourSeen(); before.current = document.activeElement as HTMLElement | null; startStage.current = normalizeStage(navRef.current.stage); tourStage.current = null; dir.current = 1; setStep(0); };
@@ -57,7 +71,12 @@ export function StudioTour({ nav }: { nav: StudioNav }) {
     const track = () => { const el = target.current; if (el && el.isConnected) { const r = el.getBoundingClientRect(); setBox((b) => (b && Math.abs(b.left - r.left) < 0.5 && Math.abs(b.top - r.top) < 0.5 && Math.abs(b.width - r.width) < 0.5 && Math.abs(b.height - r.height) < 0.5 ? b : { left: r.left, top: r.top, width: r.width, height: r.height })); } raf = requestAnimationFrame(track); };
     raf = requestAnimationFrame(track); return () => cancelAnimationFrame(raf);
   }, [step]);
-  useLayoutEffect(() => { if (card.current) setCardH(card.current.offsetHeight); }, [step, box]);
+  useLayoutEffect(() => {
+    const el = card.current; if (!el) return;
+    const measure = () => setCardH(el.getBoundingClientRect().height);
+    measure(); const observer = new ResizeObserver(measure); observer.observe(el);
+    return () => observer.disconnect();
+  }, [step]);
   // Esc закрывает тур раньше, чем редактор снимет выделение
   useEffect(() => {
     if (step === null) return;
@@ -73,7 +92,7 @@ export function StudioTour({ nav }: { nav: StudioNav }) {
     <b>Короткое обучение</b><p>9 шагов, меньше минуты: этапы, шкафы, виды, меню, линии Q, цена и поиск.</p>
     <div><button className="primary" onClick={start}>Показать</button><button className="outline" onClick={() => { setOffer(false); markTourSeen(); }}>Не сейчас</button></div>
   </div>, document.body) : null;
-  const s = TOUR_STEPS[step], vw = window.innerWidth, vh = window.innerHeight, w = Math.min(CARD_W, vw - 32);
+  const s = TOUR_STEPS[step], vw = viewport.width, vh = viewport.height, w = Math.min(CARD_W, vw - 32);
   // карточка под целью, если есть место, иначе над ней, иначе сбоку; всегда в пределах окна
   let left = vw / 2 - w / 2, top = vh / 2 - cardH / 2;
   if (box) {
@@ -82,9 +101,12 @@ export function StudioTour({ nav }: { nav: StudioNav }) {
     else if (box.top - PAD - GAP - cardH > 8) top = box.top - PAD - GAP - cardH;
     else { top = Math.min(Math.max(8, box.top), vh - cardH - 8); left = box.left + box.width + PAD + GAP + w < vw - 8 ? box.left + box.width + PAD + GAP : Math.max(16, box.left - PAD - GAP - w); }
   }
+  // Последний барьер: карточка вместе с кнопками всегда внутри видимой области.
+  left = Math.max(viewport.left + 16, Math.min(left, viewport.left + vw - w - 16));
+  top = Math.max(viewport.top + 16, Math.min(top, viewport.top + vh - cardH - 16));
   return createPortal(<div className="studio-tour" data-testid="studio-tour" data-step={s.id}>
     {box ? <div className="tour-spot" aria-hidden="true" style={{ left: box.left - PAD, top: box.top - PAD, width: box.width + 2 * PAD, height: box.height + 2 * PAD }} /> : <div className="tour-dim" aria-hidden="true" />}
-    <div ref={card} className="tour-card" role="dialog" aria-labelledby="tour-title" aria-describedby="tour-text" style={{ left, top, width: w }}>
+    <div ref={card} className="tour-card" role="dialog" aria-labelledby="tour-title" aria-describedby="tour-text" style={{ left, top, width: w, maxHeight: Math.max(80, vh - 32) }}>
       <div className="tour-head"><span className="tour-count">{step + 1} / {TOUR_STEPS.length}</span><button className="tour-x" aria-label="Закрыть обучение" onClick={close}><X size={16} /></button></div>
       <h3 id="tour-title">{s.title}</h3>
       <p id="tour-text">{s.text}</p>
