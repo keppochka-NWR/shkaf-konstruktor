@@ -1,3 +1,4 @@
+import {LegatoPanel} from './LegatoPanel';
 import {FacadeEditor} from './FacadeEditor';
 import {Eye,EyeOff,PanelTopClose,PanelTopOpen,BrickWall} from 'lucide-react';
 import {Scissors,RectangleHorizontal} from 'lucide-react';
@@ -413,7 +414,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const title=partSetting(selectedDetail.id,selectedDetail.role);
     propertiesRef.current?.querySelectorAll<HTMLDetailsElement>('details[data-setting]').forEach(d=>{if(d.dataset.setting===title)revealSettings(d);});
   },[selectedDetail?.id]);
-  const canRemove=selectedDetail&&(/:door:|:shelf:|:drawer:|:pantograph:|:pullout:|:flange:/.test(selectedDetail.id)||selectedDetail.id.endsWith(':rod'));
+  const canRemove=selectedDetail&&(selectedDetail.id.startsWith('legato:')||/:door:|:shelf:|:drawer:|:pantograph:|:pullout:|:flange:/.test(selectedDetail.id)||selectedDetail.id.endsWith(':rod'));
   const selectedFillingName=selectedDetail?.id.includes(':drawer:')?'Ящик '+(Number(selectedDetail.id.split(':drawer:')[1].split(':')[0])+1):selectedDetail?.id.includes(':pantograph:')?'Пантограф':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Штанга':selectedDetail?.id.includes(':shelf:')?'Полка '+(Number(selectedDetail.id.split(':shelf:')[1])+1):selectedDetail?.name;
   const selectedKind=selectedDetail?partKind(selectedDetail.id,selectedDetail.role):null;
   const removalLabel=selectedDetail?.id.includes(':drawer:')?'Удалить ящик':(selectedDetail?.role==='door'||selectedDetail?.id.endsWith(':facade'))?'Удалить выбранный фасад':selectedDetail?.id.includes(':pantograph:')?'Удалить пантограф':selectedDetail?.id.includes(':pullout:')?'Удалить тремпель':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Удалить штангу':'Удалить полку';
@@ -1573,6 +1574,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <span>Добавить ящик</span>
               <Plus size={15} />
             </button>
+            <button hidden={!!m.corner||!!m.kupe} onClick={()=>{setTab("section");setTimeout(()=>{const el=propertiesRef.current?.querySelector<HTMLElement>('[data-setting="Сетки для обуви Premial"]');revealSettings(el);el?.scrollIntoView({block:"nearest"});},0);}}><Rows3 size={19}/><span>Сетка для обуви Premial</span><Plus size={15}/></button>
             <div hidden={!!m.corner} className="mesh-add">
               <button disabled={!!fillBlock} title={fillBlock||undefined} draggable={!fillBlock} onDragStart={e=>startFill(e,'mesh')}
                 onClick={()=>dropFilling('mesh',placed.id,selectedId,b.bottom+drawerStackHeight(s),meshChoice)}
@@ -2039,6 +2041,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   </button>
                 </div>
               </SettingsSection>
+<SettingsSection title="Сетки для обуви Premial"><LegatoPanel m={m} s={s} modify={modifySection}/></SettingsSection>
 <SettingsSection title="Полки">                {selectedKind==='shelf'&&<div data-part-params="shelf">{selectedCard()}</div>}
                 <Counter
                   label="Полки"

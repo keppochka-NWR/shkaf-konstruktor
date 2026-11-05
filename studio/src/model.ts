@@ -1,3 +1,4 @@
+import {legatoParts,legatoErrors,legatoCollisionErrors,parseShoeShelves,type ShoeShelf} from './legato';
 import { metalFrameParts, metalFrameErrors, parseMetalFrame, type MetalFrame } from './metalFrame';
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, parseItems as parseBazisItems, type RawSpec, type BazisNames } from "./rawModule";
@@ -179,6 +180,7 @@ export type HingeAngle = 90 | 165;
 export const HINGE_ANGLES: HingeAngle[] = [90, 165];
 export const HINGE_ANGLE_LABEL: Record<HingeAngle, string> = { 90: "открывание на 90°", 165: "155–165° (широкий угол)" };
 export type Section = {
+  shoeShelves?: ShoeShelf[];
   drawerMount?: 'inset';
   glassShelves?: number[];
   /** Посадочное место (заказ 7427796, 26.10.2026): номера жёстких полок секции из двух плит 16, склеенных в 32 под одну кромку
@@ -546,6 +548,7 @@ export type GolaCut = { top0: number; top1: number; depth: number; r: number; /*
   /** Средний вырез: верхний угол без скругления (k10, k15, k17, k30 — в нём стяжка соседних модулей «5»), скруглён только нижний. */ sharpTop?: boolean;
   /** Вырез только в этой боковине (k30 m12: средний — только в правой; k30 m14: в правой вырезов нет). Без поля — в обеих. */ side?: 'left' | 'right' };
 export type Part = {
+  legato?: {article:string;mount:"horizontal"|"inclined"};
   /** Фигурная деталь (shapes.ts): контур в плоскости детали с вырезами — сцена рисует по нему; раскрой — по габариту. */
   shape?: PartShape;
   /** Пометка фигурной детали для раскроя, деталировки, бирки: размеры вырезов, радиус, трапеция. */
@@ -1208,7 +1211,7 @@ function partsUncached(m: Module): Part[] {
 /** Детали без вырезов (проверка вырезов и окно «Вырезы» строят контур от них). */
 export function shapeBaseParts(m: Module): Part[] {
   if (m.radius && !m.kupe && !m.raw && !m.worktop && !m.corner && !m.casework && !m.kitchen) return radiusParts(m);
-  return partsCore(m);
+  return [...partsCore(m), ...legatoParts(m)];
 }
 function partsCore(m: Module): Part[] {
   if(m.metalFrame)return metalFrameParts(m);
@@ -2666,7 +2669,7 @@ export function fastenerCounts(m: Module) {
   const rafix = m.kitchen ? rafixCount(ps) : 0; // рафиксы — только у кухонь Базиса (kitchenRafix.ts)
   for (const j of m.kitchen?.bareShelves ?? []) fixedIds.add(`${m.sections[0].id}:shelf:${j}`); // полка без крепежа в Базисе — без полкодержателей
   if (m.radius) for (const p of ps) if (p.role === "shelf") fixedIds.add(p.id); // радиусные полки — жёсткие, на конфирматах (shapes.ts)
-  return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: fastenersMode(m.kitchen) === false ? 0 : 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap") && !p.id.endsWith(":glue") && !fixedIds.has(p.id)).length + ps.filter((p) => /^shp:.*:r\d+:\d+$/.test(p.id)).length /* перфорация kitchen.pinRows */, eccentrics: ps.filter((p) => p.id.startsWith("ecc:") && !p.id.endsWith(":pin")).length + (cornerStrip(m) ? 4 : 0), ...(rafix ? { rafix } : {}) };
+  return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: fastenersMode(m.kitchen) === false ? 0 : 4 * ps.filter((p) => p.role === "shelf" && !p.legato && !p.id.endsWith(":drawer-cap") && !p.id.endsWith(":glue") && !fixedIds.has(p.id)).length + ps.filter((p) => /^shp:.*:r\d+:\d+$/.test(p.id)).length /* перфорация kitchen.pinRows */, eccentrics: ps.filter((p) => p.id.startsWith("ecc:") && !p.id.endsWith(":pin")).length + (cornerStrip(m) ? 4 : 0), ...(rafix ? { rafix } : {}) };
 }
 /** Предел высоты модуля: кухонный пенал до KITCHEN.maxHeight 2900 (Базис до 2869), остальное (шкафы, нижние/навесные/антресоли) — RULES.maxH 2500. Один источник для validate и полей «Высота». */
 /** Ящичный модуль: без распашных дверей, в каждой секции есть ящики и нет полок, штанг и тремпелей (подвесной ящик, комод-ящик). */
@@ -2709,7 +2712,7 @@ export function rodClearanceWarnings(m: Module): string[] {
 /** opts.all (w-formerrors 23.10): не останавливаться на ошибках габаритов — проверить и остальное (все причины отказа поля списком);
  *  вызывающий ловит исключения: при недопустимых габаритах дальнейшие проверки могут не собраться. */
 export function validate(m: Module, opts?: {all?: boolean}): string[] {
-  const errors = validateCore(m, opts);
+  const errors = [...validateCore(m, opts), ...legatoErrors(m)];
   if (!m.cutouts?.length && !m.mansard && !m.radius) return errors;
   // фигурные детали (shapes.ts): мансарда, радиусный стеллаж, вырезы — после общих проверок; контур вырезов — от деталей без вырезов
   const more = [...mansardErrors(m), ...radiusErrors(m)];
@@ -3001,6 +3004,7 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
   errors.push(...dividerErrors(m));
   if (errors.length && opts?.all !== true) return [...new Set(errors)];
   const geometry=parts(m);
+  errors.push(...legatoCollisionErrors(m,geometry));
   errors.push(...hingeEdgeErrors(m,geometry));
   errors.push(...dividerHingeErrors(m,geometry));
   for(const section of m.sections.filter(s=>s.pantograph)){
@@ -3422,6 +3426,7 @@ export function parseModule(input: unknown): Module {
       ...(s.doorGap===undefined?{}:{doorGap:s.doorGap}),
       ...(s.removedDoors===undefined?{}:{removedDoors:Array.isArray(s.removedDoors)?[...s.removedDoors]:s.removedDoors}),
       shelves: [...s.shelves],
+      ...(s.shoeShelves===undefined?{}:{shoeShelves:parseShoeShelves(s.shoeShelves)}),
       ...(Array.isArray(s.shelfIds)?{shelfIds:fitIds(parseIds(s.shelfIds)!,s.shelves.length)}:{}),
       ...(Array.isArray(s.drawerIds)&&typeof s.drawers==='number'?{drawerIds:fitIds(parseIds(s.drawerIds)!,s.drawers)}:{}),
       ...(s.drawerMount===undefined?{}:{drawerMount:s.drawerMount}),

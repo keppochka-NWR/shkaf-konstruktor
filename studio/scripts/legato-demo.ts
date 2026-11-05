@@ -1,0 +1,10 @@
+import {writeFileSync,mkdirSync} from 'node:fs';
+import {initialModule,section,validate} from '../src/model';
+import {newProject,projectErrors} from '../src/project';
+const m=initialModule();m.name='Обувные сетки Premial';m.width=800;m.height=2000;m.depth=600;m.doors=false;m.backType='board';m.sections=[section()];m.sections[0].shelves=[];m.sections[0].drawers=0;m.sections[0].rod=false;
+const p=newProject(m);if(projectErrors(p).length)throw Error(projectErrors(p).join('\n'));
+mkdirSync('public/local-projects',{recursive:true});writeFileSync('public/local-projects/premial-legato-check.json',JSON.stringify(p,null,2));
+const s=m.sections[0];s.shoeShelves=[{id:'demo-white',article:'180097',y:300,mount:'horizontal'},{id:'demo-black',article:'180119',y:700,mount:'inclined'},{id:'demo-chrome',article:'180099',y:1100,mount:'inclined'}];
+if(validate(m).length)throw Error(validate(m).join('\n'));
+writeFileSync('public/local-projects/premial-legato-demo.json',JSON.stringify(p,null,2));
+console.log('Two synthetic review projects saved');

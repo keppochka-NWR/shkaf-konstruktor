@@ -1,3 +1,4 @@
+import {legatoModel} from './legatoGeometry';
 import {dishwasherServiceModel} from './dishwasherServices';
 import {applianceModel,APPLIANCE_MODEL_TYPES} from './applianceGeometry';
 import {surfacePoint} from './roomSurvey';
@@ -667,13 +668,19 @@ export function Scene(p: Props) {
             mat.transparent = true; mat.opacity = 0; mat.depthWrite = false;
           }
           const isMeshItem = part.id.endsWith(":mesh");
+          const isLegato = !!part.legato;
           const isHandle = part.role === "handle";
           // невидимый бокс для выбора: сетка Лемана, ручка-модель, процедурная фурнитура (n5-hardware3d)
-          if (isMeshItem || (isHandle&&!part.simpleHandle) || proc) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
+          if (isLegato || isMeshItem || (isHandle&&!part.simpleHandle) || proc) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
           // фасад Вернисажа под стекло: вторая группа сетки — стекло своим материалом (n5-vernissage); у процедурной модели бокс без групп
           const vGlass = !proc && vern && geometry.groups.some((g) => g.materialIndex === 1)
             ? new THREE.MeshStandardMaterial({ color: 0xdfe8ec, transparent: true, opacity: state.clearFacades ? 0.25 : 0.42, roughness: 0.05, metalness: 0.1, depthWrite: false }) : null;
           const mesh = new THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>(geometry, vGlass ? [mat, vGlass] : mat);
+          if (isLegato) {
+            const model=legatoModel(part);
+            model.traverse(o=>{o.userData={partId:part.id,moduleId:placed.id,role:part.role,sectionId:part.sectionId,active};});
+            mesh.add(model);
+          }
           if (part.model?.node) {
             // узел Базиса без сетки («Петля под фальшпанель»): не рисуем — коробка выше прозрачная, остаётся только для выбора
           } else if (part.model?.native) {

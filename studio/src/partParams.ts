@@ -15,13 +15,14 @@ export function partKind(pid: string, role?: string): PartKind {
 
 const SETTING: Record<PartKind, string> = { drawer: "Ящики", shelf: "Полки", door: "Фасад", rod: "Штанги", divider: "Перегородки секции", kupe: "Двери купе", section: "Секция" };
 /** Раздел настроек детали (SettingsSection title). */
-export const partSetting = (pid: string, role?: string) => SETTING[partKind(pid, role)];
+export const partSetting = (pid: string, role?: string) => pid.startsWith('legato:')?'Сетки для обуви Premial':SETTING[partKind(pid, role)];
 
 /** Номер ящика или полки в id: у углового шкафа у каждого свой блок (критик 01.11: подсвечивалось вступление, «Наполнение» оставалось закрытым). */
 export const partIndex = (pid: string) => { const m = /:(?:drawer|shelf):(\d+)/.exec(pid); return m ? Number(m[1]) : null; };
 
 /** Селекторы по убыванию точности; подсвечивается первый найденный. */
 export function partParamTargets(pid: string, role?: string): string[] {
+  if(pid.startsWith('legato:'))return ['.properties details[data-setting="Сетки для обуви Premial"]'];
   const kind = partKind(pid, role), s = SETTING[kind], p = ".properties ", n = partIndex(pid);
   return [
     ...(n === null ? [] : [`${p}[data-part-params="${kind}"][data-part-index="${n}"]`]),

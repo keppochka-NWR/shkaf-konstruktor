@@ -21,6 +21,7 @@ export function wholeDrawerPid(pid:string):string{return pid.includes(':drawer:'
 export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);
   if(!m||!s)throw Error('Выберите элемент наполнения.');
+  if(pid.startsWith('legato:')){const rest=(s.shoeShelves??[]).filter(q=>`legato:${s.id}:${q.id}`!==pid);if(rest.length===(s.shoeShelves??[]).length)throw Error('Сетка не найдена.');if(rest.length)s.shoeShelves=rest;else delete s.shoeShelves;return n;}
   bindCutouts(m);/* решение Макса 29.10: вырез — по постоянному id полки/ящика (partIds.ts), id уходит вместе с деталью */
   if(pid.includes(':door:')){const k=Number(pid.split(':door:')[1]);if(!parts(m).some(part=>part.id===pid&&part.role==='door'))throw Error('Фасад не найден.');s.removedDoors=[...new Set([...(s.removedDoors??[]),k])];}
   else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);dropId(s,'shelf',j);for(const key of ['fixed','glassShelves','thickShelves','shelfLights'] as const)if(s[key])s[key]=s[key]!.filter(k=>k!==j).map(k=>k>j?k-1:k);remapShelfSpec(s,k=>k===j?undefined:k>j?k-1:k);}
@@ -40,6 +41,7 @@ export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
 export function moveModule(p:Project,mid:string,pos:{x:number;y:number;z:number}){const n=structuredClone(p),a=n.modules.find(a=>a.id===mid);if(!a)throw Error('Корпус не найден.');Object.assign(a,pos);return n;}
 export function movePart(p:Project,mid:string,sid:string,pid:string,delta:number){
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)!.module,s=m.sections.find(s=>s.id===sid)!,b=boxes(m).find(b=>b.id===sid)!;
+  if(pid.startsWith('legato:')){const q=s.shoeShelves?.find(q=>`legato:${s.id}:${q.id}`===pid);if(q)q.y=Math.round(q.y+delta);return n;}
   if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);s.shelves[j]=Math.round(s.shelves[j]*(b.top-b.bottom)+delta)/(b.top-b.bottom);}
   else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);const yy=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:yy[k]}));s.drawerConfigs[j]={...s.drawerConfigs[j],y:Math.round(yy[j]+delta)};}
   else if(pid.includes(':rod')||pid.includes(':pantograph:')||pid.includes(':flange:')){const current=parts(m).find(p=>p.id===sid+':rod'||p.id===sid+':pantograph:rod')!;s.rodAt=(current.position[1]+delta-b.bottom)/(b.top-b.bottom);}
@@ -243,6 +245,7 @@ export function addUpperModule(p:Project,mid:string):Project {
 
 export function clearSection(p:Project,mid:string,sid:string):Project {
  const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);if(!m||!s)throw Error('Выберите секцию.');
+ delete s.shoeShelves;
  bindCutouts(m);
  s.shelves=[];s.drawers=0;s.rod=false;delete s.pantograph;delete s.rodAt;delete s.drawerConfigs;delete s.glassShelves;delete s.thickShelves;delete s.fixed;delete s.shelfLight;delete s.shelfLights;delete s.shelfIds;delete s.drawerIds;
  settleCutouts(m);return n;

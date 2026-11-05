@@ -1,0 +1,8 @@
+.app [data-testid="legato-panel"] {display:grid;gap:12px;min-width:0;font-size:12px;}
+.app [data-testid="legato-panel"] label {display:grid;gap:5px;min-width:0;line-height:1.4;}
+.app [data-testid="legato-panel"] select,.app [data-testid="legato-panel"] input {width:100%;min-width:0;box-sizing:border-box;padding:8px;border:1px solid #d7dde5;border-radius:6px;background:white;color:#273244;font:inherit;}
+.app [data-testid="legato-panel"] fieldset {display:grid;gap:10px;margin:0;padding:12px;min-width:0;border:1px solid #d7dde5;border-radius:8px;}
+.app [data-testid="legato-panel"] legend {padding:0 5px;font-weight:600;}
+.app [data-testid="legato-panel"] button {padding:9px 10px;border:1px solid #c8d3ee;border-radius:6px;background:#edf1ff;color:#284abe;font:inherit;cursor:pointer;}
+.app [data-testid="legato-panel"] .field-note {display:block!important;margin:0;font-size:11px;line-height:1.5;color:#626f80;}
+.app [data-testid="legato-panel"] a {color:#284abe;line-height:1.4;}

@@ -1,3 +1,4 @@
+import {legatoPriceLines} from './legato';
 import {FRAME_LABEL,metalFramePriceKey} from './metalFrame';
 import {facadeHandleId} from './model';
 import {parts,drawerConfig,RULES,legCount,fastenerCounts,pulloutLength,HINGE_ANGLE_LABEL} from './model';
@@ -303,6 +304,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // ручная цена менеджера — в закупке: в публичной сборке строка считается в запечённых единицах (ручная цена × базовый коэффициент проекта)
       if(pub&&!retail){const k=isVernissageLine(id)?pub.ovVernissage:pub.ov;if(k===null){blocked=true;price=null;}else price=Math.round(ov*k*100)/100;}}
     lines.push({id,label,quantity,unit,unitPrice:price,source:ov===undefined?source:'Цена в этом проекте',...(retail?{retail:true}:{})});}
+  for(const l of legatoPriceLines(p.modules.map(a=>a.module)))add(l.id,l.label,l.quantity,l.unit,l.price,l.source,true);
   for(const sheet of plan){
     if(sheet.material==='hdf'){add('sheet:hdf','ЛХДФ 3 мм',1,'лист',HDF_SHEET,'Древиз: ХДФ Kronospan 2800×2070');continue;}
     // толщина листа — из раскроя (у кухонь Базиса бывает 19 мм); строка 16 мм как раньше
