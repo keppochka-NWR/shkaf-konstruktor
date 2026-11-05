@@ -45,7 +45,7 @@ export function cornerItems(m: Module, ops: QuickMenuOps): RadialItem[] {
 
 /** Есть ли у модуля быстрые пункты (шкафы и стеллажи студии). */
 export function quickMenuApplies(m: Module) {
-  return !m.kitchen && !m.raw && !m.kupe && !m.desk && !m.worktop && !m.corner && !m.casework;
+  return !m.metalFrame && !m.kitchen && !m.raw && !m.kupe && !m.desk && !m.worktop && !m.corner && !m.casework;
 }
 /** Почему в режиме выбора деталей подсветка не ставится на этот объект (K1, критик 22.10): у кухни — «в следующей версии», не «не ставится». */
 export function lightUnavailable(m: Module): string {

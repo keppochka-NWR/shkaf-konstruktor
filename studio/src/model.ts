@@ -1,3 +1,4 @@
+import { metalFrameParts, metalFrameErrors, parseMetalFrame, type MetalFrame } from './metalFrame';
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, parseItems as parseBazisItems, type RawSpec, type BazisNames } from "./rawModule";
 import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
@@ -503,6 +504,7 @@ export type Module = {
   skew?: { side: "left" | "right"; depth: number };
   /** Стол (заказ 6785429): столешница ЛДСП на опорах-боковинах и задней царге. sides — какие опоры свои;
    *  отсутствующая опора — столешница опирается на соседний корпус (стяжки эксцентрик + шкант). Без дна, цоколя, задника и фасадов. */
+  metalFrame?: MetalFrame;
   desk?: {
     sides: "both" | "left" | "right" | "none";
     /** Высота царги. */
@@ -840,7 +842,7 @@ export function legCount(m:Module,y=0){if(y>0||(!m.feet&&plinth(m)===0))return 0
   if(!m.feet&&!hasBottom(m))return 0;return m.width>=RULES.legsWideW?RULES.legsWide:RULES.legsPerModule;}
 /** В корпусе есть распашные фасады или выкатные элементы — по регламенту у стены нужна фальшпанель. */
 /** Фальшпанель к стене нужна, когда у стены распашной фасад или накладной ящик. Вкладной ящик открытого корпуса (за купе) внутри проёма — о стену не бьёт. */
-export function needsWallFiller(m:Module){return !m.desk&&(m.doors||m.sections.some(s=>s.drawers>0&&!drawerFaceInset(m,s)));}
+export function needsWallFiller(m:Module){return !m.metalFrame&&!m.desk&&(m.doors||m.sections.some(s=>s.drawers>0&&!drawerFaceInset(m,s)));}
 /** Фасады ящиков внутри проёма: выбрано «Вкладные фасады ящиков» или корпус шкафа-купе с дверями внутри (kupeZone, заказ 7437584) —
  *  там боковины выдвинуты вперёд на зону дверей и накладной фасад крайней секции упирается в боковину. */
 export function drawerFaceInset(m:Pick<Module,'kupeZone'>,s:Pick<Section,'drawerMount'>){return s.drawerMount==='inset'||!!m.kupeZone;}
@@ -965,7 +967,7 @@ export function doorRowsBlock(m:Module):string|null{
   if(m.kupe)return 'Двери купе делятся вставками в панели купе, рядов распашных фасадов у них нет.';
   if(m.casework)return 'У этого изделия свои фасады — ряды не задаются.';
   if(m.raw)return 'Импорт Базиса как есть: фасады правятся в Базисе.';
-  if(m.desk||m.worktop||m.radius)return 'У этого изделия нет распашных фасадов.';
+  if(m.metalFrame||m.desk||m.worktop||m.radius)return 'У этого изделия нет распашных фасадов.';
   return null;
 }
 /** Фасады ящиков секции в одной плоскости с распашными (Макс 01.11, «вровень»): двери накладные — фасады ящиков накладные, двери вкладные —
@@ -1209,6 +1211,7 @@ export function shapeBaseParts(m: Module): Part[] {
   return partsCore(m);
 }
 function partsCore(m: Module): Part[] {
+  if(m.metalFrame)return metalFrameParts(m);
   if(m.kupe)return kupeParts(m);
   if(m.raw)return rawParts(m);
   if(m.worktop)return worktopParts(m);
@@ -2716,6 +2719,7 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   return [...errors, ...more, ...fit];
 }
 function validateCore(m: Module, opts?: {all?: boolean}): string[] {
+  if(m.metalFrame)return metalFrameErrors(m);
   if(m.kupe)return kupeErrors(m);
   if(m.raw)return rawErrors(m);
   if(m.worktop)return kitchenErrors(m);
@@ -3296,6 +3300,7 @@ export function parseModule(input: unknown): Module {
     depth: x.depth as number,
     decor: x.decor,
     facadeDecor: x.facadeDecor,
+    ...(x.metalFrame===undefined?{}:{metalFrame:parseMetalFrame(x.metalFrame)}),
     ...(x.casework===undefined?{}:{casework:structuredClone(x.casework) as Casework}),
     ...(x.corner===undefined?{}:{corner:structuredClone(x.corner) as CornerSpec}),
     ...(x.sectionLayout===undefined?{}:{sectionLayout:structuredClone(x.sectionLayout) as SectionLayout}),

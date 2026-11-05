@@ -47,6 +47,7 @@ import {StageBar} from './StageBar';
 import {ModulePalette} from './ModulePalette';
 import {KitchenPalette} from './KitchenPalette';
 
+import {MetalFramePanel} from './MetalFramePanel';
 import {KitchenPanel} from './KitchenPanel';
 import {isKitchenProject} from './kitchenProject';
 import {placeModuleAt,placeToWall,cornerTurns,continueAroundCorner,WALL_LABEL,type PlaceTarget,type Wall,type CornerTurn} from './wallPlacement';
@@ -1530,7 +1531,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           <button className="text-action upper-add" data-stages="bodies filling" data-search="library" onClick={()=>setModal("library")}>Моя библиотека модулей</button>
           {/* сырой модуль Базиса: вместо пресетов и кнопок наполнения — заметка; «Пересобрать модулем студии» появится вместе с распознавателем (ярус C) */}
           {!!m.raw&&!isFreePanel(m)&&<div className="stage-note raw-note" data-stages="bodies filling"><b>Модуль перенесён из Базиса как есть</b><p>Наполнение здесь не настраивается. Правится в Базисе (переимпорт). Положение в комнате, смета и раскрой работают как обычно. Кнопка «Пересобрать модулем студии» будет позже — когда появится распознаватель корпусов Базиса.</p></div>}
-          <details hidden={!!m.corner||kitchenModule||!!m.worktop||!!m.raw} className="replace-filling" data-stages="filling"><summary>Заменить всё наполнение корпуса</summary>
+          <details hidden={!!m.metalFrame||!!m.corner||kitchenModule||!!m.worktop||!!m.raw} className="replace-filling" data-stages="filling"><summary>Заменить всё наполнение корпуса</summary>
           <div className="presets" data-stages="filling">
             {(
               [
@@ -1556,7 +1557,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           <div className="library-label section-title" data-stages="filling" hidden={!!m.raw}>
             Наполнение <span>в секцию {idx + 1}</span>
           </div>
-          <div className="fill-buttons" data-stages="filling" hidden={!!m.kitchen||!!m.worktop||!!m.raw}>
+          <div className="fill-buttons" data-stages="filling" hidden={!!m.metalFrame||!!m.kitchen||!!m.worktop||!!m.raw}>
             <button hidden={!!m.corner} disabled={!!fillBlock} title={fillBlock||undefined} draggable={!fillBlock} onDragStart={e=>startFill(e,'pantograph')} onClick={()=>dropFilling('pantograph',placed.id,selectedId,b.top-100)}><Shirt size={19}/><span>Пантограф</span><Plus size={15}/></button>
             <button disabled={!!fillBlock} title={fillBlock||undefined} draggable={!fillBlock} onDragStart={e=>startFill(e,'shelf')}
               onClick={()=>m.corner?dropFilling('shelf',placed.id,selectedId,(b.top+b.bottom)/2):setComposer('shelf')}
@@ -1894,7 +1895,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {tab!=='room'&&liveGroupIds.length>1&&<GroupFacadePanel key={liveGroupIds.join('|')} project={project} ids={liveGroupIds} commit={commitProject}/>}
           {/* Макс 31.10: «Наполнение как у этого» — наполнение выбранного модуля отмеченным (src/groupFilling.ts) */}
           {tab!=='room'&&liveGroupIds.length>1&&<GroupFillingBlock key={'fill:'+placed.id+'|'+liveGroupIds.join('|')} project={project} ids={liveGroupIds} sourceId={placed.id} commit={commitProject}/>}
-          {tab!=='room'&&!nothingSelected&&!m.raw&&!m.worktop&&!m.kupe&&<div className="selected-module-heading"><strong>{m.name}</strong><label>Секция<select aria-label="Выбранная секция" value={selectedId} onChange={e=>chooseSection(e.target.value)}>{m.sections.map((section,i)=><option key={section.id} value={section.id}>Секция {i+1}</option>)}</select></label></div>}
+          {tab!=='room'&&!nothingSelected&&!m.metalFrame&&!m.raw&&!m.worktop&&!m.kupe&&<div className="selected-module-heading"><strong>{m.name}</strong><label>Секция<select aria-label="Выбранная секция" value={selectedId} onChange={e=>chooseSection(e.target.value)}>{m.sections.map((section,i)=><option key={section.id} value={section.id}>Секция {i+1}</option>)}</select></label></div>}
           {tab === "room" ? (roomLeft ? null : roomPanel
           ) : nothingSelected ? (
             <div className="property-section nothing-selected" data-testid="nothing-selected">
@@ -1904,7 +1905,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <button className="outline full" onClick={()=>selectModule(placed.id)}>Настройки «{m.name}»</button>
               <button className="text-action" onClick={()=>setTab('room')}>Замер помещения и проверка расстановки</button>
             </div>
-          ) : m.raw||m.worktop||kitchenModule ? <KitchenPanel allowEmpty={!!onEmptyProject} m={m} placed={placed} project={project} stage={stage} modify={modify} commit={commitProject} move={movePlaced} place={placePlaced} toWall={m.worktop?undefined:w=>moduleToWall(placed.id,w)} turns={m.worktop?[]:cornerTurns(project,placed.id)} aroundCorner={t=>aroundCorner(placed.id,t)} position={placedBounds} room={project.room} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} material={target=>{setMaterialTarget(target);setModal('materials');}} handles={()=>{setHandleFace('');setHandleTarget('doors');setModal('handles');}} showInside={()=>{setHideFacades(false);userDoors(true);}}/> : m.kupe ? <KupePanel m={m} modify={modify} openDoors={openDoors} setOpenDoors={userDoors} selectedPid={selectedPart?.mid===placed.id?selectedPart.pid:undefined}/> : m.corner ? <CornerModulePanel module={m} stage={tab==='section'?'filling':stage} selected={selectedId} update={commit} select={chooseSection} material={target=>{setMaterialTarget(target);setModal('materials');}} addUpper={addUpper} rotation={placed.rotation??0} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} position={placedBounds} room={project.room} move={movePlaced} preview={(sid,j,pid)=>{chooseSection(sid);setMode('fill');setOpenDoors(true);setDrawerIndex(j);setDrawerPreview(j!==null);setSelectedPart({mid:placed.id,sid,pid});}}/> : (
+          ) : m.metalFrame ? <MetalFramePanel m={m} modify={modify} position={placedBounds} move={movePlaced} rotation={placed.rotation??0} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}}/> : m.raw||m.worktop||kitchenModule ? <KitchenPanel allowEmpty={!!onEmptyProject} m={m} placed={placed} project={project} stage={stage} modify={modify} commit={commitProject} move={movePlaced} place={placePlaced} toWall={m.worktop?undefined:w=>moduleToWall(placed.id,w)} turns={m.worktop?[]:cornerTurns(project,placed.id)} aroundCorner={t=>aroundCorner(placed.id,t)} position={placedBounds} room={project.room} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} material={target=>{setMaterialTarget(target);setModal('materials');}} handles={()=>{setHandleFace('');setHandleTarget('doors');setModal('handles');}} showInside={()=>{setHideFacades(false);userDoors(true);}}/> : m.kupe ? <KupePanel m={m} modify={modify} openDoors={openDoors} setOpenDoors={userDoors} selectedPid={selectedPart?.mid===placed.id?selectedPart.pid:undefined}/> : m.corner ? <CornerModulePanel module={m} stage={tab==='section'?'filling':stage} selected={selectedId} update={commit} select={chooseSection} material={target=>{setMaterialTarget(target);setModal('materials');}} addUpper={addUpper} rotation={placed.rotation??0} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} position={placedBounds} room={project.room} move={movePlaced} preview={(sid,j,pid)=>{chooseSection(sid);setMode('fill');setOpenDoors(true);setDrawerIndex(j);setDrawerPreview(j!==null);setSelectedPart({mid:placed.id,sid,pid});}}/> : (
             <SettingsTree className="furniture-settings" key={active} leads={{"Наполнение":groupFillNote}}>
               <SettingsSection title="Габариты">
                 <label className="hardware-field expert-only"><span><input type="checkbox" aria-label="Боковины над цоколем" checked={!!m.raisedSides} onChange={e=>modify(n=>{n.raisedSides=e.target.checked;})}/> Боковины над цоколем</span></label>

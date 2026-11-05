@@ -1,5 +1,6 @@
 // Сборка мебели из палитры «Добавить мебель» (перенесено из ModulePalette.tsx, w-formerrors 23.10: проверка формы paletteCheck.ts
 // собирает те же модули без исключения на первой ошибке). Тексты ошибок прежние; ModulePalette.tsx реэкспортирует функции.
+import {metalFrameModule} from './metalFrame';
 import {refitKDrawers} from './kitchenDrawers';
 import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,roofEvenLayout,roofLayoutApplies,drawerFacesEqual,rearClear,parts,boxes,RULES,type Module,type Section,type Part} from './model';
 import {RADIUS,radiusMax,mansardIntrusions} from './shapes';
@@ -14,9 +15,9 @@ import {DEFAULT_KUPE,KUPE_DEPTH} from './kupe';
 import {KITCHEN,kitchenBase,kitchenWall,kitchenWorktop,kitchenRowWidths,setWorktopMaterial} from './kitchen';
 import type {PlacedModule} from './project';
 // 'kitchen-corner' и 'kitchen-u' (w-lwing 23.10) — группы в угол комнаты, собираются kitchenCornerRow.ts (createKitchenCornerRow/createKitchenURow)
-export type ModuleKind='empty'|'shelves'|'radius'|'wardrobe'|'drawers'|'hanging-drawer'|'desk'|'corner'|'kupe'|'kupe-wardrobe'|'kitchen-row'|'kitchen-corner'|'kitchen-u'|'kitchen-base'|'kitchen-wall'|'worktop';
+export type ModuleKind='metal-frame'|'empty'|'shelves'|'radius'|'wardrobe'|'drawers'|'hanging-drawer'|'desk'|'corner'|'kupe'|'kupe-wardrobe'|'kitchen-row'|'kitchen-corner'|'kitchen-u'|'kitchen-base'|'kitchen-wall'|'worktop';
 /** Названия видов мебели палитры (имя нового модуля). */
-export const KIND_LABEL:Record<ModuleKind,string>={empty:'Пустой шкаф',shelves:'Стеллаж',radius:'Стеллаж радиусный',wardrobe:'Для одежды',drawers:'Комод','hanging-drawer':'Подвесной ящик',corner:'Угловой шкаф',desk:'Стол','kupe-wardrobe':'Шкаф-купе','kitchen-row':'Кухня прямая','kitchen-corner':'Кухня угловая (Г)','kitchen-u':'Кухня П-образная','kitchen-base':'Нижний кухонный','kitchen-wall':'Навесной кухонный',worktop:'Столешница',kupe:'Двери купе'};
+export const KIND_LABEL:Record<ModuleKind,string>={'metal-frame':'Металлокаркас',empty:'Пустой шкаф',shelves:'Стеллаж',radius:'Стеллаж радиусный',wardrobe:'Для одежды',drawers:'Комод','hanging-drawer':'Подвесной ящик',corner:'Угловой шкаф',desk:'Стол','kupe-wardrobe':'Шкаф-купе','kitchen-row':'Кухня прямая','kitchen-corner':'Кухня угловая (Г)','kitchen-u':'Кухня П-образная','kitchen-base':'Нижний кухонный','kitchen-wall':'Навесной кухонный',worktop:'Столешница',kupe:'Двери купе'};
 /** Куда складывать ошибки вместо исключения на первой (проверка формы — все ошибки сразу). */
 type Sink=string[]|undefined;
 const fail=(sink:Sink,text:string)=>{if(sink)sink.push(text);else throw Error(text);};
@@ -151,12 +152,12 @@ function mansardFitReason(m:Module,n:Module,error:string):string{
 export function assembleModule(kind:ModuleKind,width:number,height:number,depth:number,source:Module,doors?:number,fit=true):Module{
   // волна 29.10: корпус от 100×100 — наполнение, которое в малый корпус не входит, снимается (smallSize.ts), а не запрещает размер
   const m=assembleRaw(kind,width,height,depth,source,doors);
-  if(fit&&!['corner','kupe','worktop','desk'].includes(kind))fitSmallModule(m);
+  if(fit&&!['metal-frame','corner','kupe','worktop','desk'].includes(kind))fitSmallModule(m);
   return m;
 }
 /** Что палитра сняла с малого корпуса (сообщение менеджеру после добавления; пусто — ничего). */
 export function paletteFitNotes(kind:ModuleKind,width:number,height:number,depth:number,source:Module,doors?:number):string[]{
-  if(['corner','kupe','worktop','desk'].includes(kind))return [];
+  if(['metal-frame','corner','kupe','worktop','desk'].includes(kind))return [];
   try{return fitSmallModule(assembleRaw(kind,width,height,depth,source,doors));}catch{return [];}
 }
 function assembleRaw(kind:ModuleKind,width:number,height:number,depth:number,source:Module,doors?:number):Module{
@@ -172,6 +173,7 @@ function assembleRaw(kind:ModuleKind,width:number,height:number,depth:number,sou
     m.sections=[{...section(),shelves:[],drawers:0,rod:false}];
     return m;
   }
+  if(kind==='metal-frame')return metalFrameModule(source,width,height,depth);
   if(kind==='hanging-drawer')return hangingDrawer(width,height,depth,source);
   if(kind==='radius')return radiusShelving(width,height,depth,source);
   if(kind==='corner')return createCornerModule(width,height,depth,source);

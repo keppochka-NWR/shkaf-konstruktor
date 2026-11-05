@@ -91,7 +91,7 @@ export function applyAutoFillers(p:Project):Project{
   const n=structuredClone(p),t=RULES.panel,room=n.room,bazis=fromBazis(n);
   for(const a of n.modules){
     // столешница и отдельная панель (freePanels.ts) — не корпус с фасадами: фальшей у них нет (ДП 28.10: панель МДФ за витриной получала угловую планку и уезжала за стену)
-    if((a.module.worktop&&!isBazisModule(n,a))||a.module.raw?.source==='garderyob-free-panel'){delete a.module.wallFiller;delete a.module.cornerFiller;delete a.module.cornerKind;continue;}
+    if(a.module.metalFrame||(a.module.worktop&&!isBazisModule(n,a))||a.module.raw?.source==='garderyob-free-panel'){delete a.module.wallFiller;delete a.module.cornerFiller;delete a.module.cornerKind;continue;}
     // Bespoke open assemblies describe their corner themselves; no door filler.
     if(a.module.openJunction||a.module.corner||a.module.autoFillersOff)continue;
     // Кухня из Базиса (правило Макса 09.10.2026): фальши, сдвиги и стыки — только как в Базисе (регламент фальшей шкафов к ней
@@ -198,7 +198,7 @@ type Solid={polygon:{x:number;z:number}[];y:number;h:number};
 function moduleSolids(a:PlacedModule):Solid[]{
  const m=a.module,y=a.y??0;
  const box=(u0:number,u1:number,v0:number,v1:number,y0:number,y1:number):Solid=>({polygon:[[u0,v0],[u1,v0],[u1,v1],[u0,v1]].map(([u,v])=>localToRoom(a,u,v)),y:y+y0,h:y1-y0});
- if(m.openJunction||m.raw?.source==='garderyob-free-panel')return parts(m).filter(q=>q.role!=='fastener').map(q=>box(q.position[0]-q.size[0]/2,q.position[0]+q.size[0]/2,q.position[2]-q.size[2]/2,q.position[2]+q.size[2]/2,q.position[1]-q.size[1]/2,q.position[1]+q.size[1]/2));
+ if(m.metalFrame||m.openJunction||m.raw?.source==='garderyob-free-panel')return parts(m).filter(q=>q.role!=='fastener').map(q=>box(q.position[0]-q.size[0]/2,q.position[0]+q.size[0]/2,q.position[2]-q.size[2]/2,q.position[2]+q.size[2]/2,q.position[1]-q.size[1]/2,q.position[1]+q.size[1]/2));
  // шкаф-купе с дверями внутри: корпус + боковины и крыша над зоной дверей; сама зона (между боковинами под крышей) свободна для дверей купе
  if(m.kupeZone&&!m.desk){const t=RULES.panel,d=m.depth,f=d+m.kupeZone,rear=!m.backType||m.backType==='nailed'?3:0;
   return [box(0,m.width,-rear,d,0,m.height),box(0,t,d,f,0,m.height),box(m.width-t,m.width,d,f,0,m.height),box(t,m.width-t,d,f,m.height-t,m.height)];}
