@@ -21,7 +21,7 @@ export function parseMetalFrame(value: unknown): MetalFrame {
 export function metalFrameErrors(m: Module): string[] {
   const f = m.metalFrame!, out: string[] = [];
   if (!Object.hasOwn(FRAME_LABEL, f.kind)) out.push('Выберите вид металлокаркаса.');
-  for (const [key, label, lo, hi] of [['width', 'Ширина', 100, 6000], ['height', 'Высота', 100, 1500], ['depth', 'Глубина', 15, 2400]] as const)
+  for (const [key, label, lo, hi] of [['width', 'Ширина', 100, 2700], ['height', 'Высота', 100, 1500], ['depth', 'Глубина', 15, 2400]] as const)
     if (!Number.isFinite(m[key]) || m[key] < lo || m[key] > hi) out.push(`${label}: допустимо от ${lo} до ${hi} мм.`);
   if (![f.tubeWidth, f.tubeDepth].every(v => Number.isFinite(v) && v >= 15 && v <= 120)) out.push('Сечение трубы: каждая сторона от 15 до 120 мм.');
   if(f.tubeWall!==undefined&&(!Number.isFinite(f.tubeWall)||f.tubeWall<=0||2*f.tubeWall>=Math.min(f.tubeWidth,f.tubeDepth)))out.push('Толщина стенки трубы должна быть положительной и меньше половины меньшей стороны профиля.');

@@ -10,6 +10,13 @@ import { kitchenWorktop } from '../src/kitchen';
 import { partCollisions } from '../src/collisions';
 import { METAL_PROFILES } from '../src/metalProfiles';
 
+test('frame width 2700 is accepted from palette and after loading; 2701 is rejected',()=>{
+ const m=createModule('metal-frame',2700,870,600,initialModule());
+ assert.deepEqual(validate(m),[]);
+ assert.deepEqual(validate(parseModule(JSON.parse(JSON.stringify(m)))),[]);
+ m.width=2701;assert.ok(validate(m).some(e=>e.includes('2700')));
+});
+
 test('all 29 stock profiles preserve wall thickness through save/load and price identity',()=>{
   assert.equal(METAL_PROFILES.length,29);
   assert.equal(new Set(METAL_PROFILES.map(p=>p.id)).size,29);
