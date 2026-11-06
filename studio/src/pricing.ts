@@ -356,7 +356,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const HANGER_CAP_SRC='Заглушка навеса — входит в комплект навесов ABS ('+HANGER_KIT_RETAIL+' ₽ за комплект, Макс 27.10.2026); количество — как в Базисе';
   function addLegs(names:Record<string,number>){for(const [name,n] of Object.entries(names)){if(/^опора кухонная регулируемая/i.test(name))add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',n,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');else add('kitchen-leg:'+name,name,n,'шт',null,BZ);}}
   for(const a of p.modules){
-    if(a.module.metalFrame){const m=a.module,f=m.metalFrame!;add(metalFramePriceKey(m),`${FRAME_LABEL[f.kind]} ${m.width} × ${m.height} × ${m.depth}, профиль ${f.tubeWidth} × ${f.tubeDepth}`,1,'шт',null,'Готовый металлокаркас с окраской: цена клиенту по согласованию с изготовителем',true);continue;}
+    if(a.module.metalFrame){const m=a.module,f=m.metalFrame!;add(metalFramePriceKey(m),`${FRAME_LABEL[f.kind]} ${m.width} × ${m.height} × ${m.depth}, профиль ${f.tubeWidth} × ${f.tubeDepth}${f.tubeWall!==undefined?` × ${f.tubeWall} мм`:' (стенка не задана)'}`,1,'шт',null,'Готовый металлокаркас с окраской: цена клиенту по согласованию с изготовителем',true);continue;}
     if(a.module.kitchen?.premialPullout) {
       const art=a.module.kitchen.premialPullout.article;
       add('premial-allegro:'+art,'Бутылочница Premial АЛЛЕГРО '+art,1,'компл',null,'Официальный каталог Premial; закупочная цена не задана. Крепёж и направляющие входят в комплект.');

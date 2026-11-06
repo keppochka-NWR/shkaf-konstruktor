@@ -1,7 +1,7 @@
 import type { Module, Part } from './model';
 
 export type MetalFrameKind = 'u' | 'closed' | 'table';
-export type MetalFrame = { kind: MetalFrameKind; tubeWidth: number; tubeDepth: number; color: string; crossbars: number };
+export type MetalFrame = { kind: MetalFrameKind; tubeWidth: number; tubeDepth: number; tubeWall?: number; color: string; crossbars: number };
 export const FRAME_LABEL: Record<MetalFrameKind, string> = { u: 'П-образная опора', closed: 'Замкнутая опора', table: 'Полный каркас стола' };
 export const FRAME_COLORS = [{ value: '#f2f2f0', label: 'Белый' }, { value: '#252525', label: 'Чёрный' }, { value: '#858585', label: 'Серый' }];
 export const DEFAULT_FRAME: MetalFrame = { kind: 'u', tubeWidth: 60, tubeDepth: 30, color: '#252525', crossbars: 0 };
@@ -16,14 +16,15 @@ export function metalFrameModule(base: Module, width = 600, height = 870, depth 
 export function parseMetalFrame(value: unknown): MetalFrame {
   if (!value || typeof value !== 'object') throw Error('Некорректные параметры металлокаркаса.');
   const v = value as Record<string, unknown>;
-  return { kind: v.kind as MetalFrameKind, tubeWidth: v.tubeWidth as number, tubeDepth: v.tubeDepth as number, color: v.color as string, crossbars: v.crossbars as number };
+  return { kind: v.kind as MetalFrameKind, tubeWidth: v.tubeWidth as number, tubeDepth: v.tubeDepth as number, ...(v.tubeWall!==undefined?{tubeWall:v.tubeWall as number}:{}), color: v.color as string, crossbars: v.crossbars as number };
 }
 export function metalFrameErrors(m: Module): string[] {
   const f = m.metalFrame!, out: string[] = [];
   if (!Object.hasOwn(FRAME_LABEL, f.kind)) out.push('Выберите вид металлокаркаса.');
-  for (const [key, label, lo, hi] of [['width', 'Ширина', 100, 6000], ['height', 'Высота', 100, 1500], ['depth', 'Глубина', 20, 2400]] as const)
+  for (const [key, label, lo, hi] of [['width', 'Ширина', 100, 6000], ['height', 'Высота', 100, 1500], ['depth', 'Глубина', 15, 2400]] as const)
     if (!Number.isFinite(m[key]) || m[key] < lo || m[key] > hi) out.push(`${label}: допустимо от ${lo} до ${hi} мм.`);
-  if (![f.tubeWidth, f.tubeDepth].every(v => Number.isFinite(v) && v >= 20 && v <= 120)) out.push('Сечение трубы: каждая сторона от 20 до 120 мм.');
+  if (![f.tubeWidth, f.tubeDepth].every(v => Number.isFinite(v) && v >= 15 && v <= 120)) out.push('Сечение трубы: каждая сторона от 15 до 120 мм.');
+  if(f.tubeWall!==undefined&&(!Number.isFinite(f.tubeWall)||f.tubeWall<=0||2*f.tubeWall>=Math.min(f.tubeWidth,f.tubeDepth)))out.push('Толщина стенки трубы должна быть положительной и меньше половины меньшей стороны профиля.');
   if (m.width <= 2 * f.tubeWidth || m.height <= 2 * f.tubeWidth) out.push('Ширина и высота каркаса должны быть больше двух сторон профиля.');
   if (f.kind === 'table' ? m.depth <= 2 * f.tubeDepth : m.depth !== f.tubeDepth) out.push(f.kind === 'table' ? 'Глубина каркаса должна быть больше двух сторон профиля.' : 'У плоской опоры глубина равна толщине профиля.');
   if (!Number.isInteger(f.crossbars) || f.crossbars < 0 || f.crossbars > 5 || (f.kind !== 'table' && f.crossbars !== 0)) out.push('Поперечины: от 0 до 5, только у полного каркаса.');
@@ -62,5 +63,5 @@ export const metalFrameLength = (m: Module) => metalFrameParts(m).reduce((sum, p
 /** Configuration-specific price: changing size/profile must never reuse an old quotation. Retail, outside the board-sheet price. */
 export function metalFramePriceKey(m: Module): string {
   const f = m.metalFrame!;
-  return `metal-frame:${f.kind}:${m.width}x${m.height}x${m.depth}:${f.tubeWidth}x${f.tubeDepth}:${f.color.slice(1)}:${f.crossbars}`;
+  return `metal-frame:${f.kind}:${m.width}x${m.height}x${m.depth}:${f.tubeWidth}x${f.tubeDepth}${f.tubeWall!==undefined?'x'+f.tubeWall:''}:${f.color.slice(1)}:${f.crossbars}`;
 }

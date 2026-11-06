@@ -8,6 +8,27 @@ import { estimate } from '../src/pricing';
 import { nest } from '../src/exports';
 import { kitchenWorktop } from '../src/kitchen';
 import { partCollisions } from '../src/collisions';
+import { METAL_PROFILES } from '../src/metalProfiles';
+
+test('all 29 stock profiles preserve wall thickness through save/load and price identity',()=>{
+  assert.equal(METAL_PROFILES.length,29);
+  assert.equal(new Set(METAL_PROFILES.map(p=>p.id)).size,29);
+  for(const profile of METAL_PROFILES)for(const kind of ['u','closed','table'] as const){
+    const m=metalFrameModule(initialModule(),1200,870,600);changeFrameKind(m,kind);
+    Object.assign(m.metalFrame!,{tubeWidth:profile.width,tubeDepth:profile.depth,tubeWall:profile.wall});
+    if(kind!=='table')m.depth=profile.depth;
+    assert.deepEqual(validate(m),[],profile.id);
+    const restored=parseModule(JSON.parse(JSON.stringify(m)));
+    assert.equal(restored.metalFrame!.tubeWall,profile.wall);
+    assert.deepEqual(partCollisions(parts(m),m),[]);
+    const key=metalFramePriceKey(m);m.metalFrame!.tubeWall=undefined;
+    assert.notEqual(metalFramePriceKey(m),key);
+  }
+});
+test('legacy frames do not acquire an invented wall thickness; invalid walls are rejected',()=>{
+ const m=metalFrameModule(initialModule());assert.equal(parseModule(m).metalFrame!.tubeWall,undefined);
+ for(const wall of [NaN,0,-1,30]){m.metalFrame!.tubeWall=wall;assert.ok(validate(m).length);}
+});
 
 for (const kind of ['u', 'closed', 'table'] as const) test(`metal frame ${kind}: exact bounds, no boards or self intersections, roundtrip`, () => {
   const m=metalFrameModule(initialModule()); changeFrameKind(m,kind);
