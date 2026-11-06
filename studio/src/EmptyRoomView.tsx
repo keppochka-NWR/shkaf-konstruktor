@@ -112,7 +112,7 @@ export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload
             roomDimensions
           />)}
  </section>
- <aside className="properties">{roomLeft?<section className="property-section">{palette}</section>:roomSection}</aside></WorkspacePanels>
+ <aside className="properties">{roomLeft?<section className="property-section empty-room-palette">{palette}</section>:roomSection}</aside></WorkspacePanels>
  <div className="project-dock"><nav className="dock-bar" aria-label="Навигация по проекту"><button aria-pressed onClick={()=>go('room')}><Box size={17}/>Проект</button><span className="empty-room-total">В комнате пока нет мебели</span></nav></div>
  {selected&&<RoomObjectProperties room={project.room} selection={selected} onChange={change} onClose={()=>setSelected(null)}/>}
  </div>;

@@ -14,6 +14,10 @@
 .workspace.right-collapsed>.properties{visibility:hidden;overflow:hidden;padding:0;border:0}
 .workspace.right-collapsed>.panel-resizer-right,.workspace.left-collapsed>.panel-resizer-left{display:none}
 .app .library,.app .properties{min-width:0;overflow-x:hidden}
+/* Макс 06.11: не складывать отступы вложенных обёрток вокруг палитры. */
+.app.empty-room-app .properties .empty-room-palette{padding:8px;}
+.app.empty-room-app .empty-room-palette>.project-modules{padding:0;margin:0;}
+.app.empty-room-app .empty-room-palette .module-palette{margin:0;padding:10px;}
 
 /* ── 1. Верхняя полоса сцены: одна строка, сплошной фон, сцена — под ней ── */
 .app .viewport{container-type:inline-size;container-name:scene}
