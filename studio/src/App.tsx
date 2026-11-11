@@ -569,7 +569,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       selectModule(next.modules.at(-1)!.id);
     }
   }
-  const [selected, setSelected] = useState(m.sections[0].id),
+  // Панели, столешницы и двери купе могут быть без секций корпуса.
+  const [selected, setSelected] = useState(m.sections[0]?.id ?? ''),
     [view, setView] = useState<View>(()=>{try{const v=viewKey?JSON.parse(sessionStorage.getItem('garderyob-camera:'+viewKey)||'null')?.view:null;return ['iso','front','side','left','top'].includes(v)?v:'iso';}catch{return 'iso';}}),
     [fit, setFit] = useState(0),
     [openDoors, setOpenDoors] = useState(true),
@@ -615,7 +616,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     touched = useRef(false);
   const selectedId = m.sections.some((s) => s.id === selected)
     ? selected
-    : m.sections[0].id;
+    : m.sections[0]?.id ?? '';
   const idx = m.sections.findIndex((s) => s.id === selectedId),
     s = m.sections[idx],
     b = boxes(m)[idx],
@@ -704,7 +705,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   useEffect(()=>{const on=(e:Event)=>{const d=(e as CustomEvent).detail as {title?:string;text?:string}|undefined;if(d?.text)setNotice({title:d.title??'Сделано',text:d.text});};window.addEventListener('studio-note',on);return()=>window.removeEventListener('studio-note',on);},[]);
   useEffect(()=>{if(!error||meshFit||error===startup.error)return;const t=setTimeout(()=>setError(''),errorDetails.length?20000:6000);return()=>clearTimeout(t);},[error,meshFit]); // eslint-disable-line react-hooks/exhaustive-deps
   /** «Показать в 3D» детали (карты раскроя, «не помещается в лист»): выбрать корпус, секцию и деталь, открыть наполнение. */
-  function inspectPart(mid:string,pid:string){const body=project.modules.find(a=>a.id===mid);if(!body)return;selectModule(mid);const sec=body.module.sections.find(s=>pid.startsWith(s.id+':'));if(sec)chooseSection(sec.id);setSelectedPart({mid,sid:sec?.id||body.module.sections[0].id,pid});if(pid.includes(':drawer:'))setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));setRoomPlan(false);setView('iso');setMode('fill');setFocusActive(true);setOpenDoors(true);setModal(null);}
+  function inspectPart(mid:string,pid:string){const body=project.modules.find(a=>a.id===mid);if(!body)return;selectModule(mid);const sec=body.module.sections.find(s=>pid.startsWith(s.id+':'));if(sec)chooseSection(sec.id);setSelectedPart({mid,sid:sec?.id||(body.module.sections[0]?.id ?? ''),pid});if(pid.includes(':drawer:'))setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));setRoomPlan(false);setView('iso');setMode('fill');setFocusActive(true);setOpenDoors(true);setModal(null);}
   // u1 (замер удобства 22.10): действие кругового меню бросило исключение — сообщение на экране, а не только в консоли
   useEffect(()=>{const on=(e:Event)=>{const d=(e as CustomEvent).detail as unknown;
       // п.3 w-formerrors (23.10): отказ поля по нескольким причинам — все списком (предел поля первым, затем остальное с «Что сделать»)
@@ -1384,7 +1385,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             if (commitProject(imported)) {
               setSelectedPart(null);setDrawerPreview(false);setSelectedObstacle(undefined);setSelectedOpening(undefined);setMoveAll(false);setGroupIds([]);setTab("module");
               setActive(imported.modules[0].id);
-              setSelected(next.sections[0].id);
+              setSelected(next.sections[0]?.id ?? '');
               setFit((f) => f + 1);
               const priceNote = saveManagedProject ? orderCalculationNotice(own, project.calculation, "файле") : undefined; if (priceNote) setNotice(priceNote);
             }
@@ -1558,7 +1559,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           <div className="library-label section-title" data-stages="filling" hidden={!!m.raw}>
             Наполнение <span>в секцию {idx + 1}</span>
           </div>
-          <div className="fill-buttons" data-stages="filling" hidden={!!m.metalFrame||!!m.kitchen||!!m.worktop||!!m.raw}>
+          {s && b && <div className="fill-buttons" data-stages="filling" hidden={!!m.metalFrame||!!m.kitchen||!!m.worktop||!!m.raw}>
             <button hidden={!!m.corner} disabled={!!fillBlock} title={fillBlock||undefined} draggable={!fillBlock} onDragStart={e=>startFill(e,'pantograph')} onClick={()=>dropFilling('pantograph',placed.id,selectedId,b.top-100)}><Shirt size={19}/><span>Пантограф</span><Plus size={15}/></button>
             <button disabled={!!fillBlock} title={fillBlock||undefined} draggable={!fillBlock} onDragStart={e=>startFill(e,'shelf')}
               onClick={()=>m.corner?dropFilling('shelf',placed.id,selectedId,(b.top+b.bottom)/2):setComposer('shelf')}
@@ -1609,7 +1610,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <span>Разделить секцию</span>
               <Plus size={15} />
             </button>
-          </div>
+          </div>}
           <div className="library-bottom">
             <div className="tip-mark">
               <Info size={17} />
@@ -1633,7 +1634,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             mode={presentation||editingFacades?'orbit':mode}
             presentation={presentation||editingFacades}
             cutaway={cutaway}
-            drawerPreview={!presentation&&drawerPreview&&s.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
+            drawerPreview={!presentation&&drawerPreview&&s?.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
             snapping={snapping}
             snap={(mid,p)=>snapping?snapBodies(mid,p):{x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)}}
             keepIn={(mid,p)=>keepInRoom(project,mid,p,moveAll?project.modules.map(a=>a.id):liveGroupIds.includes(mid)?liveGroupIds:undefined)}
