@@ -1,4 +1,5 @@
 import {ChevronLeft,ChevronRight,Check,SlidersHorizontal} from 'lucide-react';
+import {ApartmentTabs} from './ApartmentPlan';
 import {STAGES,stageHint,stageIndex,nextStage,prevStage,type Stage} from './stages';
 /** rawSelected — выбран сырой модуль из Базиса (m.raw): на этапе «Наполнение» подсказка говорит, что наполнение правится в Базисе. */
 type Props={stage:Stage;advanced:boolean;onStage:(s:Stage)=>void;onAdvanced:(v:boolean)=>void;done:Partial<Record<Stage,boolean>>;rawSelected?:boolean};
@@ -16,5 +17,6 @@ export function StageBar({stage,advanced,onStage,onAdvanced,done,rawSelected}:Pr
       {i<STAGES.length-1?<button className="primary" onClick={()=>onStage(nextStage(stage))}>Дальше: {STAGES[i+1].title} <ChevronRight size={15}/></button>:<button className="primary" onClick={()=>onStage('docs')}>Открыть документы</button>}
       <label className="stage-advanced" title="Показать все панели независимо от этапа"><input type="checkbox" checked={advanced} onChange={e=>onAdvanced(e.target.checked)}/><SlidersHorizontal size={14}/> Все настройки</label>
     </div>
+    <ApartmentTabs roomStage={stage==='room'}/>
   </nav>;
 }

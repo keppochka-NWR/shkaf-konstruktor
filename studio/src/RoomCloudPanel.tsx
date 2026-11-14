@@ -37,7 +37,7 @@ export function RoomCloudPanel({
     setItems(data.items);
   }
   return (
-    <details>
+    <details onToggle={(e) => { if (e.currentTarget.open && !user) void run(reload); }}>
       <summary>Сохранение на сервере</summary>
       <p>
         Нужен запущенный сервер кабинета и учётная запись сотрудника. До

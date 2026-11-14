@@ -26,3 +26,6 @@ studio/.qa/
 studio/reports/local-backups/
 studio/reports/server-temp/
 studio/reports/recheck-*/
+
+server/.assistant-venv/
+server/__pycache__/

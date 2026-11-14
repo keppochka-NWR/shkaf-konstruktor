@@ -270,6 +270,8 @@ def create_app(db_path=None, config=None, static_root=None):
         with connect() as c:
             c.execute('UPDATE projects SET archived=? WHERE id=? AND email=?',(int(archived),pid,u['email']))
         return {'ok':True}
+    from studio_assistant import install_assistant
+    install_assistant(app,user,cfg,connect)
     if static_root is not None:
         web=Path(static_root).resolve()
         if not (web/'studio'/'index.html').is_file():

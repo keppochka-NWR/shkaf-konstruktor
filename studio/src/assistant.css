@@ -1,0 +1,217 @@
+.yo-shell {
+  display: flex;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.yo-editor {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  position: relative;
+}
+.yo-assistant {
+  flex: 0 0 340px;
+  width: 340px;
+  max-width: 100vw;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-left: 1px solid #d6dfeb;
+  color: #243248;
+  min-height: 0;
+  font-size: 13px;
+}
+.yo-assistant header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  border-bottom: 1px solid #d6dfeb;
+}
+.yo-assistant header small {
+  display: block;
+  color: #68778a;
+  margin-top: 4px;
+}
+.yo-assistant button,
+.yo-apartment button {
+  border: 1px solid #ccd6e5;
+  border-radius: 7px;
+  padding: 8px 10px;
+  background: #fff;
+  color: #2344c7;
+  cursor: pointer;
+}
+.yo-assistant button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.yo-assistant-messages {
+  flex: 1;
+  overflow: auto;
+  padding: 14px;
+  min-height: 0;
+  overflow-wrap: anywhere;
+}
+.yo-assistant-messages p {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.yo-chat-user {
+  background: #edf1ff;
+  padding: 10px;
+  border-radius: 8px;
+}
+.yo-choices {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0 16px;
+}
+.yo-proposal {
+  border-top: 1px solid #d6dfeb;
+  padding-top: 12px;
+}
+.yo-assistant form {
+  padding: 12px;
+  border-top: 1px solid #d6dfeb;
+  display: grid;
+  gap: 8px;
+}
+.yo-assistant textarea {
+  width: 100%;
+  min-height: 80px;
+  max-height: 160px;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid #ccd6e5;
+  border-radius: 8px;
+  font: inherit;
+}
+.yo-assistant small {
+  color: #68778a;
+  line-height: 1.4;
+}
+.yo-upload input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+}
+.yo-attachments span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.yo-apartment {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #f5f7fb;
+}
+.yo-apartment header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px;
+  background: white;
+  border-bottom: 1px solid #d6dfeb;
+}
+.yo-apartment svg {
+  width: 100%;
+  flex: 1;
+  min-height: 200px;
+}
+.yo-apartment g[role="button"] {
+  cursor: pointer;
+}
+.yo-apartment g:focus {
+  outline: 3px solid #325bee;
+}
+.yo-room-tabs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  border-bottom: 1px solid #d6dfeb;
+  background: #fff;
+}
+.yo-room-tabs button {
+  padding: 6px 10px;
+  border: 1px solid #ccd6e5;
+  border-radius: 6px;
+  background: #fff;
+  color: #2344c7;
+}
+.yo-room-tabs button:last-child {
+  margin-left: auto;
+}
+.yo-shell .app {
+  height: 100%;
+  min-height: 0;
+}
+.yo-shell .stage-bar {
+  flex-wrap: wrap;
+}
+.yo-shell .stage-hint {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .yo-assistant {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 150;
+    box-shadow: -12px 0 35px #24324822;
+    width: min(380px, 100vw);
+  }
+}
+
+.yo-shell .app .stage-bar {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.yo-shell .app .stage-actions {
+  grid-column: 2;
+  grid-row: 1;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.yo-shell .app .yo-room-tabs {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
+  flex-wrap: wrap;
+  border: 0;
+  padding: 3px 0;
+}
+.yo-room-tabs button {
+  white-space: nowrap;
+}
+.yo-workspace-error {
+  position: absolute;
+  bottom: 40px;
+  left: 10px;
+  right: 10px;
+  background: #fff0e8;
+  color: #8c381f;
+  padding: 12px;
+  z-index: 100;
+}
+.yo-assistant[hidden] {
+  display: none;
+}
+@media (max-width: 700px) {
+  .yo-shell .app .stage-bar {
+    grid-template-columns: 1fr;
+  }
+  .yo-shell .app .stage-actions {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .yo-shell .app .yo-room-tabs {
+    grid-row: 3;
+  }
+}
