@@ -1,3 +1,4 @@
+import {textureContentStyle} from './textureContent';
 import {sinkCatalog,sinkByArticle} from './sinkCatalog';
 import {joinedUnderLightParts} from './joinedUnderLight';
 import {WorktopCutoutEditor} from './WorktopCutoutEditor';
@@ -94,7 +95,7 @@ function Colors({ m, material }: { m: Module; material: KitchenPanelProps["mater
   if (m.doors) rows.push(["facadeDecor", "Фасады", m.facadeDecor]);
   if (m.kdrawers?.length || m.sections.some((s) => s.drawers > 0)) rows.push(["drawerFacadeDecor", "Фасады ящиков", m.drawerFacadeDecor ?? m.facadeDecor]);
   return <div className="kitchen-colors">{rows.map(([target, label, name]) => <button key={target} type="button" aria-label={`${label}: ${name} — выбрать декор`} onClick={() => material(target)}>
-    <span className="swatch" style={tex(name) ? { backgroundImage: `url("${tex(name)}")` } : { backgroundColor: fill(name) }} /><span><small>{label}</small>{name}</span></button>)}</div>;
+    <span className="swatch" style={tex(name) ? { backgroundImage: `url("${tex(name)}")`, ...textureContentStyle(tex(name)!) } : { backgroundColor: fill(name) }} /><span><small>{label}</small>{name}</span></button>)}</div>;
 }
 
 export type KitchenPanelProps = {

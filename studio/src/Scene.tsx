@@ -1,3 +1,4 @@
+import {applyTextureContent} from './textureContent';
 import {joinedUnderLightParts} from './joinedUnderLight';
 import {compactMaterialGroups} from './compactEdges';
 import {legatoModel} from './legatoGeometry';
@@ -347,7 +348,7 @@ export function Scene(p: Props) {
       let result=textureLoads.get(url);
       // сбой (пересборка демо, сеть) — те же попытки, что у сеток, и отказ не остаётся в кэше: раньше декоры до перезагрузки страницы
       // рисовались плоским цветом (снимок Макса 20.10)
-      if(!result){const q=withRetry<THREE.Texture>((ok,fail)=>loader.load(url,map=>{map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());if(disposed)map.dispose();else loadedTextures.add(map);ok(map);},undefined,fail));q.catch(()=>{if(textureLoads.get(url)===q)textureLoads.delete(url);});textureLoads.set(url,result=q);}
+      if(!result){const q=withRetry<THREE.Texture>((ok,fail)=>loader.load(url,map=>{map.colorSpace=THREE.SRGBColorSpace;applyTextureContent(map,url);map.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());if(disposed)map.dispose();else loadedTextures.add(map);ok(map);},undefined,fail));q.catch(()=>{if(textureLoads.get(url)===q)textureLoads.delete(url);});textureLoads.set(url,result=q);}
       return result;
     }
     let generation = 0,pendingTextures=0;

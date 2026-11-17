@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import {newProject} from '../src/project';
 const KEY='garderyob-rooms-v1';
+async function hideDimensions(page:any){const b=page.getByRole('button',{name:'Показать размеры',exact:true});if(await b.count()&&await b.getAttribute('aria-pressed')==='true')await b.click();}
 test.beforeEach(async({page},info)=>{if(!info.title.startsWith('visibility and compact'))await page.addInitScript(()=>localStorage.setItem('yo-compact-top','0'));});
 test('right-click rehangs the selected facade and supports undo redo reload',async({page})=>{
  await page.goto('/');await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
@@ -9,7 +10,7 @@ test('right-click rehangs the selected facade and supports undo redo reload',asy
  await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();
  await page.getByRole('button',{name:'Показать размеры',exact:true}).click();
  await page.waitForTimeout(700);const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;
- await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});
+ await hideDimensions(page);await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});
  // Right-clicking the face opens its actions directly.
  await expect(page.getByRole('menu',{name:'Действия: Фасад',exact:true})).toHaveCount(1);
  await expect(page.getByRole('menuitem',{name:/^Открывание\./})).toBeVisible();
@@ -435,9 +436,9 @@ test('visibility and compact header preserve the document and restore all module
  await page.getByRole('button',{name:'Копировать с наполнением',exact:true}).click();
  const before=await state();
  await page.locator('.module-item').first().click({button:'right'});
- await page.getByRole('menuitem',{name:/^Корпус\./}).click();await page.getByRole('menuitem',{name:/^Скрыть модуль\./}).click();
+ await page.getByRole('menuitem',{name:/^Скрыть модуль\./}).click();
  await expect(page.getByRole('button',{name:'Показать все скрытые (1)',exact:true})).toBeVisible();
- await page.locator('.module-item').last().click({button:'right'});await page.getByRole('menuitem',{name:/^Корпус\./}).click();await page.getByRole('menuitem',{name:/^Скрыть модуль\./}).click();
+ await page.locator('.module-item').last().click({button:'right'});await page.getByRole('menuitem',{name:/^Скрыть модуль\./}).click();
  await expect(page.locator('.module-hidden')).toHaveCount(2);
  expect(await state()).toBe(before);
  await page.getByRole('button',{name:'План',exact:true}).click();
@@ -445,7 +446,7 @@ test('visibility and compact header preserve the document and restore all module
  await page.getByRole('button',{name:'Показать все скрытые (2)',exact:true}).click();
  await expect(page.locator('svg [aria-label^="На плане:"]')).toHaveCount(2);
  await page.locator('svg [aria-label^="На плане:"]').first().click({button:'right'});
- await page.getByRole('menuitem',{name:/^Корпус\./}).click();await page.getByRole('menuitem',{name:/^Скрыть модуль\./}).click();
+ await page.getByRole('menuitem',{name:/^Скрыть модуль\./}).click();
  await page.locator('.module-item').first().click();
  await expect(page.locator('.module-hidden')).toHaveCount(0);
  await expect(page.locator('svg [aria-label^="На плане:"]')).toHaveCount(2);
@@ -463,7 +464,7 @@ test('top and bottom facade menus save Premial selection with undo and reload',a
  await page.getByRole('button',{name:'Построение мебели',exact:true}).click();
  await page.getByRole('button',{name:'Спереди',exact:true}).click();
  await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();
- const opening=async()=>{await page.waitForTimeout(500);const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});await page.getByRole('menuitem',{name:/^Фасад\./}).click();await page.getByRole('menuitem',{name:/^Открывание\./}).click();};
+ const opening=async()=>{await page.waitForTimeout(500);const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;await hideDimensions(page);await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});await page.getByRole('menuitem',{name:/^Открывание\./}).click();};
  const section=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules[0].module.sections[0]);
  await opening();await page.getByRole('menuitem',{name:/^Петли снизу\./}).click();
  expect((await section()).doorHinges).toContain('bottom');
@@ -480,7 +481,7 @@ test('facade editor via right click: film, enamel, cancel, undo and reload',asyn
  await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
  await page.getByRole('button',{name:'Спереди',exact:true}).click();
  await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();
- const open=async()=>{await page.waitForTimeout(700);const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});await page.getByRole('menuitem',{name:/^Фасад\./}).click();await page.getByRole('menuitem',{name:/^Редактировать фасад\./}).click();await expect(page.getByRole('region',{name:'Редактор фасадов'})).toBeVisible();await expect(page.locator('.modal-backdrop')).toHaveCount(0);};
+ const open=async()=>{await page.waitForTimeout(700);const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;await hideDimensions(page);await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});await page.getByRole('menuitem',{name:/^Редактировать фасад\./}).click();await expect(page.getByRole('region',{name:'Редактор фасадов'})).toBeVisible();await expect(page.locator('.modal-backdrop')).toHaveCount(0);};
  const value=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules[0].module.vernissage);
  await open();await page.getByRole('region',{name:'Редактор фасадов'}).getByLabel('Основа фасадов',{exact:true}).selectOption('vernissage');
  await expect(page.getByRole('region',{name:'Редактор фасадов'}).getByLabel('Фрезеровка Вернисаж',{exact:true})).toBeVisible();
@@ -498,31 +499,29 @@ test('facade editor via right click: film, enamel, cancel, undo and reload',asyn
 });
 
 
-test('Ctrl module group: list, plan and scene selection, selected facade apply and undo',async({page})=>{
+test('Shift module group: list, plan and scene selection, selected facade apply and undo',async({page})=>{
  await page.goto('/');await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
  await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
  await page.getByRole('button',{name:'Копировать с наполнением',exact:true}).click();
  await page.getByRole('button',{name:'Копировать с наполнением',exact:true}).click();
  const items=page.locator('.module-list .module-item');await expect(items).toHaveCount(3);
- await items.nth(0).click({modifiers:['Control']});await items.nth(2).click({modifiers:['Control']});
+ await items.nth(0).click({modifiers:['Shift']});await items.nth(2).click({modifiers:['Shift']});
  await expect(page.getByRole('button',{name:'Фасады выделенных (2)',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Фасады выделенных (2)',exact:true}).click();
- await expect(page.getByRole('region',{name:'Редактор фасадов'}).getByLabel('Область применения фасадов',{exact:true})).toHaveValue('group');
- await page.getByRole('region',{name:'Редактор фасадов'}).getByLabel('Основа фасадов',{exact:true}).selectOption('vernissage');
- await page.getByRole('button',{name:'Применить к выделенным (2)',exact:true}).click();
+ await page.getByLabel('Группа: Тип фасадов',{exact:true}).selectOption('vernissage');
  const covers=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules.map((a:any)=>a.module.vernissage?.cover??null));
  expect(await covers()).toEqual(['film',null,'film']);await page.keyboard.press('Control+z');expect(await covers()).toEqual([null,null,null]);
  await page.keyboard.press('Control+y');expect(await covers()).toEqual(['film',null,'film']);
- await items.nth(0).click({modifiers:['Control']});await expect(page.getByRole('button',{name:'Фасады выделенных (1)',exact:true})).toBeVisible();
+ await items.nth(0).click({modifiers:['Shift']});await expect(page.getByRole('button',{name:'Фасады выделенных (1)',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Снять выделение',exact:true}).click();
  await page.getByRole('button',{name:'План',exact:true}).click();
  await expect(page.locator('.room-plan')).toBeVisible();
- await page.locator('.room-plan g[role="button"]').filter({has:page.locator('polygon')}).first().click({modifiers:['Control']});
+ await page.locator('.room-plan g[role="button"]').filter({has:page.locator('polygon')}).first().click({modifiers:['Shift']});
  await expect(page.getByRole('button',{name:'Фасады выделенных (1)',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Снять выделение',exact:true}).click();
  await page.getByRole('button',{name:'Спереди',exact:true}).click();
  await items.nth(1).click();await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();await page.waitForTimeout(700);
- const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;await canvas.click({modifiers:['Control'],position:{x:b.width/2,y:b.height/2}});
+ const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;await hideDimensions(page);await canvas.click({modifiers:['Shift'],position:{x:b.width/2,y:b.height/2}});
  await expect(page.getByRole('button',{name:'Фасады выделенных (1)',exact:true})).toBeVisible();
  await page.reload();expect(await covers()).toEqual(['film',null,'film']);
 });
@@ -530,35 +529,23 @@ test('Ctrl module group: list, plan and scene selection, selected facade apply a
 
 test('context menu separates facade and body actions without changing project',async({page})=>{
  await page.goto('/');await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
- await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
- const state=()=>page.evaluate(()=>localStorage.getItem('garderyob-rooms-v1'));
- const before=await state();
+ await page.getByRole('button',{name:'Построение мебели',exact:true}).click();
+ const state=()=>page.evaluate(()=>localStorage.getItem('garderyob-rooms-v1'));const before=await state();
  await page.locator('.module-item').first().click({button:'right'});
  const menu=page.getByRole('menu');
- await expect(menu.getByRole('menuitem')).toHaveCount(2);
- await menu.getByRole('menuitem',{name:/^Корпус\./}).click();
  await expect(menu.getByRole('menuitem',{name:/^Размеры\./})).toBeVisible();
+ await expect(menu.getByRole('menuitem',{name:/^Скрыть модуль\./})).toBeVisible();
  await expect(menu.getByRole('menuitem',{name:/^Петли\./})).toHaveCount(0);
- await expect(menu.getByRole('menuitem',{name:/^Редактировать фасад\./})).toHaveCount(0);
- await menu.getByRole('button',{name:'Назад',exact:true}).click();
- await menu.getByRole('menuitem',{name:/^Фасад\./}).click();
- await expect(menu.getByRole('menuitem',{name:/^Редактировать фасад\./})).toBeVisible();
- await expect(menu.getByRole('menuitem',{name:/^Скрыть модуль\./})).toHaveCount(0);
- await page.keyboard.press('Escape');await expect(menu.getByRole('menuitem')).toHaveCount(2);
- await page.keyboard.press('Escape');await expect(menu).toHaveCount(0);
- expect(await state()).toBe(before);
+ await page.keyboard.press('Escape');await expect(menu).toHaveCount(0);expect(await state()).toBe(before);
  await page.getByRole('button',{name:'Спереди',exact:true}).click();
- await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();await page.waitForTimeout(700);
+ await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();await hideDimensions(page);await page.waitForTimeout(700);
  const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;
  await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});
- await expect(menu.getByRole('menuitem')).toHaveCount(2);
- await menu.getByRole('menuitem',{name:/^Фасад\./}).click();
  await expect(menu.getByRole('menuitem',{name:/^Открывание\./})).toBeVisible();
+ await expect(menu.getByRole('menuitem',{name:/^Редактировать фасад\./})).toBeVisible();
  await expect(menu.getByRole('menuitem',{name:/^Скрыть модуль\./})).toHaveCount(0);
- await page.waitForTimeout(600);await page.screenshot({path:'.qa/context-submenus.png'});
- await menu.getByRole('button',{name:'Назад',exact:true}).click();await page.waitForTimeout(600);await page.screenshot({path:'.qa/context-submenus-root.png'});
+ await page.screenshot({path:'.qa/context-submenus.png'});await page.keyboard.press('Escape');expect(await state()).toBe(before);
 });
-
 
 test('middle mouse rotates camera in edit modes without changing furniture',async({page})=>{
  await page.goto('/');await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
@@ -605,7 +592,7 @@ test('facade preview panel fits laptop viewport and never saves an unapplied dra
  await page.goto('/');await page.getByRole('button',{name:'Свернуть верхнюю панель',exact:true}).click();await page.getByRole('button',{name:'Добавить первый шкаф'}).click();await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
  await page.getByRole('button',{name:'Спереди',exact:true}).click();await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();
  await page.waitForTimeout(700);const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;
- await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});await page.getByRole('menuitem',{name:/^Фасад\./}).click();await page.getByRole('menuitem',{name:/^Редактировать фасад\./}).click();
+ await hideDimensions(page);await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});await page.getByRole('menuitem',{name:/^Редактировать фасад\./}).click();
  const panel=page.getByRole('region',{name:'Редактор фасадов'});await expect(panel).toBeVisible();await expect(page.locator('.modal-backdrop')).toHaveCount(0);
  const before=await page.evaluate(()=>localStorage.getItem('garderyob-rooms-v1'));
  await panel.getByLabel('Основа фасадов',{exact:true}).selectOption('vernissage');
