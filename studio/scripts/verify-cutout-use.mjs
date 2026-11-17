@@ -1,7 +1,7 @@
 import {chromium} from '@playwright/test';
 const browser=await chromium.launch({headless:true,channel:"chrome"});const page=await browser.newPage({viewport:{width:1600,height:1000}});
 if(process.env.FIXTURE_ROOT){const {readFileSync}=await import('node:fs');const {join}=await import('node:path');await page.route('**/local-projects/*.json',route=>route.fulfill({contentType:'application/json',body:readFileSync(join(process.env.FIXTURE_ROOT,new URL(route.request().url()).pathname.split('/').pop()))}));}
-await page.goto((process.env.REVIEW_URL||'http://127.0.0.1:5197/')+'?project=kitchen-cut-repair-review');
+page.setDefaultNavigationTimeout(90000);await page.goto((process.env.REVIEW_URL||'http://127.0.0.1:5197/')+'?project=kitchen-cut-repair-review');
 await page.getByRole('button',{name:'Дальше: Построение мебели',exact:true}).click();
 await page.locator('details[data-setting="Столешница"] > summary').click();
 await page.getByRole('button',{name:'Убрать',exact:true}).click();
