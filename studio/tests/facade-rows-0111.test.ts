@@ -47,7 +47,7 @@ for(const rows of [3,4,5] as const){
   assert.deepEqual(realHits(m),[],'нет пересечений');
   // раскрой и цена: двери по рядам в деталях, петли в смете — как фактические, цена выше цельной двери на петли
   const one=wardrobe(600,2400),p=project(m),e=estimate(p,nest(p)),e1=estimate(project(one),nest(project(one)));
-  const hingeQty=(x:typeof e)=>x.lines.filter(l=>/^hinge/.test(l.id)).reduce((a,l)=>a+l.quantity,0);
+  const hingeQty=(x:typeof e)=>x.lines.filter(l=>/^(hinge|premial-(?:alu-)?hinge:)/.test(l.id)).reduce((a,l)=>a+l.quantity,0);
   assert.equal(hingeQty(e),ds.reduce((a,d)=>a+hingesOf(m,d).length,0),'петель в смете столько, сколько поставлено');
   assert.ok(hingeQty(e)>hingeQty(e1));
   assert.ok(parts(m).filter(x=>x.role==='door').every(x=>x.length>=RULES.doorRowMinH));

@@ -1,3 +1,7 @@
+import {WorktopDecorPicker} from './WorktopDecorPicker';
+import {surfaceCatalog} from './surfaceCatalog';
+import { blockingDesignChanges } from './editableDesignIssues';
+import {onlyCutoutOrRailEdit} from './cutoutEditScope';
 import {LegatoPanel} from './LegatoPanel';
 import {FacadeEditor} from './FacadeEditor';
 import {Eye,EyeOff,PanelTopClose,PanelTopOpen,BrickWall} from 'lucide-react';
@@ -335,7 +339,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       const s = original =
         currentRaw || (projectKey?null:localStorage.getItem("module-studio-v2") || localStorage.getItem("module-studio-v1"));
       return {
-        model: s ? parseProject(JSON.parse(s)) : initialProject??newProject({...initialModule(),name:'Новый шкаф',sections:[section()]}),
+        model: s ? parseProject(JSON.parse(s), false, true) : initialProject??newProject({...initialModule(),name:'Новый шкаф',sections:[section()]}),
         error: "",
         damaged:undefined as string|undefined,
         storageUnavailable:false,
@@ -375,6 +379,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const composition=useMemo(()=>compositionBounds(project),[project]);
   const placementWarnings=useMemo(()=>roomWarnings(project),[project]);
   const check=useMemo(()=>buildCheck(project,placed.id),[project,placed.id]);
+  const repairIssues=useMemo(()=>projectErrors(project,!!onEmptyProject),[project,onEmptyProject]);
   const [moduleSearch,setModuleSearch]=useState('');
   const moduleList=useRef<HTMLDivElement>(null);
   const moduleWords=moduleSearch.toLocaleLowerCase('ru-RU').trim().split(/\s+/).filter(Boolean);
@@ -658,9 +663,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     // решение Макса 29.10: вырез держится за деталь при любой правке — постоянные id (partIds.ts); здесь — правки в обход id и снятые носители
     {const r=keepProjectCutouts(project,raw);raw=r.project;cutNotes.push(...r.notes);}
     // Угловые фальши ставятся и снимаются автоматически по факту примыкания корпусов под 90°.
-    const next = applyAutoFillers(raw);
+    const next = onlyCutoutOrRailEdit(project,raw)?raw:applyAutoFillers(raw);
     // радиусный стеллаж (Макс 31.10): новая ширина/глубина — в пределах RADIUS (600 × 600); старый файл шире открывается и правится
-    const e = [...radiusProjectErrors(project,next),...projectErrors(next,!!onEmptyProject)];
+    const e = [...radiusProjectErrors(project,next),...blockingDesignChanges(projectErrors(project,!!onEmptyProject),projectErrors(next,!!onEmptyProject))];
     if (e.length) {
       rejectedProject.current=next;
       setError(e[0]);
@@ -1245,7 +1250,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   const texture = (name: string) =>
-    catalog.find((c) => c.n === name)?.tex || undefined;
+    surfaceCatalog.find((c) => c.n === name)?.tex || undefined;
   // Макс 31.10: «построение помещения — в левом меню»: на этапе «Помещение» панель замера слева, правая колонка свёрнута;
   // на других этапах («План», «Замер помещения») — справа, как прежде.
   const roomLeft=stage==='room'&&!presentation;
@@ -1369,7 +1374,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             const raw=JSON.parse(text);
             if(isClientBundle(raw)){if(!onImportBundle)throw Error('Папку клиента открывайте в основном редакторе, без ссылки на отдельный проект.');onImportBundle(raw);return;}
             // в комнате заказа настройки расчёта из файла не заменяют настройки заказа молча (критик 29.10, блокер 1): заказ приоритетен, предупреждение
-            const own: OrderCalculation = saveManagedProject ? withOrderCalculation(parseProject(raw), project.calculation) : { project: parseProject(raw) };
+            const own: OrderCalculation = saveManagedProject ? withOrderCalculation(parseProject(raw, false, true), project.calculation) : { project: parseProject(raw, false, true) };
             const imported = own.project;
             const next = imported.modules[0].module;
             if (
@@ -1441,7 +1446,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 }}
               />
             </label>
-            {error && (
+            {repairIssues.length>0 && !error && <div className="error-banner" role="alert"><Info size={20}/><div><strong>Проект открыт для исправления</strong><p>Геометрия сохранена. Исправьте замечания перед расчётом и выпуском документов.</p><ul>{repairIssues.map((text,i)=><li key={i}>{text}</li>)}</ul></div></div>}
+          {error && (
               <p role="alert" className="dimension-error">
                 {error}
               </p>
@@ -1732,6 +1738,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               {m.width} <small>×</small> {m.height} <small>×</small> {m.depth}
             </b>
           </div>
+          {repairIssues.length>0 && !error && <div className="error-banner" role="alert"><Info size={20}/><div><strong>Проект открыт для исправления</strong><p>Геометрия сохранена. Исправьте замечания перед расчётом и выпуском документов.</p><ul>{repairIssues.map((text,i)=><li key={i}>{text}</li>)}</ul></div></div>}
           {error && (
             <div className="error-banner" role="alert">
               <Info size={20} />
@@ -2252,9 +2259,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                     <span />
                   </button>
                 </div>
-                {/* заказ 7437584: двухъярусная вешалка — вторая штанга ниже и вертикальная труба D25 по центру секции */}
+                {/* заказ 7437584: двухъярусная вешалка — две штанги на боковых креплениях */}
                 {!s.pantograph&&<div className="toggle-row">
-                  <span>Вешалка в два яруса<small>Вторая штанга ниже, вертикальная труба D25 от дна до полки</small></span>
+                  <span>Вешалка в два яруса<small>Две горизонтальные штанги на боковых креплениях</small></span>
                   <button className="switch" role="switch" aria-label="Вешалка в два яруса" aria-checked={s.rod&&s.rodLower!==undefined} onClick={()=>modifySection((a,n)=>setRodTiers(n,a,!(a.rod&&a.rodLower!==undefined)))}><span /></button>
                 </div>}
                 {s.rod&&s.rodLower!==undefined&&<NumberField label="Нижняя штанга от дна" selected={selectedPart?.pid===s.id+':rod:lower'} onSelect={()=>{setSelectedPart({mid:placed.id,sid:s.id,pid:s.id+':rod:lower'});setDrawerIndex(null);setDrawerPreview(false);setMode('fill');setOpenDoors(true);}} value={Math.round(s.rodLower*(b.top-b.bottom))} min={100} max={b.top-b.bottom-RULES.rodTierClear} onChange={v=>modifySection(a=>{a.rodLower=v/(b.top-b.bottom);})}/>}
@@ -2359,7 +2366,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
 </SettingsSection>
 <SettingsSection title="Тип открывания">                {m.doors&&<label className="hardware-field">Открывание фасадов<select aria-label="Открывание фасадов" value={m.doorOpen==='push'?'push':m.hingeSoft===false?'simple':'handle'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='push'){n.doorOpen='push';delete n.hingeSoft;}else{delete n.doorOpen;if(v==='simple')n.hingeSoft=false;else delete n.hingeSoft;}})}><option value="handle">Ручка · петли с доводчиком</option>{/* заказ 7441182: петли без доводчика */}<option value="simple">Ручка · петли без доводчика</option><option value="push">Push-to-open · без ручек, петли без пружины</option></select></label>}
                 {m.doors&&!m.kitchen&&m.doorMount!=='inset'&&<>{/* решение Макса 26.10 «подгонять под эскиз всё» (заказ 7437584); интеграция 26.10 — то же поле facadeFrom, что «Фасады по эскизу» (o-7427796) */}<NumberField label="Высота фасадов по эскизу" value={Math.round(facadeTop(m)-facadeBottom(m))} min={100} max={2750} onChange={v=>modify(n=>{n.facadeFrom=Math.round((facadeTop(n)-v)*10)/10;})}/>{m.facadeFrom!==undefined||m.facadeTo!==undefined?<button className="text-action" onClick={()=>modify(n=>{delete n.facadeFrom;delete n.facadeTo;})}>Высота по правилу зазоров</button>:<p className="field-note">Верх фасада — по правилу (под крышей или карнизом), низ опускается на заданную высоту (у корпуса на цоколе — не ниже 30 мм от пола). Ручное отклонение от зазоров цеха — по эскизу дизайнера.</p>}</>}
-                {m.doors&&<label className="hardware-field">Петли<select aria-label="Петли корпуса" value={m.hingeBrand??'gtv'} onChange={e=>modify(n=>{const v=e.target.value as HingeBrand;if(v==='gtv')delete n.hingeBrand;else n.hingeBrand=v;})}>{(Object.keys(HINGE_BRANDS) as HingeBrand[]).map(k=><option key={k} value={k}>{HINGE_BRANDS[k].label} · {HINGE_BRANDS[k].note}</option>)}</select></label>}
+                {m.doors&&m.alu&&<p className="field-note">Петли: Premial ПРЕСТО АЛЮМ · автоматически для алюминиевых фасадов</p>}{m.doors&&!m.alu&&<label className="hardware-field">Петли<select aria-label="Петли корпуса" value={m.hingeBrand??'gtv'} onChange={e=>modify(n=>{const v=e.target.value as HingeBrand;if(v==='gtv')delete n.hingeBrand;else n.hingeBrand=v;})}>{(Object.keys(HINGE_BRANDS) as HingeBrand[]).map(k=><option key={k} value={k}>{HINGE_BRANDS[k].label} · {HINGE_BRANDS[k].note}</option>)}</select></label>}
                 {m.doors&&m.doorOpen!=='push'&&<label className="hardware-field"><span><input type="checkbox" aria-label="Петли 155–165°" checked={allHingeAngles(m,165)} onChange={e=>{const on=e.target.checked;modify(n=>setAllHingeAngles(n,on?165:null));}}/> Петли с углом открывания 155–165° · все двери модуля</span><small>Дверь откидывается к соседней и не загораживает проём. Петля 155° — 1 700 ₽ клиенту. Угол одной двери — в её настройках (клик по двери).</small></label>}
                 {m.doors&&!m.kitchen&&<><button className="outline full" onClick={()=>modify(n=>Object.assign(n,repairHinges(n)))}>Подобрать положение петель</button><p className="field-note">Подбирает свободные высоты и отступ чашки. Старые проекты меняются только по этой кнопке; Ctrl+Z отменяет. Присадку и достаточность опоры створки проверяет технолог.</p></>}
 </SettingsSection>
@@ -2554,7 +2561,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   {modal === "room-setup" ? "Шаг 1 · Параметры помещения" : modal === "new" ? "Новый проект" : modal === "library" ? "Моя библиотека модулей" : modal === "render" ? "Изображение проекта" : modal === "cloud" ? "Кабинет проектов" : modal === "output"
                     ? "Документы проекта"
                     : modal === "materials"
-                      ? "Материалы Lamarty"
+                      ? (m.worktop&&materialTarget==="decor"?"Декор столешницы":materialTarget!=="decor"?"Материалы фасадов":"Материалы Lamarty")
                       : modal === "handles"
                       ? "Ручка фасадов и ящиков"
                       : modal === "parts"
@@ -2587,7 +2594,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
 
                 update={commitProject}
               /></SafeBoundary>
-            ) : modal === "materials" ? (
+            ) : modal === "materials" && materialTarget==="decor" && m.worktop ? (<WorktopDecorPicker module={m} apply={name=>{if(modify(n=>{n.decor=name;}))setModal(null);}}/>) : modal === "materials" && materialTarget!=="decor" ? (<FacadeEditor key={placed.id+materialTarget} target={materialTarget} project={project} moduleId={placed.id} selectedIds={materialScope==="all"?project.modules.map(a=>a.id):liveGroupIds} commit={commitProject} close={()=>setModal(null)} onPreview={setFacadePreview}/>) : modal === "materials" ? (
               <>
                 <p className="field-note">Материал: {materialTarget==='decor'?'корпуса':materialTarget==='facadeDecor'?'распашных фасадов':'фасадов ящиков'}.</p><label className="hardware-field">Применить материал<select aria-label="К каким корпусам применить материал" value={materialScope} onChange={e=>setMaterialScope(e.target.value as typeof materialScope)}><option value="active">Выбранный корпус: {m.name}</option><option value="group" disabled={!liveGroupIds.length}>Отмеченная группа ({liveGroupIds.length})</option><option value="all">Все корпуса проекта ({project.modules.length})</option></select></label>{project.modules.length>1&&<label className="hardware-field"><span><input type="checkbox" aria-label="Заменить у всех" checked={materialScope==='all'} onChange={e=>setMaterialScope(e.target.checked?'all':'active')}/> Заменить у всех ({project.modules.length}) — {materialTarget==='decor'?'каркасы':'фасады'} всех корпусов проекта</span></label>}<p className="field-note">Меняется только указанный выше материал. Группу можно отметить в списке корпусов, в разделе «Двигать группу».</p>
                 <label className="search">

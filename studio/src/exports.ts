@@ -1,3 +1,4 @@
+import {panelSheetSize} from './facadePanels';
 import { holes } from "./drilling";
 import {roomWarnings} from './roomWarnings';
 import {cutting,cutCSV,cuttingHTML,sheetPolygon,type Point} from './cornerCutting';
@@ -10,7 +11,7 @@ import { grooveText, parts, RULES, boxes, drawerConfig, drawerOffsets, plinth, c
 import { bounds, projectErrors, type Project } from "./project";
 import {packRectangles} from './packing';
 import {edgeLength} from './edges';
-import {catalog} from './catalog';
+import {surfaceCatalog as catalog} from './surfaceCatalog';
 import {guillotinePack,type GuillotineCut,type GuillotineResult,type Offcut} from './guillotine';
 import {describeModule,plainFeatures,hingeFeature,clientModuleName} from './quoteDescribe';
 import {moduleThumbSVG,decorFallbackColor} from './quoteThumb';
@@ -70,8 +71,8 @@ export function nestGuillotine(p: Project, gap: number = RULES.sheetKerf): Sheet
   for (const d of details(p).sort(
     (a, b) => b.length * b.width - a.length * a.width,
   )) {
-    const width = d.material === "hdf" ? RULES.hdfH : RULES.sheetH,
-      height = d.material === "hdf" ? RULES.hdfW : RULES.sheetW;
+    const width = d.material === "hdf" ? RULES.hdfH : panelSheetSize(d.decor)?.width??RULES.sheetH,
+      height = d.material === "hdf" ? RULES.hdfW : panelSheetSize(d.decor)?.height??RULES.sheetW;
     const key = d.material === "hdf" ? "ЛХДФ" : d.decor;
     // больше листа — не исключение: такую деталь смета показывает «не помещается в лист» (classicUnplaced), раскрой остальных идёт
     const M = RULES.sheetMargin;
@@ -126,7 +127,7 @@ export type NestPlan={sheets:Sheet[];unplaced:{detail:Detail;reason:string}[];en
 /** Раскрой с подробностями: карты + детали, которые не помещаются в лист (только у гильотины — старый движок в этом случае падает). */
 /** Прежний движок: влезает ли деталь в рабочее поле листа (поле RULES.sheetMargin 10 мм; поперёк — только без направления текстуры). */
 function classicFits(d:Detail){
-  const M2=2*RULES.sheetMargin,W=(d.material==='hdf'?RULES.hdfH:RULES.sheetH)-M2,H=(d.material==='hdf'?RULES.hdfW:RULES.sheetW)-M2;
+  const M2=2*RULES.sheetMargin,W=(d.material==='hdf'?RULES.hdfH:panelSheetSize(d.decor)?.width??RULES.sheetH)-M2,H=(d.material==='hdf'?RULES.hdfW:panelSheetSize(d.decor)?.height??RULES.sheetW)-M2;
   return (d.width<=W&&d.length<=H)||(grainFree(d)&&d.length<=W&&d.width<=H);
 }
 /** Детали больше листа у прежнего движка (БЛОКЕР 1 критика релиза 22.10): раньше раскрой бросал «Деталь не помещается в лист»
@@ -148,7 +149,7 @@ export function nestPlan(p:Project):NestPlan{
   for(const d of details(p)){const key=JSON.stringify([d.material,d.material==='hdf'?'ЛХДФ':d.decor,d.thickness]);groups.set(key,[...(groups.get(key)||[]),d]);}
   const sheets:Sheet[]=[],unplaced:NestPlan['unplaced']=[];
   for(const ds of groups.values()){
-    const first=ds[0],decor=first.material==='hdf'?'ЛХДФ':first.decor,width=first.material==='hdf'?RULES.hdfH:RULES.sheetH,height=first.material==='hdf'?RULES.hdfW:RULES.sheetW;
+    const first=ds[0],decor=first.material==='hdf'?'ЛХДФ':first.decor,width=first.material==='hdf'?RULES.hdfH:panelSheetSize(first.decor)?.width??RULES.sheetH,height=first.material==='hdf'?RULES.hdfW:panelSheetSize(first.decor)?.height??RULES.sheetW;
     const byId=new Map(ds.map(d=>[d.code,d])),nb=GUILLOTINE_RULES.narrowBlank;
     const parts=ds.map(d=>({id:d.code,w:Math.max(d.width,nb),h:Math.max(d.length,nb),rot:grainFree(d)}));
     // обрезка 12; если деталь иначе не помещается — меньше, но не ниже minTrim
@@ -187,7 +188,7 @@ export function nest(p:Project,gap:number=RULES.sheetKerf):Sheet[]{
   for(const d of all){const key=JSON.stringify([d.material,d.material==='hdf'?'ЛХДФ':d.decor,d.thickness]);groups.set(key,[...(groups.get(key)||[]),d]);}
   const result:Sheet[]=[];
   for(const ds of groups.values()){
-    const first=ds[0],decor=first.material==='hdf'?'ЛХДФ':first.decor,width=first.material==='hdf'?RULES.hdfH:RULES.sheetH,height=first.material==='hdf'?RULES.hdfW:RULES.sheetW;
+    const first=ds[0],decor=first.material==='hdf'?'ЛХДФ':first.decor,width=first.material==='hdf'?RULES.hdfH:panelSheetSize(first.decor)?.width??RULES.sheetH,height=first.material==='hdf'?RULES.hdfW:panelSheetSize(first.decor)?.height??RULES.sheetW;
     const base=baseline.filter(s=>s.material===first.material&&s.decor===decor&&s.thickness===first.thickness);
     // базовая гильотина без поворотов могла не взять деталь, которая влезает только поперёк — тогда она не эталон
     let best:Sheet[]|null=base.reduce((n,s)=>n+s.items.length,0)===ds.length?base:null;

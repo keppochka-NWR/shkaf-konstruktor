@@ -9,6 +9,7 @@ import { kupeLdspPerM2, MARKUP_DEFAULT } from "./pricing";
 import "./kupe-panel.css";
 
 const groups = [...new Set(KUPE_FILLS.map((f) => f.g))];
+import {selectableKupeFill as selectableFill} from "./kupeFillSelection";
 const rub = (n: number) => Math.round(n).toLocaleString("ru-RU") + " ₽";
 
 /** Цвет секции в схеме двери — как в 3D (kupeFillLook), ЛДСП — бежевый. */
@@ -34,7 +35,8 @@ export function KupePanel({ m, modify, openDoors, setOpenDoors, selectedPid }: {
   const { sectionFills: _sf, ...noSect } = k;
   const fillSelect = (value: string, onChange: (v: string) => void, label: string) => (
     <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
-      {groups.map((g) => <optgroup key={g} label={g}>{KUPE_FILLS.filter((f) => f.g === g).map((f) => <option key={f.n} value={f.n} title={decorTitle(f.n)}>{decorLabel(f.n)}</option>)}</optgroup>)}
+      {!selectableFill({n:value})&&<option value={value} disabled>{decorLabel(value)} — замените на наполнение до 4 мм</option>}
+      {groups.map((g) => <optgroup key={g} label={g}>{KUPE_FILLS.filter((f) => f.g === g && selectableFill(f)).map((f) => <option key={f.n} value={f.n} title={decorTitle(f.n)}>{decorLabel(f.n)}</option>)}</optgroup>)}
     </select>
   );
   return (

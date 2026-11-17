@@ -73,7 +73,7 @@ function identifier(value: unknown): string {
 }
 /** Rooms can contain no furniture; all environment validation still applies. */
 export function parseRoomProject(raw: unknown): Project {
-  return structuredClone(parseProject(raw, true));
+  return structuredClone(parseProject(raw, true, true));
 }
 /** Настройки расчёта документа (одно место): заданные в документе, иначе (документы до 29.10.2026) — активной комнаты, иначе — первой
  *  комнаты с настройками. */

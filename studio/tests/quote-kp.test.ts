@@ -20,7 +20,7 @@ test('КП: карточка на каждое изделие — миниатю
   assert.ok(html.includes('Состав заказа')&&html.includes('Входит в стоимость')&&html.includes('Не входит'));
   assert.ok(html.includes('доставка')&&html.includes('монтаж (сборка и установка)'));
   assert.ok(/class="sw" style="background-color:#[0-9a-f]{6}"/.test(html),'образец цвета без текстуры');
-  assert.ok(html.includes('петли GTV с доводчиком'),'петли простыми словами');
+  assert.ok(html.includes('петли Premial с доводчиком'),'петли простыми словами');
   assert.ok(/2 ящика на шариковых направляющих, с доводчиком/.test(html),'ящики и направляющие');
   assert.ok(html.includes('ручки: '),'ручки');
   // без закупки и служебных слов
@@ -60,6 +60,6 @@ test('КП 26.10: миниатюра — наполнение за прозра�
   assert.ok(html.includes('<img class="sw" src="data:image/jpeg;base64,AAAA"'),'образец текстуры — <img>, печатается без «фона»');
   assert.equal(html.match(/<h3 class="q-group">Изделие 3<\/h3>/g)?.length,1,'группа «Изделие 3» один раз');
   assert.ok(!html.includes('И3 ·')&&html.includes('<small>Левый</small>'));
-  assert.equal(html.match(/петли GTV с доводчиком/g)?.length,1,'петли — один раз в общем блоке');
+  assert.equal(html.match(/петли Premial с доводчиком/g)?.length,1,'петли — один раз в общем блоке');
   assert.ok(/\.q-item\{display:block;[^}]*break-inside:avoid;page-break-inside:avoid/.test(html),'карточка не рвётся между страницами');
 });

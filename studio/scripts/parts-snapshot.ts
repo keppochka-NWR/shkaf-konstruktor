@@ -9,7 +9,7 @@ import { parseProject } from "../src/project";
 import { createModule, type ModuleKind } from "../src/ModulePalette";
 import { isWardrobeImportFile } from "./wardrobe/files";
 
-const out = ".qa/parts-baseline.json";
+const out = process.env.PARTS_SNAPSHOT || ".qa/parts-baseline.json";
 const sets = new Map<string, Module>();
 const addProject = (label: string, file: string) => {
   try {

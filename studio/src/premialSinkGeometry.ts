@@ -1,19 +1,16 @@
 import * as THREE from 'three';
 /** Dimensions from official 6045 drawing. Minor radii and drain fitting are schematic. */
-export function premialSinkModel():THREE.Group {
- const g=new THREE.Group(),steel=new THREE.MeshStandardMaterial({color:0x4b4c4a,metalness:.65,roughness:.3});
- const add=(geo:THREE.BufferGeometry,x:number,y:number,z:number)=>{const m=new THREE.Mesh(geo,steel);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;g.add(m);return m;};
- const s=new THREE.Shape();s.moveTo(-300,-225);s.lineTo(300,-225);s.lineTo(300,225);s.lineTo(-300,225);s.closePath();
- const bowl=new THREE.Path();bowl.moveTo(-275,-150);bowl.lineTo(-275,200);bowl.lineTo(275,200);bowl.lineTo(275,-150);bowl.closePath();s.holes.push(bowl);
- for(const x of [0,245]){const h=new THREE.Path();h.absarc(x,-187.5,x===0?17.5:14,0,Math.PI*2,true);s.holes.push(h);}
- const rim=new THREE.ExtrudeGeometry(s,{depth:3,bevelEnabled:false});rim.rotateX(Math.PI/2);add(rim,0,111.5,0);
- // Closed individual sheets: visible inside, solid back-face culled outside.
- for(const x of [-276.5,276.5])add(new THREE.BoxGeometry(3,220,356),x,-1.5,25);
- for(const z of [-151.5,201.5])add(new THREE.BoxGeometry(550,220,3),0,-1.5,z);
- const bottom=new THREE.Shape();bottom.moveTo(-275,-150);bottom.lineTo(275,-150);bottom.lineTo(275,200);bottom.lineTo(-275,200);bottom.closePath();
- const drain=new THREE.Path();drain.absarc(0,25,45,0,Math.PI*2,true);bottom.holes.push(drain);
- const base=new THREE.ExtrudeGeometry(bottom,{depth:1.5,bevelEnabled:false});base.rotateX(Math.PI/2);add(base,0,-110,0);
- const strainer=new THREE.Mesh(new THREE.TorusGeometry(44,2,8,40),new THREE.MeshStandardMaterial({color:0xa3a3a3,metalness:.8,roughness:.2}));strainer.rotation.x=Math.PI/2;strainer.position.set(0,-108.5,25);g.add(strainer);
+export function premialSinkModel(size:[number,number,number]=[600,223,450],bowlSize:[number,number,number]=[556,220,356],offset=25,color=0x4b4c4a):THREE.Group {
+ const [w,total,d]=size,[bw0,h,bd0]=bowlSize,bw=bw0-6,bd=bd0-6,t=3,top=total/2;
+ const g=new THREE.Group(),steel=new THREE.MeshStandardMaterial({color,metalness:.65,roughness:.3});
+ const add=(geo:THREE.BufferGeometry,x:number,y:number,z:number)=>{const m=new THREE.Mesh(geo,steel);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;g.add(m);};
+ const shape=new THREE.Shape();shape.moveTo(-w/2,-d/2);shape.lineTo(w/2,-d/2);shape.lineTo(w/2,d/2);shape.lineTo(-w/2,d/2);shape.closePath();
+ const hole=new THREE.Path();hole.moveTo(-bw/2,offset-bd/2);hole.lineTo(-bw/2,offset+bd/2);hole.lineTo(bw/2,offset+bd/2);hole.lineTo(bw/2,offset-bd/2);hole.closePath();shape.holes.push(hole);
+ const rim=new THREE.ExtrudeGeometry(shape,{depth:t,bevelEnabled:false});rim.rotateX(Math.PI/2);add(rim,0,top,0);
+ for(const x of [-bw/2-t/2,bw/2+t/2])add(new THREE.BoxGeometry(t,h,bd+2*t),x,top-t-h/2,offset);
+ for(const z of [offset-bd/2-t/2,offset+bd/2+t/2])add(new THREE.BoxGeometry(bw,h,t),0,top-t-h/2,z);
+ add(new THREE.BoxGeometry(bw,1.5,bd),0,top-t-h+0.75,offset);
+ const drain=new THREE.Mesh(new THREE.CylinderGeometry(44,44,2,32),new THREE.MeshStandardMaterial({color:0x333333,metalness:.8,roughness:.2}));drain.position.set(0,top-t-h+2,offset);g.add(drain);
  return g;
 }
 export function layoutDrainModel(height:number):THREE.Group{

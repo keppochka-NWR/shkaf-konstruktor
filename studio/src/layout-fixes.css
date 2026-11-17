@@ -114,3 +114,6 @@
   .app .stage-step:not(.current) .stage-title { display: none !important; }
   /* сцена: после правки Codex (inset: 0, панели инструментов поверх сцены) отдельных отступов .scene на невысоком экране не нужно */
 }
+
+/* Dialogs block panel resizing, including keyboard focus and hover tooltips. */
+body:has([aria-modal="true"]) .panel-resizer,body:has(.modal-backdrop) .panel-resizer{display:none!important;}

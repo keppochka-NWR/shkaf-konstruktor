@@ -56,7 +56,7 @@ test('проём между рядами фасадов: ящики в проё�
 
 test('петли 155–165°, датчик открывания, блок питания, торцевые ручки — с ценами Макса 26.10 (клиенту, поверх коэффициента)', () => {
   // интеграция 26.10: «Петли 155–165°» модуля = угол 165 у всех створок (hingeAngles, o-7427796); wideHinges — синоним при загрузке
-  const m=parseModule({...JSON.parse(JSON.stringify(base({lightSensor:true,handleId:'edge600b'}))),wideHinges:true});m.sections[0].standLights=['left'];
+  const m=parseModule({...JSON.parse(JSON.stringify(base({hingeBrand:'gtv',lightSensor:true,handleId:'edge600b'}))),wideHinges:true});m.sections[0].standLights=['left'];
   assert.ok(allHingeAngles(m,165));
   const p=project(m),e=estimate(p),line=(id:string)=>e.lines.find(l=>l.id===id);
   assert.equal(line('hinge'),undefined);
@@ -76,7 +76,7 @@ test('петли 155–165°, датчик открывания, блок пит
   assert.equal(e.missing.length,0);
   assert.ok((e.byMarkup??0)>0);
   // без подсветки датчика нет; без флага — обычные петли
-  const plain=base({lightSensor:true});const e2=estimate(project(plain));
+  const plain=base({hingeBrand:'gtv',lightSensor:true});const e2=estimate(project(plain));
   assert.equal(e2.lines.find(l=>l.id==='light-sensor'),undefined);
   assert.ok(e2.lines.find(l=>l.id==='hinge'));
   // флаги переживают сохранение

@@ -2,6 +2,7 @@
 // (scripts/bake-calc-kupe.ts). Тест: данные web/calc = данные студии — те же 17 систем и цвета, профиль = прайс × 3 (запечено),
 // наполнения те же, ЛДСП Lamarty — та же цена за м², что в смете студии; в публичных данных нет множителя и служебной системы.
 // Полная сверка итогов страницы в браузере — scripts/calc-kupe-sverka.ts (5 конфигураций отчёта 22.10).
+import {selectableKupeFill} from "../src/kupeFillSelection";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -44,8 +45,8 @@ test("web/calc: системы, цвета и цены профилей = сту
 
 test("web/calc: наполнения = студия; ЛДСП Lamarty — цена за м² из сметы студии (лист по прайсу Lamarty), не заглушка 1800", () => {
   const c = calcData();
-  assert.equal(c.FILLINGS.length, KUPE_FILLS.length, "наполнения: столько же позиций");
-  for (const f of KUPE_FILLS) {
+  assert.equal(c.FILLINGS.length, KUPE_FILLS.filter(selectableKupeFill).length, "наполнения: столько же позиций");
+  for (const f of KUPE_FILLS.filter(selectableKupeFill)) {
     const cf = c.FILLINGS.find((x) => x.n === f.n && x.g === f.g);
     assert.ok(cf, "наполнение " + f.n);
     if (f.g.startsWith("ЛДСП")) assert.equal(cf!.p, kupeLdspPerM2(f.n, MARKUP_DEFAULT).price, "ЛДСП " + f.n);

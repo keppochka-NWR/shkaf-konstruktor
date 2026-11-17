@@ -12,8 +12,8 @@ export function sinkChecks(p:Project):RoomWarning[]{
   const warn=(message:string)=>out.push({moduleId:a.id,kind:'sink-fit',message});
   for(const original of sinkParts(a.module,c,i))for(const part of (original.id.startsWith('layout-water:')&&original.collide?original.collide.map(c=>({...original,...c})): [original])){
    // The rim sits on the slab. Only the bowl envelope below it occupies a cabinet.
-   const size=part.id.startsWith('premial-sink:')?[556,220,356]:part.size;
-   const pos=part.id.startsWith('premial-sink:')?[part.position[0],a.module.worktop!.thickness-110,part.position[2]+25]:part.position;
+   const size=part.id.startsWith('premial-sink:')?part.collide![0].size:part.size;
+   const pos=part.id.startsWith('premial-sink:')?part.collide![0].position:part.position;
    const envelope=box(a,pos,size);
    if(envelope.y<0)warn('Мойка/сифон ниже пола: поднимите столешницу или сократите опускание сифона.');
    for(const b of p.modules){if(a.id===b.id)continue;

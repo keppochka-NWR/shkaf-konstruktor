@@ -52,7 +52,7 @@ test('смета шкафа: строки рамки — цены клиента
   assert.ok(Math.abs(line('alu-insert:glass-clear')!.quantity*line('alu-insert:glass-clear')!.unitPrice!-s.fillCost)<0.5,'количество в смете — до 0,001 м²');
   assert.equal(line('alu-seal')!.unitPrice,ALU_GASKET_PER_M);
   for(const id of ['alu-film','alu-corners','alu-handle-hole','alu-hinge-hole','alu-hinge-hole-narrow'])assert.equal(line(id),undefined,id+' — нет в калькуляторе');
-  assert.ok(line('hinge'),'петли — строкой фурнитуры');
+  assert.ok(e.lines.some(l=>l.id.startsWith('premial-alu-hinge:')),'петли Premial для алюминия — строкой фурнитуры');
 });
 
 test('кухня с алюминиевой рамкой: применить ко всем, без ошибок и пересечений, смета и КП',()=>{
@@ -74,7 +74,7 @@ test('кухня с алюминиевой рамкой: применить ко
   }
   const e=estimate(p),alu=e.lines.filter(l=>l.id.startsWith('alu-'));
   assert.ok(alu.length>=3&&alu.every(l=>l.unitPrice!==null&&l.retail),'строки рамки с ценой клиента');
-  assert.ok(e.lines.some(l=>/^hinge/.test(l.id)),'петли в смете');
+  assert.ok(e.lines.some(l=>/^(hinge|premial-(?:alu-)?hinge:)/.test(l.id)),'петли в смете');
 });
 
 test('модули из Базиса и сырые модули рамку не получают',()=>{

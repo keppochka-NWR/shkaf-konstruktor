@@ -9,22 +9,22 @@ const two=():Project=>{const p=newProject();p.modules[0].module.sections[0].draw
 
 test('scopedSwap: модуль — меняется только он, проект — все; что стоит сейчас — по выбранной части',()=>{
   const p=two(),one=scopedSwap(p,'m2',q=>setAllHinges(q,'blum'));
-  assert.equal(one.modules[0].module.hingeBrand,undefined);assert.equal(one.modules[1].module.hingeBrand,'blum');
-  assert.deepEqual(hardwareChoice(one).hinges.sort(),['blum','gtv']);
+  assert.equal(one.modules[0].module.hingeBrand,'premial');assert.equal(one.modules[1].module.hingeBrand,'blum');
+  assert.deepEqual(hardwareChoice(one).hinges.sort(),['blum','premial']);
   assert.deepEqual(hardwareChoice(scopeProject(one,'m2')).hinges,['blum']);
   const all=scopedSwap(p,null,q=>setAllHinges(q,'blum'));assert.ok(all.modules.every(a=>a.module.hingeBrand==='blum'));
   assert.throws(()=>scopedSwap(p,'нет',q=>q));
-  assert.equal(p.modules[1].module.hingeBrand,undefined,'исходный проект не меняется');
+  assert.equal(p.modules[1].module.hingeBrand,'premial','исходный проект не меняется');
 });
 
 // Цена — только по листам (решение Макса 30.10.2026): фурнитура по закупке входит в цену листа (Pulse, Premial — разницы нет),
 // фурнитура с ценой клиента (Blum: петля 800 ₽, TANDEM 10 000 ₽ — розница сверху листов) меняет цену.
 test('разница в цене: Blum дороже GTV; Pulse внутри цены листа; в модуле — меньше, чем во всём проекте; Blum TANDEM меняет цену',()=>{
-  const p=two(),base=estimate(p).retail!;
+  const p=setAllHinges(two(),'gtv'),base=estimate(p).retail!;
   const d=(q:Project)=>estimate(q).retail!-base;
   const blumAll=d(scopedSwap(p,null,q=>setAllHinges(q,'blum'))),blumOne=d(scopedSwap(p,'m2',q=>setAllHinges(q,'blum')));
   assert.ok(blumAll>0&&blumOne>0&&blumOne<blumAll,`${blumOne} < ${blumAll}`);
   assert.equal(d(scopedSwap(p,null,q=>setAllHinges(q,'pulse'))),0);
-  assert.equal(d(scopedSwap(p,null,q=>setAllSlides(q,'hidden-premial-soft'))),0);
+  assert.ok(d(scopedSwap(p,null,q=>setAllSlides(q,'hidden-premial-soft')))>0,'Premial: цена сайта ×1,3 поверх листов');
   assert.ok(d(scopedSwap(p,null,q=>setAllSlides(q,'hidden-blum-soft')))>0);
 });

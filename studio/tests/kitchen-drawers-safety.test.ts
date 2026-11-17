@@ -10,7 +10,7 @@ import {drawersSweep,applyChange,silentCollisions,isParametric,SWEEP_CHANGES} fr
 
 // Ящики Базиса: конфликты с ящиками студии, глухие фасады, пересчёт по высоте с жёсткими полками и профилями Gola (аудит 11.10.2026, A4).
 // Правило: модуль не сохраняется с пересечением, о котором проверка молчит. Фикстуры local-projects — только номера проектов и имена модулей.
-const LP='public/local-projects';
+const LP=existsSync('tests/local-kitchens')?'tests/local-kitchens':'public/local-projects';
 const lp=(k:string)=>`${LP}/kitchen-${k}.json`;
 const load=(k:string,i:number):Module=>parseProject(JSON.parse(readFileSync(lp(k),'utf8'))).modules[i].module;
 const base=(n=3,system?:'axis-pro'|'firmax-ldsp'|'versalite-h45'|'start-sc')=>{const m=kitchenBase(initialModule(),600,'drawers' as never);m.doors=false;m.sections[0].shelves=[];m.sections[0].drawers=0;m.kdrawers=relayoutKDrawers(m,n,undefined,system);return m;};

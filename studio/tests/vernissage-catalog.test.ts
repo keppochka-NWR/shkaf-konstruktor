@@ -64,7 +64,8 @@ test('цена группы — по прайсу: минимум плёночн
     const film = Object.entries(row).filter(([k]) => k.startsWith('pvc') || k === 'pet').map(([, v]) => v);
     return Math.round((Math.min(...film) * VERNISSAGE_MARKUP_DEFAULT) / 100) * 100;
   };
-  assert.deepEqual(groups.map((g) => g.id), PRICE_TIERS.map((t) => t.id), 'все три группы заполнены, дешёвые сверху');
+  assert.deepEqual(groups.map(g=>g.id), PRICE_TIERS.filter(t=>groups.some(g=>g.id===t.id)).map(t=>t.id), 'непустые группы в порядке цены');
+  assert.equal(groups.reduce((n,g)=>n+g.tiles.length,0),MILLING_TILES.length,'ни один декор не потерян');
   for (const g of groups) {
     const series = [...new Set(g.tiles.map((t) => t.milling.series))], prices = series.map(ref);
     assert.equal(g.from, Math.min(...prices), `${g.label}: «от»`);

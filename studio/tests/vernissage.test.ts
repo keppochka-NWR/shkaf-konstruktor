@@ -281,17 +281,17 @@ test('Вернисаж: шкаф по умолчанию, №86, эмаль ма
   const plain = estimate(base), withV = estimate({ ...base, modules: [{ ...p.modules[0], module: m }] });
   const cost = withV.lines.filter((l) => l.id.startsWith('vernissage')).reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0), 0);
   assert.ok(cost > 20000, `закупка фасадов ${cost}`);
-  // фасады Вернисажа сверху листов — закупка × свой коэффициент 1,6 (решение Макса 10.10.2026), не общий 2,2
-  assert.equal(withV.vernissageMarkup, 1.6);
-  assert.equal(withV.bySheet, withV.ldspSheets * withV.sheetPrice + withV.retailExtras + Math.round(cost * 1.6 / 100) * 100);
-  assert.equal(withV.vernissageOnTop, Math.round(cost * 1.6 / 100) * 100);
+  // фасады Вернисажа сверху листов — закупка × свой коэффициент 2 (решение Макса 10.10.2026), не общий 2,2
+  assert.equal(withV.vernissageMarkup, 2);
+  assert.equal(withV.bySheet, withV.ldspSheets * withV.sheetPrice + withV.retailExtras + Math.round(cost * 2 / 100) * 100);
+  assert.equal(withV.vernissageOnTop, Math.round(cost * 2 / 100) * 100);
   assert.ok(withV.bySheet > plain.bySheet, `цена по листам ${plain.bySheet} → ${withV.bySheet}: фасады не должны удешевлять шкаф`);
   // цена клиента (retail) в модели «по листам» — с фасадами: листы те же (фасады вне раскроя ЛДСП), разница — фасады × коэффициент
   assert.equal(withV.retail, withV.bySheet);
   assert.equal(withV.retail! - plain.retail!, (withV.ldspSheets - plain.ldspSheets) * withV.sheetPrice + withV.vernissageOnTop);
   // закупка фасадов остаётся в себестоимости сметы (не розничная строка)
   assert.ok(withV.lines.filter((l) => l.id.startsWith('vernissage')).every((l) => !l.retail) && withV.knownCost >= Math.round(cost));
-  // цена — только по листам (30.10.2026): проект без настроек — та же цена; внутренняя оценка «по коэффициенту» тоже с фасадами × 1,6
+  // цена — только по листам (30.10.2026): проект без настроек — та же цена; внутренняя оценка «по коэффициенту» тоже с фасадами × 2
   const mkBase = estimate(p), mk = estimate({ ...p, modules: [{ ...p.modules[0], module: m }] });
   assert.equal(mk.model, 'sheet'); assert.equal(mk.retail, withV.retail);
   assert.ok(mk.byMarkup !== null && mk.byMarkup > mkBase.byMarkup!, `оценка по коэффициенту ${mkBase.byMarkup} → ${mk.byMarkup}`);
@@ -300,29 +300,29 @@ test('Вернисаж: шкаф по умолчанию, №86, эмаль ма
   assert.ok(estimateCSV({ ...base, modules: [{ ...p.modules[0], module: m }] }).includes('Фасады Вернисаж: закупка × коэффициент Вернисажа'));
 });
 
-test('Вернисаж: цена клиенту = закупка × 1,6 (решение Макса 10.10.2026) в обеих моделях — ручной пример', () => {
+test('Вернисаж: цена клиенту = закупка × 2 (решение Макса 10.10.2026) в обеих моделях — ручной пример', () => {
   // Шкаф по умолчанию, Стандарт №1, плёнка «Моно белый» (кат. 2 → «Категория ПВХ 2, Моно»), МДФ 19 мм: 4800 ₽/м².
   // Фасады: дверь 596×1968 = 1,1729 м²; два ящика 546×177 = 0,0966 м² → ПВХ меньше 0,3 м² — по 0,3 м². Итого 1,773 м² × 4800 = 8510,40 ₽.
-  // Присадка под петли: 5 петель × 40 ₽ = 200 ₽. Закупка Вернисажа: 8710,40 ₽ → клиенту × 1,6 = 13 936,64 → 13 900 ₽ (округление до 100, как у групп сметы).
+  // Присадка под петли: 5 петель × 40 ₽ = 200 ₽. Закупка Вернисажа: 8710,40 ₽ → клиенту × 2 = 17 420,80 → 17 400 ₽ (округление до 100, как у групп сметы).
   const p = newProject(), m: Module = { ...p.modules[0].module, vernissage: { milling: '1', cover: 'film', film: 'Моно белый', thickness: 19 }, facadeT: 19 };
   const q = { ...p, modules: [{ ...p.modules[0], module: m }] }, e = estimate(q);
   const f = e.lines.find((l) => l.id.startsWith('vernissage:1:'))!, b = e.lines.find((l) => l.id === 'vernissage-hinge-boring')!;
   assert.equal(f.unitPrice, 4800); assert.equal(f.quantity, 1.773);
   assert.equal(b.unitPrice, 40); assert.equal(b.quantity, 5);
   assert.equal(e.vernissageCost, 8710.4);
-  assert.equal(e.vernissageMarkup, 1.6);
-  assert.equal(e.vernissageOnTop, 13900);
-  assert.ok(f.source.includes('× 1,6'), 'в строке сметы — закупка, пометка «клиенту × 1,6»');
-  // модель «себестоимость × коэффициент»: материалы без Вернисажа × 2,2 + Вернисаж × 1,6; закупка Вернисажа остаётся в себестоимости материалов
+  assert.equal(e.vernissageMarkup, 2);
+  assert.equal(e.vernissageOnTop, 17400);
+  assert.ok(f.source.includes('× 2'), 'в строке сметы — закупка, пометка «клиенту × 2»');
+  // модель «себестоимость × коэффициент»: материалы без Вернисажа × 2,2 + Вернисаж × 2; закупка Вернисажа остаётся в себестоимости материалов
   const own = Math.round(e.lines.filter((l) => !l.retail && lineGroup(l.id) === 'material' && !l.id.startsWith('vernissage')).reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0), 0));
-  // части клиенту — до рубля, округление до 100 ₽ один раз по итогу (A3, 11.10.2026); Вернисаж — своя сотня (13 900)
-  assert.equal(e.split.material, Math.round(own * 2.2) + 13900 + Math.round(e.lines.filter((l) => l.retail && l.id === 'falsh-glue').reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0), 0)));
+  // части клиенту — до рубля, округление до 100 ₽ один раз по итогу (A3, 11.10.2026); Вернисаж — своя сотня (17 400)
+  assert.equal(e.split.material, Math.round(own * 2.2) + 17400 + Math.round(e.lines.filter((l) => l.retail && l.id === 'falsh-glue').reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0), 0)));
   assert.ok(e.split.materialCost >= own + 8710);
-  assert.equal(e.byMarkup, Math.round((own + e.split.hardwareCost) * 2.2 / 100) * 100 + 13900 + Math.round(e.lines.filter((l) => l.retail && l.id === 'falsh-glue').reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0), 0)));
-  // модель «цена за лист»: листы × 23 000 + фасады Вернисаж 13 900 сверху
+  assert.equal(e.byMarkup, Math.round((own + e.split.hardwareCost) * 2.2 / 100) * 100 + 17400 + e.retailExtras);
+  // модель «цена за лист»: листы × 23 000 + фасады Вернисаж 17 400 сверху
   const s = estimate({ ...q, calculation: { markup: 2.2, overrides: {}, model: 'sheet' } });
-  assert.equal(s.vernissageOnTop, 13900);
-  assert.equal(s.bySheet, s.ldspSheets * 23000 + s.retailExtras + 13900);
+  assert.equal(s.vernissageOnTop, 17400);
+  assert.equal(s.bySheet, s.ldspSheets * 23000 + s.retailExtras + 17400);
   assert.equal(s.retail, s.bySheet);
   // свой коэффициент проекта (calculation.vernissageMarkup): 8710,40 × 1,8 = 15 678,72 → 15 700
   assert.equal(estimate({ ...q, calculation: { markup: 2.2, overrides: {}, vernissageMarkup: 1.8 } }).vernissageOnTop, 15700);

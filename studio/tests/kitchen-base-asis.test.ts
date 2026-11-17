@@ -28,7 +28,7 @@ test('фасад без петель (k13 m06): фасад есть, петел�
   assert.equal(m.kitchen?.hinges,false);
   assert.deepEqual(validate(m),[]);
   assert.equal(hingeIds(m).length,0);
-  assert.ok(!priced(m).some(id=>id.startsWith('hinge')),'в смете нет петель');
+  assert.ok(!priced(m).some(id=>/^(hinge|premial-(?:alu-)?hinge:)/.test(id)),'в смете нет петель');
   const c=compareModule(ref,m);
   assert.ok(c.pass,why(c));
   // ящик без направляющих (k20 m11, TANDEMBOX в «ящик-система») и подъёмный на газлифте (k11 m09) — не «фасад без петель»
@@ -286,7 +286,7 @@ test('флаги «как в Базисе» не трогают обычную �
   assert.ok(hingeIds(m).length>0,'петли есть');
   assert.ok(parts(m).some(p=>p.id.startsWith('leg:')),'опоры есть');
   assert.ok(parts(m).some(p=>p.id.startsWith('fast:')),'конфирматы есть');
-  assert.ok(priced(m).some(id=>id.startsWith('hinge')),'петли в смете');
+  assert.ok(priced(m).some(id=>/^(hinge|premial-(?:alu-)?hinge:)/.test(id)),'петли в смете');
   const w=initialModule();
   assert.equal(w.kitchen,undefined);
   assert.ok(parts(w).some(p=>p.id.startsWith('fast:')));
@@ -355,7 +355,7 @@ test('флаги «без петель» / «без крепежа» видны 
   const on={...off,kitchen:k};
   assert.deepEqual(hingeIds(on).map(p=>p.id),hingeIds(m).map(p=>p.id));
   assert.deepEqual(fastenerCounts(on),fastenerCounts(m));
-  assert.ok(priced(on).some(id=>id.startsWith('hinge')),'петли снова в смете');
+  assert.ok(priced(on).some(id=>/^(hinge|premial-(?:alu-)?hinge:)/.test(id)),'петли снова в смете');
   const src=readFileSync(new URL('../src/KitchenPanel.tsx',import.meta.url),'utf8');
   assert.match(src,/k\.hinges === false && <p[^>]*>Как в проекте Базиса[^]*?delete n\.kitchen!\.hinges[^]*?Поставить петли/);
   assert.match(src,/k\.fasteners === false && <p[^>]*>Как в проекте Базиса[^]*?delete n\.kitchen!\.fasteners[^]*?Поставить крепёж/);

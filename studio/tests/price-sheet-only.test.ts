@@ -10,7 +10,7 @@ import { modulePrices } from "../src/itemPrices";
 
 const box = (patch: Partial<Module> = {}): Module => {
   const m = initialModule();
-  Object.assign(m, { name: "Корпус", width: 430, height: 2000, depth: 510, doors: true, decor: "Каньон Ледяной", facadeDecor: "Каньон Ледяной" }, patch);
+  Object.assign(m, { hingeBrand: "gtv", name: "Корпус", width: 430, height: 2000, depth: 510, doors: true, decor: "Каньон Ледяной", facadeDecor: "Каньон Ледяной" }, patch);
   m.sections = [{ ...section(), shelves: [], drawers: 0, rod: true }];
   return m;
 };

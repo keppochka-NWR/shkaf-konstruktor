@@ -20,7 +20,7 @@ function project(...ms:Module[]):Project{const p=newProject({...initialModule(),
 const ids=(p:Project)=>estimate(p).lines.map(l=>l.id);
 
 test('кухня из Базиса (k25, навесной с пазом под подсветку): в смете нет подсветки, паз остаётся полосой в 3D',()=>{
-  const p=project(k25wall());
+  const legacy=k25wall();legacy.hingeBrand='gtv';const p=project(legacy);
   assert.ok(!ids(p).includes('light-stand'),'подсветки в Базисе нет — строки «Подсветка врезная в стойках» нет');
   // розница модуля — только навесы ABS комплектами (решение Макса 27.10.2026), подсветки нет
   const e=estimate(p);assert.deepEqual(e.lines.filter(l=>l.retail).map(l=>l.id),['kitchen-hanger'],'нет розничной надбавки за подсветку');

@@ -5,14 +5,17 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {join} from 'node:path';
 import {estimate,withPriceStamp} from '../src/pricing';
 import {clientView} from '../src/clientPrices';
-import {newProject,parseProject,type Project} from '../src/project';
-import {initialModule} from '../src/model';
+import {newProject as createProject,parseProject,type Project} from '../src/project';
+import {initialModule as createModule} from '../src/model';
 import {createKitchenRow,createKupeWardrobe} from '../src/ModulePalette';
 import {VOTAN_DEFAULT,votanProject} from '../src/votan';
 import {bakeEdits,applyBake,readCoefs,purchaseValues,BAKE_RULES} from '../scripts/bake-prices';
 import {PRICE_LITERALS} from '../scripts/public-build';
 import {findPurchaseNumbers} from '../scripts/price-guard';
 
+// Preserve historical GTV fixtures for exact-price regressions.
+const initialModule=()=>({...createModule(),hingeBrand:'gtv' as const});
+const newProject=()=>{const p=createProject();for(const a of p.modules)a.module.hingeBrand='gtv';return p;};
 // Запекание (магазин п.1, 16.10.2026): копия src/ с запечёнными таблицами и PUBLIC_BUILD=true считает от розницы; итог — тот же,
 // что у менеджера в клиентском виде (clientView от себестоимости). Копия — в test-results (не коммитится).
 const studio=fileURLToPath(new URL('..',import.meta.url)),src=join(studio,'src'),out=join(studio,'test-results','bake-src');
@@ -31,7 +34,7 @@ const baked=await import(pathToFileURL(join(out,'pricing.ts')).href) as typeof i
 const kupeLdsp=()=>{const p:Project={...newProject(),modules:createKupeWardrobe(2400,2400,600,initialModule())};const k=p.modules.find(a=>a.module.kupe)!.module;k.kupe={...k.kupe!,fills:['Белый']};return p;};
 const swing1200=()=>{const p=newProject();p.modules[0].module.width=1200;return p;};
 const typical:Record<string,()=>Project>={
-  swing:()=>newProject(),swing1200,
+  swing:()=>newProject(),swing1200,premial:()=>createProject(),
   kupe:()=>({...newProject(),modules:createKupeWardrobe(2400,2400,600,initialModule())}),kupeLdsp,
   kitchen:()=>({...newProject(),room:{...newProject().room,width:3600},modules:createKitchenRow(3000,initialModule())}),
 };
@@ -132,7 +135,7 @@ test('страж: закупочные числа находятся в мини
 });
 
 // ---- Ревью Codex 16.10.2026 (shop-release 5bd8335): R1, R2, R5 — сценарии воспроизведения review-prices.ts
-const kitchen3m=()=>({...newProject(),modules:createKitchenRow(3000,initialModule())}) as Project;
+const kitchen3m=()=>({...newProject(),modules:createKitchenRow(3000,initialModule()).map(a=>({...a,module:{...a.module,hingeBrand:"gtv" as const}}))}) as Project;
 test('R1: ручная цена проекта (лист 10 000) в публичной сборке — тот же итог, что у менеджера (83 000 + склейка), не 50 800',()=>{
   const p=newProject();p.calculation={markup:2.2,overrides:{'sheet:Дуб Вотан':10000}};
   const m=estimate(p),pub=baked.estimate(p);
@@ -198,6 +201,6 @@ test('запекание: оценочные направляющие — одн
   for(const c of cases){
     const m=slidePrice(c as never),b=baked.slidePrice(c as never);
     if(m.price===null||b.price===null){assert.equal(b.price,m.price,JSON.stringify(c));continue;}
-    assert.ok(Math.abs(b.price-m.price*MARKUP_DEFAULT)<0.05,`${JSON.stringify(c)}: публичная ${b.price}, менеджер × коэффициент ${m.price*MARKUP_DEFAULT}`);
+    assert.ok(Math.abs(b.price-m.price*(m.retail?1:MARKUP_DEFAULT))<0.05,`${JSON.stringify(c)}: публичная ${b.price}, менеджер × коэффициент ${m.price*MARKUP_DEFAULT}`);
   }
 });

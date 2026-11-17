@@ -61,11 +61,11 @@ test('T2 18.10: кухня 2400 + Axis PRO + Gola + мойка Premial — Gola,
   const sink=p.modules.find(a=>a.module.kitchen?.appliance==='sink')!;assert.ok(sink,'в ряду 2400 есть тумба под мойку');
   const q=installSink(p,sink.id),e=estimate(q),ids=e.pending.map(l=>l.id);
   assert.deepEqual(e.missing.map(l=>l.id),[],'нет строк «нет цены»');
-  for(const id of ['gola-L','gola-C','worktop-cut:sink','premial-sink:210245'])assert.ok(ids.includes(id),id);
+  for(const id of ['gola-L','gola-C','worktop-cut:sink'])assert.ok(ids.includes(id),id);
   assert.ok(e.lines.some(l=>l.id.startsWith('axis-pro:')&&l.pending),'Axis PRO — тоже после расчёта');
   assert.ok((e.retail??0)>0);assert.equal(e.retail,e.bySheet,'итог = листы + известные позиции вне листа');
   const src=(id:string)=>e.pending.find(l=>l.id===id)!.source;
-  assert.match(src('gola-L'),/Поставщик не указан — уточнить/);assert.match(src('premial-sink:210245'),/^Premial/);assert.match(src('worktop-cut:sink'),/^Премиал/);
+  assert.match(src('gola-L'),/Поставщик не указан — уточнить/);const pricedSink=e.lines.find(l=>l.id==='premial-sink:210245')!;assert.equal(pricedSink.retail,true);assert.ok(pricedSink.unitPrice!>0&&!pricedSink.pending);assert.match(pricedSink.source,/×1,3/);assert.match(src('worktop-cut:sink'),/^Премиал/);
   // клиенту — нейтральная подпись без поставщиков, число позиций в итоговой строке
   const c=clientView(e);assert.equal(c.missing.length,0);assert.equal(c.pending.length,e.pending.length);
   assert.ok(c.pending.every(l=>l.source===PENDING_CLIENT));

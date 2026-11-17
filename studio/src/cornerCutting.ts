@@ -1,7 +1,8 @@
+import {panelSheetSize} from './facadePanels';
 import {parts,RULES,type Part} from './model';
 import {projectErrors,type Project} from './project';
 import {packRectangles,type Packed} from './packing';
-import {catalog} from './catalog';
+import {surfaceCatalog as catalog} from './surfaceCatalog';
 
 export type Point=[number,number];
 export type CutPiece={key:string;code:string;module:string;part:Part;length:number;width:number;contour?:Point[];area:number;edge04:number;edge2:number;rotate:boolean};
@@ -51,7 +52,7 @@ function cuttingRaw(project:Project):CutResult{
  for(const p of pieces){const key=[p.part.material,p.part.material==='hdf'?'ХДФ белый':p.part.decor,p.part.thickness].join('|');groups.set(key,[...(groups.get(key)??[]),p]);}
  const sheets:CutSheet[]=[],unplaced:CutPiece[]=[];
  for(const all of groups.values()){
-  const p=all[0],hdf=p.part.material==='hdf',width=hdf?2070:1830,height=hdf?2800:2750;
+  const p=all[0],hdf=p.part.material==='hdf',width=hdf?2070:panelSheetSize(p.part.decor)?.width??1830,height=hdf?2800:panelSheetSize(p.part.decor)?.height??2750;
   const group=all.filter(q=>{const ok=fitsField(q.width,q.length,q.rotate,width-2*margin,height-2*margin);if(!ok)unplaced.push(q);return ok;});
   if(!group.length)continue;
   const rects=group.map(p=>({id:p.key,w:p.width,h:p.length,rot:p.rotate}));let best:Packed[][]|undefined;

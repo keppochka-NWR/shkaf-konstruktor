@@ -61,7 +61,7 @@ test('всем навесным ряда: у каждого LED, блок пит
   const walls=q.modules.filter(a=>ids.includes(a.id));
   assert.ok(walls.every(a=>a.module.kitchen!.underLight));assert.equal(walls.filter(a=>a.module.lightPsu).length,1);
   assert.equal(q.modules.find(a=>a.id===ids[0])!.module.lightPsu,true,'блок — у крайнего левого');
-  const e=estimate(q),total=walls.reduce((s,a)=>s+a.module.width-72,0)/1000;
+  const e=estimate(q),total=(walls.reduce((s,a)=>s+a.module.width,0)-72)/1000;
   assert.ok(Math.abs(e.lines.find(x=>x.id==='light-under')!.quantity-total)<1e-9);assert.equal(e.lines.find(x=>x.id==='light-psu')!.quantity,1);
   const off=setRowUnderLight(q,ids[0],false);
   assert.ok(off.modules.every(a=>!a.module.kitchen?.underLight&&!a.module.lightPsu));

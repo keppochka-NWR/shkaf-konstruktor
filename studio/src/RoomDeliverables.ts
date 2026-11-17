@@ -12,16 +12,13 @@ const escape = (s: unknown) =>
       ]!,
   );
 export function roomSummary(d: RoomDocument) {
-  return d.rooms.map((r) => ({
-    id: r.id,
-    title: r.title,
-    modules: r.project.modules.length,
-    price: r.project.modules.length ? estimate(r.project).retail : 0,
-    warnings: r.project.modules.length
-      ? roomWarnings(r.project).map((w) => w.message)
-      : [],
-    variants: r.variants?.length ?? 0,
-  }));
+  return d.rooms.map((r) => {
+    let price:number|null=0;
+    const warnings=r.project.modules.length?roomWarnings(r.project).map(w=>w.message):[];
+    try { if(r.project.modules.length)price=estimate(r.project).retail; }
+    catch(e){price=null;warnings.unshift('Расчёт недоступен до исправления: '+(e instanceof Error?e.message:String(e)));}
+    return {id:r.id,title:r.title,modules:r.project.modules.length,price,warnings,variants:r.variants?.length??0};
+  });
 }
 export function handoffHTML(d: RoomDocument) {
   const summary = roomSummary(d);

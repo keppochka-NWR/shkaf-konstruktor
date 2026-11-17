@@ -1,3 +1,4 @@
+import {sinkByArticle} from './sinkCatalog';
 import * as THREE from "three";
 import {ovenModel} from './ovenGeometry';
 import {microwaveModel,builtInFridgeModel} from './applianceGeometry';
@@ -268,7 +269,7 @@ export function procModel(p: P & { look?: Part["look"] }, ctx: { left?: boolean;
   if(p.id.startsWith('layout-tap:'))return tapModel();
   if(p.id.startsWith('layout-waste:'))return servicePipeModel(p.size,false);
   if(p.id.startsWith('layout-water:'))return servicePipeModel(p.size,true,p.id.endsWith(':1'));
-  if (p.id.startsWith('premial-sink:')) return premialSinkModel();
+  if (p.id.startsWith('premial-sink:')) {const item=sinkByArticle(/ · (\d+) · компонов/.exec(p.name)?.[1]);return premialSinkModel(p.size,item?[item.bowlWidth+6,item.bowlHeight,item.bowlDepth+6]:undefined,item?.offsetZ??25,/сатин|Satin|серебро/i.test(p.name)?0xbfc2c4:/медн/i.test(p.name)?0x996747:0x4b4c4a);}
   if (p.id.startsWith('layout-drain:')) return layoutDrainModel(p.size[1]);
   if (p.id.startsWith('premial-allegro:')) return allegroModel(p.size[0], /06050[13]$/.test(p.id));
   const k = procKind(p);

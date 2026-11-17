@@ -93,7 +93,7 @@ test('фасад без петель (hingeless, кухня): петли не с
   assert.equal(ps.filter(p=>p.id.startsWith(`${sid}:hingeplate:0:`)).length,0,'нижний фасад (холодильник) без петель');
   assert.ok(ps.filter(p=>p.id.startsWith(`${sid}:hingeplate:2:`)).length>0,'верхний — на петлях');
   assert.ok(ps.find(p=>p.id===`${sid}:door:0`)?.hingeless);
-  const nHinges=(m:typeof t)=>estimate(newProject(m)).lines.filter(l=>l.id.startsWith('hinge')).reduce((s,l)=>s+l.quantity,0);
+  const nHinges=(m:typeof t)=>estimate(newProject(m)).lines.filter(l=>/^(hinge|premial-(?:alu-)?hinge:)/.test(l.id)).reduce((s,l)=>s+l.quantity,0);
   const withHinges={...t,sections:[{...t.sections[0],hingeless:undefined}]};
   assert.ok(nHinges(t)<nHinges(withHinges),'смета: петель нижнего фасада нет');
   assert.ok(ps.some(p=>p.id.startsWith('fast:')&&p.id.includes(':shelf:0:')));

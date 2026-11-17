@@ -281,6 +281,8 @@ def create_app(db_path=None, config=None, static_root=None):
         @app.get('/')
         def home():
             return RedirectResponse('/studio/')
+    from studio_request_limits import StudioRequestLimits
+    app.add_middleware(StudioRequestLimits)
     return app
 
 

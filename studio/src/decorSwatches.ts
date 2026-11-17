@@ -1,6 +1,6 @@
 // Образцы декоров для КП (менеджеры 22.10.2026, п. 9): уменьшенная текстура каталога (data URL — КП открывается и офлайн, в скачанном
 // HTML) и её средний цвет (для миниатюры изделия). Только в браузере; без текстуры — запасной цвет (quoteThumb.decorFallbackColor).
-import { catalog } from "./catalog";
+import {surfaceCatalog as catalog} from './surfaceCatalog';
 
 export type Swatch = { img: string; color: string };
 const cache = new Map<string, Promise<Swatch | null>>();

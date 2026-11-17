@@ -9,7 +9,7 @@ import {setAllHinges,setAllSlides,setAllEdges,hardwareChoice} from '../src/hardw
 function withDrawers(){const p=newProject();const m=p.modules[0].module;m.sections=[{...section(),drawers:2},...m.sections.slice(1)];return p;}
 
 test('hinge brand changes hinge line, price and keeps GTV ids for old projects',()=>{
-  const p=newProject();p.modules[0].module.doors=true;
+  const p=newProject();p.modules[0].module.hingeBrand='gtv';p.modules[0].module.doors=true;
   const gtv=estimate(p).lines.find(l=>l.id==='hinge')!;assert.equal(gtv.unitPrice,HINGE.price);
   for(const b of ['pulse','blum'] as const){
     const q=setAllHinges(p,b),line=estimate(q).lines.find(l=>l.id==='hinge:'+b)!;
@@ -24,7 +24,7 @@ test('hinge brand changes hinge line, price and keeps GTV ids for old projects',
 
 test('every slide system has a price at 450 mm, push systems have no handle, old hidden configs stay DTC push',()=>{
   // Blum TANDEM — 10 000 ₽ клиенту за комплект (решение Макса 26.10.2026, розница), остальные — закупка
-  for(const s of SLIDE_SYSTEMS){const q=slidePrice({slide:s.slide,operation:s.motion,brand:s.brand,length:450});assert.ok(q.price!==null&&q.price>0,s.id);assert.equal(!!q.retail,s.brand==='blum',s.id);assert.ok(q.source.length>0);}
+  for(const s of SLIDE_SYSTEMS){const q=slidePrice({slide:s.slide,operation:s.motion,brand:s.brand,length:450});assert.ok(q.price!==null&&q.price>0,s.id);assert.equal(!!q.retail,s.brand==='blum'||s.brand==='premial',s.id);assert.ok(q.source.length>0);}
   assert.equal(slideSystem({slide:'gtv0fpo'}).id,'hidden-dtc-push');assert.equal(slideSystem({slide:'ball'}).id,'ball-soft');
   assert.equal(drawerHasHandle({slide:'ball',height:140,length:450,operation:'push'}),false);
   assert.equal(drawerHasHandle({slide:'gtv0fpo',height:140,length:450,operation:'soft-close',brand:'premial'}),true);
@@ -32,13 +32,13 @@ test('every slide system has a price at 450 mm, push systems have no handle, old
   for(const s of SLIDE_SYSTEMS){
     const q=setAllSlides(p,s.id);assert.deepEqual(projectErrors(q),[],s.id);
     const m=q.modules[0].module;assert.equal(slideSystem(drawerConfig(m,m.sections[0],0)).id,s.id);
-    assert.ok(estimate(q).lines.some(l=>l.id.startsWith('slide:')&&l.label.includes(s.label)),s.id+' line label');
+    assert.ok(estimate(q).lines.some(l=>l.id.startsWith('slide:')&&(s.brand==='premial'?/МОРЕНДО.*арт./.test(l.label):l.label.includes(s.label))),s.id+' line label');
     assert.equal(parseProject(JSON.parse(JSON.stringify(q))).modules[0].module.sections[0].drawerConfigs![0].brand,s.slide==='gtv0fpo'?s.brand:undefined);
   }
 });
 
 test('edge choice changes visible edges only and is priced by thickness',()=>{
-  const p=newProject();p.modules[0].module.doors=true;
+  const p=newProject();p.modules[0].module.hingeBrand='gtv';p.modules[0].module.doors=true;
   const thin=setAllEdges(setAllEdges(p,'body',0.8),'facade',1),m=thin.modules[0].module,ps=parts(m).filter(x=>x.material==='board');
   assert.ok(ps.every(x=>!x.edge.includes(2)),'no 2 mm edge left');
   assert.ok(ps.some(x=>x.edge.includes(0.4)),'hidden 0.4 stays');
@@ -55,7 +55,7 @@ test('hinges are drawn: cup, arm and plate per hinge, matching the priced count'
   const expected=doors.reduce((n,d)=>n+hingeCount(d.length,d.width),0);
   const cups=parts(m).filter(x=>x.id.includes(':hingecup:'));
   assert.equal(cups.length,expected);assert.equal(parts(m).filter(x=>x.id.includes(':hingeplate:')).length,expected);
-  assert.equal(estimate(p).lines.find(l=>l.id==='hinge')!.quantity,expected);
+  assert.equal(estimate(p).lines.find(l=>l.id.startsWith('premial-hinge:'))!.quantity,expected);
   assert.ok(cups.every(c=>c.material==='metal'&&c.role==='hinge'));
   const pos=hingePositions(2000,500);assert.equal(pos[0],100);assert.equal(pos.at(-1),1900);
   m.doorOpen='push';assert.ok(parts(m).some(x=>x.id.includes(':latch:')),'push doors get a latch');

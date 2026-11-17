@@ -41,6 +41,7 @@ test('столешница: материал в панели и через пр�
   await shot(page,'04-after-reload-quartz-20');
   // смета: строки кварца за м² и торец — «после финального расчёта конструктором»
   await page.getByRole('button',{name:'Стоимость',exact:true}).click();await page.getByRole('button',{name:'Стоимость проекта',exact:true}).click();
+  await page.getByRole('dialog',{name:'Документы проекта'}).getByRole('button',{name:'Развернуть всё',exact:true}).click();
   await expect(page.getByText(/Столешница кварц 20 мм/).first()).toBeVisible();await expect(page.getByText(/Обработка лицевого торца: кварц 20 мм/).first()).toBeVisible();
   await shot(page,'05-cost-quartz-20');
   expect(errors).toEqual([]);

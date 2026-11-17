@@ -1,3 +1,4 @@
+import { isEditableDesignIssue } from './editableDesignIssues';
 import { kitchenRowZ } from "./kitchenAlignment";
 import {parseSurvey,type Survey} from './roomSurvey';
 import {transform,inverseTransform,polygonBounds,convexOverlap} from './roomGeometry';
@@ -32,7 +33,7 @@ export type PlanDimension={id:string;from:[number,number];to:[number,number]};
 export type CuttingEngine='classic'|'guillotine';
 /** kind 'kitchen' — проект вкладки «Кухня» (кухонная палитра и панель модуля); без поля — обычный проект мебели.
  *  source 'bazis' — кухня импортирована из Базиса (scripts/kitchen/import.ts): состав и расстановка как в Базисе. */
-export type Project={version:3;kind?:'kitchen';source?:'bazis';dimensions?:PlanDimension[];/** вспомогательные линии видов (Q, guides.ts) — только построение */guides?:Guide[];measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;sheetPrice?:number;vernissageMarkup?:number;baseMarkup?:number;baseVernissageMarkup?:number;cuttingEngine?:CuttingEngine;
+export type Project={version:3;premialExtras?:{article:string;quantity:number}[];kind?:'kitchen';source?:'bazis';dimensions?:PlanDimension[];/** вспомогательные линии видов (Q, guides.ts) — только построение */guides?:Guide[];measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;sheetPrice?:number;vernissageMarkup?:number;baseMarkup?:number;baseVernissageMarkup?:number;cuttingEngine?:CuttingEngine;
   /** @deprecated устаревшие «Модель цены» и «по большей модели»: цена — только по листам (решение Макса 30.10.2026); расчёт их не читает,
    *  parseProject отбрасывает (поля оставлены в типе только для старых скриптов заказов) */
   model?:'markup'|'sheet';/** @deprecated см. model */maxModel?:boolean};offer?:{customer:string;price:string;notes:string;/** менеджер явно отметил: цена КП уже включает позиции «после финального расчёта» (ревью R6) */pendingIncluded?:boolean;/** КП и «Кратко для клиента»: цена по каждому изделию (по умолчанию да; false — только итог), менеджеры 22.10.2026 */itemPrices?:boolean}};
@@ -225,6 +226,7 @@ export function modulesOverlap(a:PlacedModule,b:PlacedModule){
 export function maxModules(p:{source?:unknown}){return p.source==='bazis'?200:40;}
 export function projectErrors(p:Project,allowEmpty=false):string[]{
   const errors:string[]=[];
+  if(p.premialExtras&&(!Array.isArray(p.premialExtras)||p.premialExtras.length>500||p.premialExtras.some(v=>typeof v?.article!=='string'||!/^[-\w.]{1,60}$/.test(v.article)||!Number.isInteger(v.quantity)||v.quantity<1||v.quantity>10000)||new Set(p.premialExtras.map(v=>v.article)).size!==p.premialExtras.length))return ['Некорректная дополнительная фурнитура Premial'];
   if(p.room.survey){try{parseSurvey(p.room.survey);}catch(e){return [(e as Error).message];}}
   if(p.kind!==undefined&&p.kind!=='kitchen')return ['Неизвестный тип проекта.'];
   if(p.dimensions!==undefined&&(!Array.isArray(p.dimensions)||p.dimensions.length>50||p.dimensions.some(d=>!d||typeof d.id!=='string'||!Array.isArray(d.from)||!Array.isArray(d.to)||d.from.length!==2||d.to.length!==2||[...d.from,...d.to].some(v=>!Number.isFinite(v)||v<0||v>20000)||Math.hypot(d.to[0]-d.from[0],d.to[1]-d.from[1])<1)||new Set(p.dimensions.map(d=>d.id)).size!==p.dimensions.length))return ['Проверьте размеры на плане: до 50 линий, разные точки в пределах 0–20000 мм.'];
@@ -292,11 +294,17 @@ function legacyModules(raw:any,placement:{id:string;x:number;z:number;y?:number}
   const count=Math.max(2,raw.sections.length),w=raw.width/count;
   return Array.from({length:count},(_,i)=>{const s=raw.sections[i]||section();const m=parseModule({...raw,width:w,name:(raw.name||'Модуль').slice(0,66)+' · '+(i+1),sections:[{...s,id:id(),weight:1}]});return {...placement,id:i===0?placement.id:id(),x:placement.x+i*w,module:m};});
 }
-export function parseProject(data:unknown,allowEmpty=false):Project{
+export function parseProject(data:unknown,allowEmpty=false,allowDesignIssues=false):Project{
   const x=data as any;
   if(x?.version===1){const p=newProject();p.modules=legacyModules(x,{id:id(),x:50,y:0,z:30});const e=projectErrors(p);if(e.length)throw Error(e[0]);return p;}
   if(!x||![2,3].includes(x.version)||!x.room||!Array.isArray(x.modules)||x.modules.length>maxModules(x))throw Error('Нужен файл проекта редактора.');
   const p:Project={version:3,...(x.kind===undefined?{}:{kind:x.kind}),...(x.source==='bazis'?{source:'bazis' as const}:{}),room:{width:x.room.width,height:x.room.height,depth:x.room.depth,openings:[]},modules:[]};
+  if(x.premialExtras!==undefined){
+    if(!Array.isArray(x.premialExtras)||x.premialExtras.length>500)throw Error('Некорректный список дополнительной фурнитуры Premial');
+    p.premialExtras=x.premialExtras.map((v:any)=>{if(typeof v?.article!=='string'||!/^[-\w.]{1,60}$/.test(v.article)||!Number.isInteger(v.quantity)||v.quantity<1||v.quantity>10000)throw Error('Некорректная позиция дополнительной фурнитуры Premial');return {article:v.article,quantity:v.quantity};});
+    if(new Set(p.premialExtras!.map(v=>v.article)).size!==p.premialExtras!.length)throw Error('Повторяющийся артикул Premial');
+  }
+
   if(x.room.outline!==undefined){if(!Array.isArray(x.room.outline)||x.room.outline.length>40)throw Error('Неверный контур помещения.');p.room.outline=x.room.outline.map((q:any)=>({x:q?.x,z:q?.z,...(q?.bulge===undefined||q?.bulge===0?{}:{bulge:q.bulge})}));}
   if(x.room.survey!==undefined)p.room.survey=parseSurvey(x.room.survey);
   if(x.room.openings!==undefined){if(!Array.isArray(x.room.openings)||x.room.openings.length>30)throw Error('Неверные проёмы помещения.');p.room.openings=x.room.openings.map((o:any)=>({id:o?.id,type:o?.type,wall:o?.wall,...(o?.edge===undefined?{}:{edge:o.edge}),offset:o?.offset,width:o?.width,height:o?.height,sill:o?.sill,
@@ -307,7 +315,7 @@ export function parseProject(data:unknown,allowEmpty=false):Project{
   if(x.room.finish!==undefined){const f=parseRoomFinish(x.room.finish);if(f)p.room.finish=f;}
   if(x.room.walls!==undefined){const w=x.room.walls;p.room.walls={thickness:Number(w?.thickness),...(w?.angleLeft===undefined?{}:{angleLeft:Number(w.angleLeft)}),...(w?.angleRight===undefined?{}:{angleRight:Number(w.angleRight)})};}
   if(x.room.obstacles!==undefined){if(!Array.isArray(x.room.obstacles)||x.room.obstacles.length>30)throw Error('Неверные объекты замера.');p.room.obstacles=x.room.obstacles.map((o:any)=>({id:o?.id,name:o?.name,type:o?.type,x:o?.x,y:o?.y,z:o?.z,width:o?.width,depth:o?.depth,height:o?.height,...(o?.sinkModuleId!==undefined?{sinkModuleId:o.sinkModuleId}:{})}));}
-  for(const a of x.modules){if(!a||typeof a.id!=='string')throw Error('Некорректный модуль проекта.');const pos={id:a.id,x:a.x,z:a.z,y:a.y??0,...(a.rotation===undefined?{}:{rotation:a.rotation})};p.modules.push(...(x.version===2?legacyModules(a.module,pos):[{...pos,module:parseModule(a.module)}]));}
+  for(const a of x.modules){if(!a||typeof a.id!=='string')throw Error('Некорректный модуль проекта.');const pos={id:a.id,x:a.x,z:a.z,y:a.y??0,...(a.rotation===undefined?{}:{rotation:a.rotation})};p.modules.push(...(x.version===2?legacyModules(a.module,pos):[{...pos,module:parseModule(a.module,allowDesignIssues)}]));}
   if(x.dimensions!==undefined)p.dimensions=structuredClone(x.dimensions);
   if(x.guides!==undefined){const g=parseGuides(x.guides);if(g.length)p.guides=g;}
   if(x.measurement)p.measurement={number:x.measurement.number,date:x.measurement.date,notes:x.measurement.notes,...(x.measurement.niche===undefined?{}:{niche:{width:x.measurement.niche.width,height:x.measurement.niche.height,depth:x.measurement.niche.depth,deviation:x.measurement.niche.deviation,...(x.measurement.niche.readings===undefined?{}:{readings:structuredClone(x.measurement.niche.readings)})}})};
@@ -315,7 +323,7 @@ export function parseProject(data:unknown,allowEmpty=false):Project{
   // цена — только по листам (решение Макса 30.10.2026): model ('markup'|'sheet') и maxModel/priceMax старых файлов и документов заказа
   // не читаются — такие проекты открываются без ошибки и считаются по листам
   if(x.calculation)p.calculation={markup:x.calculation.markup,overrides:x.calculation.overrides,...(x.calculation.sheetPrice===undefined?{}:{sheetPrice:x.calculation.sheetPrice}),...(x.calculation.vernissageMarkup===undefined?{}:{vernissageMarkup:x.calculation.vernissageMarkup}),...(x.calculation.baseMarkup===undefined?{}:{baseMarkup:x.calculation.baseMarkup}),...(x.calculation.baseVernissageMarkup===undefined?{}:{baseVernissageMarkup:x.calculation.baseVernissageMarkup}),...(x.calculation.cuttingEngine===undefined?{}:{cuttingEngine:x.calculation.cuttingEngine}),/* edgeGlue (кромка PUR) не читается — PUR не делаем, решение Макса 26.10.2026 */};
-  if(x.offer)p.offer={customer:x.offer.customer,price:x.offer.price,notes:x.offer.notes,...(x.offer.pendingIncluded===undefined?{}:{pendingIncluded:x.offer.pendingIncluded}),...(x.offer.itemPrices===undefined?{}:{itemPrices:x.offer.itemPrices})};const e=projectErrors(p,allowEmpty);if(e.length)throw Error(e[0]);return p;
+  if(x.offer)p.offer={customer:x.offer.customer,price:x.offer.price,notes:x.offer.notes,...(x.offer.pendingIncluded===undefined?{}:{pendingIncluded:x.offer.pendingIncluded}),...(x.offer.itemPrices===undefined?{}:{itemPrices:x.offer.itemPrices})};const e=projectErrors(p,allowEmpty).filter(e=>!allowDesignIssues||!isEditableDesignIssue(e));if(e.length)throw Error(e[0]);return p;
 }
 export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Project{
   const n=structuredClone(p),module=structuredClone(source);rekeySections(module,id);module.name=`Модуль ${p.modules.length+1}`;

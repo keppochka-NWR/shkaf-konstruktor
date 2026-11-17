@@ -42,7 +42,7 @@ test('смета сырого модуля: фурнитура по Базису
     counts:{legs:4,clips:2,confirmats:12,eccentrics:2,shelfHolders:4,dowels:6,drawers:1,lifts:1}};
   const e=estimate(project(rawModule(raw)));
   const q=(id:string)=>e.lines.find(l=>l.id===id)?.quantity??0;
-  assert.equal(e.lines.filter(l=>l.id.startsWith('hinge')).length,0,'петель в Базисе нет — в смете тоже');
+  assert.equal(e.lines.filter(l=>/^(hinge|premial-(?:alu-)?hinge:)/.test(l.id)).length,0,'петель в Базисе нет — в смете тоже');
   assert.equal(e.lines.find(l=>l.id==='kit'),undefined,'«мелочёвки корпуса» в Базисе нет — сырому модулю её не добавляем');
   assert.equal(q('kitchen-leg'),4);assert.equal(q('kitchen-clip'),2);assert.equal(q('confirmat-7x50'),12);assert.equal(q('eccentric'),2);
   assert.equal(q('shelf-holder'),4);assert.equal(q('dowel'),6);assert.equal(q('axis-pro:raw'),1);assert.equal(q('lift-mechanism'),1);
@@ -60,7 +60,7 @@ test('смета сырого модуля: фурнитура по Базису
   assert.equal(eg.lines.find(l=>l.id==='glass-shelf')?.quantity,Math.round(0.495*0.298*1000)/1000);
   // с петлями Базиса — ровно их число
   const e2=estimate(project(rawModule({...raw,counts:{hinges:3}})));
-  assert.equal(e2.lines.find(l=>l.id==='hinge')?.quantity,3);
+  assert.equal(e2.lines.find(l=>l.id==='hinge:premial')?.quantity,3);
   // слияние n3: у сырого модуля кухни Базиса «мелочёвки корпуса» нет ни с крепежом, ни без (k32) — правило «ничего сверх Базиса»
   // (n3-additions, n3-kitchens2, n3-runners, n3-wardrobes2); n3-base оставлял её при крепеже в проекте — решение за Максом
   assert.equal(e.lines.find(l=>l.id==='kit'),undefined);

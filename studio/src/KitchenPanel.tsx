@@ -1,3 +1,10 @@
+import {sinkCatalog,sinkByArticle} from './sinkCatalog';
+import {joinedUnderLightParts} from './joinedUnderLight';
+import {WorktopCutoutEditor} from './WorktopCutoutEditor';
+import {relocateCutoutRails,relocateCutoutRailsForEditing} from './cutoutRails';
+import {compactDecors} from './compactCatalog';
+import {surfaceCatalog} from './surfaceCatalog';
+import {applyKitchenGola} from './applyKitchenGola';
 import {SettingsTree} from './SettingsTree';
 import {isFreePanel} from './rawModule';
 import {MANAGER_PRICING} from './buildMode';
@@ -81,7 +88,7 @@ function Group({ icon, title, children, note, stages }: { icon: ReactNode; title
 
 /** Цвета модуля образцами (как выбор материала в общей панели): корпус, фасады, фасады ящиков — открывают каталог декоров. */
 function Colors({ m, material }: { m: Module; material: KitchenPanelProps["material"] }) {
-  const tex = (n: string) => catalog.find((c) => c.n === n)?.tex;
+  const tex = (n: string) => surfaceCatalog.find((c) => c.n === n)?.tex;
   const fill = (n: string) => n === "Белый" ? "#efeeeb" : n === "Графит" ? "#565956" : "#c4ad85";
   const rows: ["decor" | "facadeDecor" | "drawerFacadeDecor", string, string][] = [["decor", m.worktop ? "Декор столешницы" : "Корпус", m.decor]];
   if (m.doors) rows.push(["facadeDecor", "Фасады", m.facadeDecor]);
@@ -272,7 +279,7 @@ function CabinetPanel(props: KitchenPanelProps) {
     {role === "wall" && (() => {
       // подсветка рабочей зоны под навесным (kitchenUnderLight.ts): у модуля и всем навесным ряда; блок питания — один на ряд
       const rowIds = wallRowIds(project, placed.id), rowLit = rowIds.every((x) => project.modules.find((a) => a.id === x)?.module.kitchen?.underLight);
-      const led = list.find((p) => p.id === "kitchen-underlight");
+      const led = joinedUnderLightParts(placed,project.modules).find((p) => p.id === "kitchen-underlight");
       const run = (v: boolean, row: boolean) => { try { commit(setRowUnderLight(project, placed.id, v, row)); } catch (e) { window.dispatchEvent(new CustomEvent("studio-error", { detail: (e as Error).message })); } };
       return <Group icon={<Lightbulb size={15} />} title="Подсветка рабочей зоны" note={k.underLight ? "есть" : undefined}>
         <Check label="Подсветка рабочей зоны под модулем" checked={!!k.underLight} change={(v) => run(v, false)} />
@@ -371,6 +378,7 @@ function CabinetPanel(props: KitchenPanelProps) {
 
     {role === "base" && <Group icon={<Wrench size={15}/>} title="Тип открывания">
       {k.appliance!=='oven'&&<Check label="Профиль Gola" checked={!!m.gola} change={v=>modify(n=>setKitchenGola(n,v))}/>}
+      {k.appliance!=='oven'&&<><button className="outline full" onClick={()=>{const result=applyKitchenGola(project,!!m.gola);if(result.changed.length&&!commit(result.project))return;setInstallationError((result.changed.length?`Изменено корпусов: ${result.changed.length}.`:'Подходящие корпуса уже имеют выбранную настройку.')+(result.skipped.length?' Пропущены: '+result.skipped.map(x=>x.name+' — '+x.reason).join('; '):''));}}>{m.gola?'Применить Gola ко всем подходящим модулям':'Убрать Gola у всех подходящих модулей'}</button>{installationError&&<p role="status" className="field-note">{installationError}</p>}</>}
       {m.gola&&<p className="field-note">Верхний L-профиль; между ящиками — C-профили. Вырезы боковин и зазоры фасадов показаны в модели. Обычные ручки отключены.</p>}
       {!m.noHandles&&<button className="text-action" onClick={handles}>Выбрать ручки кухни</button>}
     </Group>}
@@ -407,8 +415,8 @@ function CabinetPanel(props: KitchenPanelProps) {
     {m.doors && !k.premialPullout && <Group icon={<Link2 size={15} />} title="Петли" open={stage === "facades"} note={k.hinges === false ? "нет, как в Базисе" : hingeCount + " шт."}>
       {/* флаг модуля из Базиса: действует и на двери, добавленные потом в студии, — поэтому виден и снимается здесь */}
       {k.hinges === false && <p className="field-note">Как в проекте Базиса: фасады без петель — петель нет ни в 3D, ни в присадке, ни в смете. Добавили или заменили дверь — <button className="text-action" onClick={() => modify((n) => { delete n.kitchen!.hinges; })}>Поставить петли</button></p>}
-      <label className="hardware-field">Бренд петель<select aria-label="Бренд петель кухонного модуля" value={m.hingeBrand ?? "gtv"} onChange={(e) => modify((n) => { const v = e.target.value as HingeBrand; if (v === "gtv") delete n.hingeBrand; else n.hingeBrand = v; })}>
-        {(Object.keys(HINGE_BRANDS) as HingeBrand[]).map((b) => <option key={b} value={b}>{hingeBrandLabel(HINGE_BRANDS[b])}{MANAGER_PRICING?' · '+HINGE_BRANDS[b].soft.price+' ₽/шт':''}</option>)}</select></label>
+      {m.alu?<p className="field-note"><strong>Premial ПРЕСТО АЛЮМ</strong> · специальные петли для алюминиевых фасадов. Артикул, количество и цена — в смете; обычные петли не учитываются.</p>:<>      <label className="hardware-field">Бренд петель<select aria-label="Бренд петель кухонного модуля" value={m.hingeBrand ?? "gtv"} onChange={(e) => modify((n) => { const v = e.target.value as HingeBrand; if (v === "gtv") delete n.hingeBrand; else n.hingeBrand = v; })}>
+        {(Object.keys(HINGE_BRANDS) as HingeBrand[]).map((b) => <option key={b} value={b}>{hingeBrandLabel(HINGE_BRANDS[b])}{MANAGER_PRICING?' · '+HINGE_BRANDS[b].soft.price+' ₽/шт':''}</option>)}</select></label></>}
       {door && doors.filter((d) => Math.abs(d.position[1] - door.position[1]) < 1).length === 1 && <label className="hardware-field">Петли одиночной створки<select aria-label="Сторона петель кухонного модуля" value={s.doorHinges?.[0] ?? s.hingeSide ?? m.hingeSide ?? "left"} onChange={(e) => modify((n) => { const side=e.target.value as "left"|"right"|"top"; n.sections[sIdx].doorHinges=[side]; if(side!=="top"){n.sections[sIdx].hingeSide=side;delete n.kitchenLift;} })}><option value="left">Слева</option><option value="right">Справа</option><option value="top">Сверху (подъёмный)</option></select></label>}
       {/* фактические высоты (ручные пересчитаны под текущую высоту фасада) — их показываем и от них считаем правки */}
       <div className="kitchen-chips" role="group" aria-label="Высоты петель">
@@ -484,11 +492,12 @@ function CabinetPanel(props: KitchenPanelProps) {
 
 function WorktopPanel(props: KitchenPanelProps) {
   const { m, modify, stage, material } = props, w = m.worktop!;
+  const modifyCutout=(edit:(n:Module)=>void)=>{try{const next=structuredClone(props.project);edit(next.modules.find(a=>a.id===props.placed.id)!.module);return props.commit(relocateCutoutRailsForEditing(next,props.placed.id));}catch(e){window.dispatchEvent(new CustomEvent('studio-error',{detail:(e as Error).message}));return false;}};
   const setW = (patch: Partial<WorktopSpec>) => modify((n) => { n.worktop = { ...n.worktop!, ...patch }; });
-  const setCut = (i: number, patch: Partial<WorktopSpec["cutouts"][number]>) => modify((n) => { const c = [...n.worktop!.cutouts]; c[i] = { ...c[i], ...patch }; n.worktop = { ...n.worktop!, cutouts: c }; });
+  const setCut = (i: number, patch: Partial<WorktopSpec["cutouts"][number]>) => modifyCutout((n) => { const c = [...n.worktop!.cutouts]; c[i] = { ...c[i], ...patch }; n.worktop = { ...n.worktop!, cutouts: c }; });
   // вырез — над модулем под мойку (варочная — над духовкой), если он под этой столешницей; иначе по центру
   const over = (kind: "sink" | "hob") => props.project.modules.find((a) => a.module.kitchen?.appliance === (kind === "sink" ? "sink" : "oven") && (a.rotation ?? 0) === (props.placed.rotation ?? 0) && a.x >= props.placed.x - 1 && a.x + a.module.width <= props.placed.x + m.width + 1);
-  const addCut = (kind: "sink" | "hob") => modify((n) => {
+  const addCut = (kind: "sink" | "hob") => modifyCutout((n) => {
     const [cw, cd] = kind === "sink" ? [500, 450] : [560, 490], below = over(kind);
     const x = below ? below.x - props.placed.x + (below.module.width - cw) / 2 : (n.width - cw) / 2;
     n.worktop = { ...n.worktop!, cutouts: [...n.worktop!.cutouts, { kind, x: Math.max(50, Math.min(n.width - 50 - cw, Math.round(x))), width: cw, depth: cd }] };
@@ -498,7 +507,7 @@ function WorktopPanel(props: KitchenPanelProps) {
     <Group icon={<RectangleHorizontal size={15} />} title="Столешница" open={stage !== "filling"}>
       <label className="hardware-field">Материал<select aria-label="Материал столешницы" value={WORKTOP_CHOICES.find((c) => c.material === w.material && c.thickness === w.thickness)?.id ?? w.material} onChange={(e) => { const c = WORKTOP_CHOICES.find((x) => x.id === e.target.value); modify((n) => setWorktopMaterial(n, c ? c.material : e.target.value as WorktopMaterial, c?.thickness)); }}>
         {WORKTOP_CHOICES.map((c) => <option key={c.id} value={c.id}>{c.label} мм · {worktopLabel({ ...w, material: c.material, thickness: c.thickness })}</option>)}
-        {w.material === "postforming" && w.thickness !== KITCHEN.worktopThickness && <option value="postforming">Постформинг (СКИФ) {w.thickness} мм</option>}<option value="ldsp">ЛДСП 16+16</option><option value="stone">Искусственный камень</option></select></label>
+        {w.material === "postforming" && w.thickness !== KITCHEN.worktopThickness && <option value="postforming">Постформинг (СКИФ) {w.thickness} мм</option>}{(w.material==="ldsp"||w.material==="stone")&&<option value={w.material} disabled>{w.material==="ldsp"?"ЛДСП 16+16":"Искусственный камень"} · из сохранённого проекта</option>}</select></label>
       <Num label="Длина" value={m.width} min={200} max={4100} change={(v) => modify((n) => { n.width = v; })} note="Длиннее 4100 — двумя частями со стыком" />
       <Num label="Глубина от стены" value={m.depth} min={400} max={1200} change={(v) => modify((n) => { n.depth = v; })} note={`Регламент ${KITCHEN.worktopDepth}`} />
       {WORKTOP_THICKNESS[w.material] ? <>{w.material === "acrylic" && <Check label="С подклейкой до 40 мм" checked={w.thickness === 40} change={(v) => modify((n) => setWorktopMaterial(n, "acrylic", v ? 40 : 12))} />}<p className="field-note">Толщина по материалу: {w.thickness} мм. Торец без кромки ЛДСП — обработка торца отдельной строкой сметы.</p></>
@@ -511,16 +520,19 @@ function WorktopPanel(props: KitchenPanelProps) {
         {w.waterfall && <Num label="Высота водопада" value={w.waterfall.drop} min={50} max={Math.max(50, Math.min(1500, waterfallFloorDrop(props.placed)))} change={(v) => setW({ waterfall: { ...w.waterfall!, drop: v } })} note={`До пола — ${waterfallFloorDrop(props.placed)} мм (от низа столешницы)`} />}
         <p className="field-note">Боковина толщиной {w.thickness} мм во всю глубину, стык со столешницей под 45°; площадь — в строке камня, стык и торец — отдельной строкой. Над нижним корпусом столешница удлиняется на толщину в сторону водопада.</p>
       </fieldset> : <p className="field-note">Водопад (боковины до пола) — только у компакта, акрила и кварца.</p>}
-      <Colors m={m} material={material} />
+      {w.material==='compact'?<label className="hardware-field">Декор компакт-плиты<select aria-label="Декор компакт-плиты" value={m.decor} onChange={e=>modify(n=>{n.decor=e.target.value;})}>{!compactDecors.some(d=>d.n===m.decor)&&<option value={m.decor} disabled>Прежний декор: {m.decor} — выберите компакт</option>}{['Premial','Eterno'].map(brand=><optgroup key={brand} label={brand}>{compactDecors.filter(d=>d.brand===brand).map(d=><option key={d.code} value={d.n} disabled={d.withdrawal}>{d.n}{d.withdrawal?' · выводится':''}</option>)}</optgroup>)}</select><p className="field-note">Компакт 12 мм, чёрный торец. Материал и обработка рассчитываются отдельно; ставка фасадных панелей сюда не применяется.</p></label>:<Colors m={m} material={material} />}
       <div className="kitchen-cuts">
         <span className="rails-title">Вырезы</span>
         {w.cutouts.map((c, i) => <div key={i} className="kitchen-cut">
+          <WorktopCutoutEditor project={props.project} top={props.placed} index={i} commit={props.commit}/>
           <div className="kitchen-chips" role="group" aria-label={"Вырез " + (i + 1)}>{(["sink", "hob"] as const).map((kind) => <button key={kind} type="button" aria-pressed={c.kind === kind} onClick={() => setCut(i, { kind, fixture:undefined, drainDrop:undefined, tap:undefined, plumbing:undefined })}>{kind === "sink" ? "Мойка" : "Варочная"}</button>)}
             <button type="button" className="danger" onClick={() => modify((n) => { n.worktop = { ...n.worktop!, cutouts: n.worktop!.cutouts.filter((_, j) => j !== i) }; })}>Убрать</button></div>
-          {c.kind==='sink'&&<><label className="hardware-field">Модель мойки<select aria-label="Модель мойки" value={c.fixture??''} onChange={e=>setCut(i,e.target.value?{fixture:SINK_ARTICLE,x:c.x+(c.width-560)/2,...(c.z===undefined?{}:{z:c.z+(c.depth-360)/2}),width:560,depth:360}:{fixture:undefined,drainDrop:undefined,tap:undefined,plumbing:undefined})}><option value="">Только вырез</option><option value={SINK_ARTICLE}>Premial PRODIGY 6045 · 210245 · 600×450</option></select></label>
-          {c.fixture&&<><Check label="Смеситель в 3D" checked={!!c.tap} change={v=>setCut(i,{tap:v})}/><Check label="Подводки воды и слив до задней кромки" checked={!!c.plumbing} change={v=>setCut(i,{plumbing:v,drainDrop:v?(c.drainDrop??420):c.drainDrop})}/><p className="field-note">Чаша 550×350×220 мм по каталогу. Вырез 560×360 мм, его допустимый диапазон в редакторе, толщина стенок, радиусы и сифон — оценка. Проверка пересечений компоновочная; перед изготовлением нужен заводской шаблон. <a href={SINK_SOURCE} target="_blank" rel="noreferrer">Карточка производителя</a></p><label><input type="checkbox" aria-label="Показать сифон для компоновки" checked={c.drainDrop!==undefined} onChange={e=>setCut(i,{drainDrop:e.target.checked?420:undefined,plumbing:e.target.checked?c.plumbing:undefined})}/> Выпуск и сифон (условная модель)</label>{c.drainDrop!==undefined&&<Num label="Низ сифона от верха столешницы" value={c.drainDrop} min={350} max={650} change={v=>setCut(i,{drainDrop:v})}/>}</> }</>}
+          {c.kind==='sink'&&<><label className="hardware-field">Модель мойки<select aria-label="Модель мойки" value={c.fixture??''} onChange={e=>{const selected=sinkByArticle(e.target.value);setCut(i,selected?{fixture:selected.article,x:c.x+(c.width-selected.cutWidth)/2,z:(c.z??(m.depth-c.depth)/2)+(c.depth-selected.cutDepth)/2,width:selected.cutWidth,depth:selected.cutDepth}:{fixture:undefined,drainDrop:undefined,tap:undefined,plumbing:undefined});}}><option value="">Только вырез</option>{sinkCatalog.map(item=><option key={item.article} value={item.article}>{item.name} · {item.article} · {item.width}×{item.depth}</option>)}</select></label>
+          {c.fixture&&<><Check label="Смеситель в 3D" checked={!!c.tap} change={v=>setCut(i,{tap:v})}/><Check label="Подводки воды и слив до задней кромки" checked={!!c.plumbing} change={v=>setCut(i,{plumbing:v,drainDrop:v?(c.drainDrop??420):c.drainDrop})}/><p className="field-note">{(()=>{const item=sinkByArticle(c.fixture);return item?<>{item.approxBowl?'Габарит изделия из каталога; чаша показана условно.':'Размер чаши по каталогу: '+item.bowlWidth+'×'+item.bowlDepth+'×'+item.bowlHeight+' мм.'} Вырез {item.cutWidth}×{item.cutDepth} мм — предварительная компоновка. Радиусы, сифон и монтажные зазоры условные; перед изготовлением сверить заводской шаблон. <a href={item.source} target="_blank" rel="noreferrer">Каталог поставщика</a></>:null;})()}</p><label><input type="checkbox" aria-label="Показать сифон для компоновки" checked={c.drainDrop!==undefined} onChange={e=>setCut(i,{drainDrop:e.target.checked?420:undefined,plumbing:e.target.checked?c.plumbing:undefined})}/> Выпуск и сифон (условная модель)</label>{c.drainDrop!==undefined&&<Num label="Низ сифона от верха столешницы" value={c.drainDrop} min={350} max={650} change={v=>setCut(i,{drainDrop:v})}/>}</> }</>}
           <Num label="От задней кромки" value={c.z??(m.depth-c.depth)/2} min={40} max={m.depth-40-c.depth} change={v=>setCut(i,{z:v})}/>
           <Num label="От левого торца" value={c.x} min={c.fixture?20:50} max={Math.max(c.fixture?20:50, m.width - (c.fixture?20:50) - c.width)} change={(v) => setCut(i, { x: v })} />
+          <Num label="От правого торца" value={m.width-c.x-c.width} min={c.fixture?20:50} max={m.width-c.width-(c.fixture?20:50)} change={v=>setCut(i,{x:m.width-c.width-v})}/>
+          <Num label="От передней кромки" value={m.depth-(c.z??(m.depth-c.depth)/2)-c.depth} min={40} max={m.depth-c.depth-40} change={v=>setCut(i,{z:m.depth-c.depth-v})}/>
           <Num label="Ширина выреза" value={c.width} min={200} max={Math.max(200, m.width - 100)} change={(v) => setCut(i, { width: v })} />
           <Num label="Глубина выреза" value={c.depth} min={200} max={Math.max(200, m.depth - 80)} change={(v) => setCut(i, { depth: v })} />
         </div>)}

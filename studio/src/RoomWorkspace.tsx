@@ -371,7 +371,6 @@ export function RoomWorkspace({
             return commit(d, true, true);
           }}
         />
-        {error && <p role="alert">{error}</p>}
         <input
           hidden
           ref={upload}

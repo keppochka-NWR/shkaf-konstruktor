@@ -169,6 +169,13 @@ def names_dir_components(path):
         # (k2-divider давал ложное «divider» в 320 строках web/). Исключение только этому заказу: другие имена с номером могут содержать фамилию.
         if base.startswith(("kitchen", "wardrobe-", "test-", "garderob-", "demo-", "order-", "dp-", "sketch-", "7176141-", "7176141v2-")):
             continue
+        # Reviewed synthetic regression fixtures, not client names. Exact stems only:
+        # do not suppress arbitrary projects containing these ordinary words.
+        if base in {"calypso-1611", "calypso-1611-v2", "calypso-1611-v3",
+                    "premial-legato-check", "premial-legato-demo",
+                    "regression-sectionless-kupe", "regression-sectionless-worktop",
+                    "two-rods-review"}:
+            continue
         out.append(base)
     return out
 

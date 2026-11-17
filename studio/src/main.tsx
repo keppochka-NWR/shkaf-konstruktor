@@ -1,4 +1,5 @@
 import React from "react";
+import {loadPremialSnapshot} from './premialRefresh';
 import { createRoot } from "react-dom/client";
 import {SafeBoundary} from "./SafeBoundary";
 import App from "./App";
@@ -15,6 +16,7 @@ import "./layout-fixes.css";
 import {installSelectGuard} from './selectGuard';
 installSelectGuard(); // стрелки в закрытом списке не применяют промежуточные пункты (интеграция 29.10)
 async function start(){
+  await loadPremialSnapshot();
   const query=new URLSearchParams(location.search),slug=query.get('project');
   if(query.get('rooms')==='1'){
     createRoot(document.getElementById('root')!).render(<React.StrictMode><SafeBoundary label="Студия"><RoomWorkspace workspaceKey={query.get('workspace')??''}/></SafeBoundary></React.StrictMode>);

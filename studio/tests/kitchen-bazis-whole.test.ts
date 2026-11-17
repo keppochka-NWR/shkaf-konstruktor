@@ -99,7 +99,7 @@ test('B4: фурнитура Базиса у сырых модулей и в р�
 
 test('B5: артикулы — по Базису: тип петель, полкодержатели, длина направляющих Firmax',{skip},()=>{
   const k14=kitchen('k14'),k22=kitchen('k22'),k30=kitchen('k30');
-  assert.equal(qty(k14,/^hinge-inset/),4,'k14 НМ: вкладные ×4');
+  assert.equal(qty(k14,/^(hinge-inset|hinge-bazis:вкладная:premial)/),4,'k14 НМ: вкладные ×4');
   assert.equal(qty(k22,/^hinge-bazis:под фальшпанель/),4);assert.equal(qty(k22,/^hinge-bazis:полунакладная/),2);
   assert.equal(qty(k14,/^firmax:.*L - 500/),6,'k14: L - 500 по Базису (не «490»), 6 компл. — 6 ящиков (было 10 шт по записям)');
   assert.ok(!estimate(k22).lines.some(l=>/Firmax (390|490) мм/.test(l.label)),'длина короба вместо артикула');

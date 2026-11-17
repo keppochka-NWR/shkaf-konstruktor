@@ -50,7 +50,7 @@ test('slides, opening and fastening swaps apply to every module and keep the pro
   assert.deepEqual(hardwareChoice(hidden).slides,['hidden-dtc-push']);
   assert.equal(drawerConfig(p.modules[0].module,p.modules[0].module.sections[0],0).slide,'ball');
   const push=setAllOpening(p,'push');assert.ok(push.modules.every(a=>a.module.doorOpen==='push'));
-  const ep=estimate(push);assert.ok(ep.lines.some(l=>l.id.startsWith('push-latch')));
+  const ep=estimate(push);assert.ok(ep.lines.some(l=>l.id==='premial-push:070501'));
   const ecc=setAllFastening(p,'eccentric');assert.ok(ecc.modules.every(a=>a.module.fastening==='eccentric'));
   assert.ok(estimate(ecc).lines.some(l=>l.id==='eccentric'));
 });

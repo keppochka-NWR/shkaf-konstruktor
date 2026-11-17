@@ -58,7 +58,7 @@ export function moduleQuote(p: Project, total: number | null, model: "markup" | 
   if (total === null || !Number.isFinite(total) || total <= 0 || !p.modules.length) return null;
   const own: number[] = [], pending: boolean[] = [], sheets: number[] = [];
   for (const a of p.modules) {
-    const v = ownValue({ ...p, modules: [a] }, model);
+    const v = ownValue({ ...p, premialExtras:undefined, modules: [a] }, model);
     if (!v) return null;
     own.push(v.value); pending.push(v.pending); sheets.push(v.sheets);
   }

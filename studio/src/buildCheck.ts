@@ -1,10 +1,12 @@
-import type { Project } from "./project";
+import { projectErrors, type Project } from "./project";
 import { collisionWarnings } from "./roomWarnings";
 
 /** Итог проверки выбранного корпуса внизу правой панели («Построение»): та же проверка пересечений, что в панели
  *  «Пересечения деталей» (collisionWarnings) — раньше подпись «Габариты проверены» стояла всегда, даже при пересечениях (аудит Б5). */
 export type BuildCheck = { ok: boolean; title: string; detail: string };
 export function buildCheck(project: Project, moduleId: string): BuildCheck {
+  const issues=projectErrors(project,true);
+  if(issues.length)return {ok:false,title:"Проект требует исправления",detail:issues[0]};
   const one = project.modules.filter((a) => a.id === moduleId);
   const hits = one.length ? collisionWarnings({ ...project, modules: one }) : [];
   if (!hits.length) return { ok: true, title: "Габариты проверены", detail: "Детали помещаются в лист, пересечений нет" };

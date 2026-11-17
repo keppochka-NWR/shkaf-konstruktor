@@ -127,7 +127,7 @@ test('округление до 100 ₽ один раз по итогу: час�
   const retailHw=Math.round(k.lines.filter(l=>l.retail&&lineGroup(l.id)==='hardware').reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   assert.ok(retailHw>0);assert.equal(k.split.hardware,Math.round(k.split.hardwareCost*k.markup)+retailHw);
   // решение 16.10.2026: позиции кухни без счёта — «после финального расчёта конструктором», итог — по известным позициям
-  assert.equal(k.missing.length,0);assert.ok(k.pending.length>0);assert.equal(k.byMarkup,k.byMarkupKnown);assert.equal(k.byMarkupKnown%100,0);assert.ok(k.byMarkupKnown>0);
+  assert.equal(k.missing.length,0);assert.ok(k.pending.length>0);assert.equal(k.byMarkup,k.byMarkupKnown);assert.equal((k.byMarkupKnown-k.retailExtras)%100,0);assert.ok(k.byMarkupKnown>0);
   assert.match(estimateCSV(kitchenProject(),k),/Позиции после финального расчёта конструктором: \d+/);
 });
 

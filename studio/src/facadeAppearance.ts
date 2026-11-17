@@ -10,13 +10,14 @@ export function changeFacadeKind(m:Module,kind:FacadeKind,{keepThickness=false}:
  const n=structuredClone(m);
  if(kind===facadeKind(n))return n;
  if(!keepThickness||n.vernissage)delete n.facadeT;
+ delete n.drawerFacadeT;
  delete n.vernissage;delete n.alu;delete n.aluDrawers;delete n.facadeMaterial;
  if(kind==='vernissage'){n.vernissage={...DEFAULT_VERNISSAGE};n.facadeT=DEFAULT_VERNISSAGE.thickness;}
  if(kind==='alu')n.alu={...DEFAULT_ALU};
  if(kind==='external')n.facadeMaterial='external';
  return n;
 }
-const keys=['facadeDecor','drawerFacadeDecor','facadeMaterial','alu','aluDrawers','vernissage','facadeT','edgeFacade'] as const;
+const keys=['facadeDecor','drawerFacadeDecor','facadeMaterial','alu','aluDrawers','vernissage','facadeT','drawerFacadeT','edgeFacade'] as const;
 const eligible=(m:Module)=>!m.raw&&!m.bazis&&!m.kupe&&!m.worktop&&!m.desk&&parts(m).some(p=>p.facadeSide||p.role==='door'||p.id.endsWith(':facade'));
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 /** Appearance only. Never enables doors or copies dimensions, opening or drawer layout.

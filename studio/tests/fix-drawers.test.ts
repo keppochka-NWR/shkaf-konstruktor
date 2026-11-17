@@ -87,7 +87,7 @@ test('правка 2: один выкатной ящик на всю секци�
   const base=initialModule();base.height=2000;
   const p0=newProject(base),p=addUpperModule(p0,p0.modules[0].id),a=p.modules[1].module,sid=a.sections[0].id;
   assert.ok(parts(a).some(x=>x.role==='door'),'антресоль с дверью');
-  const hinges0=estimate(p).lines.filter(l=>/^hinge/.test(l.id)).reduce((s,l)=>s+l.quantity,0);
+  const hinges0=estimate(p).lines.filter(l=>/^(hinge|premial-(?:alu-)?hinge:)/.test(l.id)).reduce((s,l)=>s+l.quantity,0);
   const m=structuredClone(a);fullSectionDrawer(m,sid);
   const ps=parts(m),b=boxes(m)[0],f=ps.find(x=>x.id===sid+':drawer:0:facade')!;
   assert.deepEqual(validate(m),[]);assert.equal(m.sections[0].drawers,1);
@@ -98,7 +98,7 @@ test('правка 2: один выкатной ящик на всю секци�
   const len=m.sections[0].drawerConfigs![0].length;assert.equal(len,[...SLIDES.ball.lengths].reverse().find(l=>l<=m.depth-25),'направляющая — самая длинная по глубине');
   const q=newProject(m);q.modules[0]={...q.modules[0],module:m};
   const kits=estimate(q).lines.filter(l=>l.id.startsWith('slide:'));assert.equal(kits.reduce((s,l)=>s+l.quantity,0),1);assert.ok(kits.every(l=>l.unit==='компл'));
-  const pp=structuredClone(p);pp.modules[1].module=m;assert.ok(estimate(pp).lines.filter(l=>/^hinge/.test(l.id)).reduce((s,l)=>s+l.quantity,0)<hinges0,'петли двери антресоли ушли из сметы');
+  const pp=structuredClone(p);pp.modules[1].module=m;assert.ok(estimate(pp).lines.filter(l=>/^(hinge|premial-(?:alu-)?hinge:)/.test(l.id)).reduce((s,l)=>s+l.quantity,0)<hinges0,'петли двери антресоли ушли из сметы');
   // высота антресоли меняется — ящик по-прежнему на всю секцию
   for(const h of [450,350]){const n=structuredClone(m);n.height=h;fitDrawersAfterResize(n,m);assert.deepEqual(validate(n),[]);const nf=faces(n)[0];assert.ok(Math.abs(hi(nf)-facadeTop(n))<0.01&&Math.abs(lo(nf)-facadeBottom(n))<0.01,'антресоль '+h);assert.ok(!parts(n).some(x=>x.role==='door'));}
   // шаблон меню «Наполнение › Ящик на всю секцию» — то же

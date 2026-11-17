@@ -1,0 +1,10 @@
+import {chromium} from '@playwright/test';import {execFileSync} from 'node:child_process';import path from 'node:path';
+const base='https://desktop-8aqbtbm.tailddcb43.ts.net';
+const command="[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Content -Raw -Encoding UTF8 'C:\\YoConstructorTest-20261114\\access.txt'";
+const access=execFileSync('ssh',['-o','BatchMode=yes','-i',path.join(process.env.USERPROFILE,'.ssh/home_server_ed25519'),'макас@100.124.96.64','powershell -NoProfile -EncodedCommand '+Buffer.from(command,'utf16le').toString('base64')],{encoding:'utf8'});
+const browser=await chromium.launch({headless:true,channel:'chrome'});const context=await browser.newContext({viewport:{width:1500,height:1000}});
+const login=await context.request.post(base+'/api/studio/auth/login',{headers:{Origin:base,'X-Studio-Request':'1'},data:{login:'max',password:access.match(/Пароль:\s*(\S+)/)[1]}});if(!login.ok())throw Error('Login failed');
+const page=await context.newPage();await page.goto(base+'/studio/?rooms=1&workspace=assistant-main-check-1711');await page.getByRole('button',{name:'Помощник · анализ ДП',exact:true}).click();await page.getByLabel('Сообщение помощнику',{exact:true}).fill('Проверка чата. Ответь: готов помочь. Ничего в проекте не меняй.');
+await page.getByRole('button',{name:'Отправить',exact:true}).click();
+await page.waitForResponse(r=>r.url().endsWith('/api/studio/assistant')&&r.request().method()==='POST',{timeout:250000});
+await page.waitForTimeout(800);const pane=page.getByLabel('Помощник конструктора',{exact:true});const text=await pane.innerText();if(text.includes('Not Found')||text.includes('Astra не вернула'))throw Error('Assistant error');await pane.screenshot({path:'reports/assistant-main-live.png'});console.log(text);await browser.close();

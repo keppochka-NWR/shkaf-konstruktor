@@ -28,7 +28,7 @@ test('estimate is complete for the default project and includes hinges, kit and 
   const p=newProject(),e=estimate(p);
   assert.equal(e.missing.length,0,e.missing.map(l=>l.label).join('; '));
   assert.ok(e.retail!==null&&e.retail>0);
-  const hinge=e.lines.find(l=>l.id==='hinge')!;assert.equal(hinge.unitPrice,HINGE.price);assert.equal(hinge.label,HINGE.label);
+  const hinge=e.lines.find(l=>l.id.startsWith('premial-hinge:'))!;assert.equal(hinge.unitPrice,235.43);assert.match(hinge.label,/044408/);assert.equal(hinge.retail,true);
   const kit=e.lines.find(l=>l.id==='kit')!;assert.equal(kit.quantity,p.modules.length);assert.equal(kit.unitPrice,HARDWARE_KIT.price);
   assert.ok(e.lines.some(l=>l.id.startsWith('slide:ball:')&&l.unitPrice!==null));
 });
@@ -275,7 +275,7 @@ test('workshop frames: feet without plinth, no bottom, rails, inset push doors, 
   // без дна и без нижней стяжки — ошибка
   const g=structuredClone(f);g.rails=[];assert.ok(validate(g).some(x=>x.includes('стяжкой')));
   // заказ 6990041 01: вкладные фасады push, планка под крышей 60, задняя стенка ЛДСП
-  const k=initialModule();k.width=852;k.height=1455;k.depth=240;k.plinthHeight=0;k.backType='board';k.doorMount='inset';k.doorOpen='push';k.topStrip=60;k.sections=[{...section(),shelves:[0.25,0.5,0.75],drawers:0,rod:false}];
+  const k=initialModule();k.hingeBrand='gtv';k.width=852;k.height=1455;k.depth=240;k.plinthHeight=0;k.backType='board';k.doorMount='inset';k.doorOpen='push';k.topStrip=60;k.sections=[{...section(),shelves:[0.25,0.5,0.75],drawers:0,rod:false}];
   assert.equal(validate(k).length,0,validate(k).join('; '));
   const kp=parts(k),doors=kp.filter(p=>p.role==='door');
   assert.equal(doors.length,2);assert.ok(doors.every(d=>d.position[2]+d.size[2]/2<=240+0.01),'inset doors flush with the front');

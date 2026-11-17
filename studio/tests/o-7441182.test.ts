@@ -30,7 +30,7 @@ test("7441182: цоколь утоплен — цоколь на 50 от пер�
 });
 
 test("7441182: петли без доводчика — своя строка сметы (GTV SOLID PLUS 115 ₽), push и с доводчиком — как было", () => {
-  const soft = estimate(proj(box())), simple = estimate(proj(box({ hingeSoft: false })));
+  const soft = estimate(proj(box({hingeBrand:"gtv"}))), simple = estimate(proj(box({ hingeBrand:"gtv", hingeSoft: false })));
   const h = simple.lines.find((l) => l.id === "hinge-simple")!;
   assert.ok(h && h.unitPrice === 115 && h.quantity === 4, JSON.stringify(h));
   assert.ok(!simple.lines.some((l) => l.id === "hinge"), "петель с доводчиком нет");

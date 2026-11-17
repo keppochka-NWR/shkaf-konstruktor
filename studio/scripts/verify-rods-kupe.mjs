@@ -1,0 +1,14 @@
+import {chromium} from '@playwright/test';
+import http from 'node:http';import fs from 'node:fs';import path from 'node:path';
+const root=path.resolve('../../Calc/kupe');const server=http.createServer((req,res)=>{const f=path.join(root,new URL(req.url,'http://localhost').pathname==='/'?'index.html':decodeURIComponent(new URL(req.url,'http://localhost').pathname));if(!f.startsWith(root)){res.writeHead(403).end();return;}try{res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css','.html':'text/html'})[path.extname(f)]||'application/octet-stream');res.end(fs.readFileSync(f));}catch{res.writeHead(404).end();}});await new Promise(r=>server.listen(5198,'127.0.0.1',r));
+const browser=await chromium.launch({headless:true,channel:'chrome'});const page=await browser.newPage({viewport:{width:1600,height:1000}});await page.goto(process.env.KUPE_URL||'http://127.0.0.1:5198/');await page.locator('#bulkFillSel option').first().waitFor({state:'attached'});
+const names=await page.locator('#bulkFillSel option').allTextContents();if(names.some(n=>/(?:Стекло|Зеркало).*\b[56]мм/.test(n)))throw Error('Thick glass selectable');if(!names.some(n=>n.includes('Стекло прозрачное 4мм')))throw Error('4mm missing');await page.getByRole('button',{name:'Рассчитать стоимость',exact:true}).click();await page.screenshot({path:'reports/kupe-4mm-use.png'});
+if(process.env.FIXTURE_ROOT){const {readFileSync}=await import('node:fs');const {join}=await import('node:path');await page.route('**/local-projects/*.json',route=>route.fulfill({contentType:'application/json',body:readFileSync(join(process.env.FIXTURE_ROOT,new URL(route.request().url()).pathname.split('/').pop()))}));}
+await page.goto((process.env.REVIEW_URL||'http://127.0.0.1:5197/')+'?project=two-rods-review');await page.getByRole('button',{name:'Дальше: Построение мебели',exact:true}).click();
+await page.getByRole('button',{name:'Наполнение',exact:true}).click();
+await page.getByLabel('Все настройки',{exact:true}).check();
+console.log(await page.locator('details[data-setting=Штанги]').evaluate(el=>{let a=[];for(let p=el;p;p=p.parentElement)a.push([p.tagName,p.className,p.getAttribute('data-settings-category')]);return a;}));
+await page.locator('details[data-settings-category=Наполнение] > summary').click();
+await page.locator('details[data-setting=Штанги] > summary').click();
+const toggle=page.getByRole('switch',{name:'Вешалка в два яруса',exact:true});await toggle.scrollIntoViewIfNeeded();if(await toggle.getAttribute('aria-checked')!=='true')throw Error('tiers not restored');await toggle.click();if(await toggle.getAttribute('aria-checked')!=='false')throw Error('disable failed');await toggle.click();if(await toggle.getAttribute('aria-checked')!=='true')throw Error('enable failed');await page.screenshot({path:'reports/two-rods-use.png'});
+console.log(JSON.stringify({glassOptions:names.length,onlyUpTo4:true,tierToggle:true}));await browser.close();server.close();

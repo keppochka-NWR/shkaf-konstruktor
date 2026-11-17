@@ -13,7 +13,7 @@ import { roomSummary, handoffHTML, bazisExport } from "./RoomDeliverables";
 import { freePanel, placeFreePanel, type FreePanelInput } from "./freePanels";
 import { catalog } from "./catalog";
 import { saveFile } from "./exports";
-import { estimate } from "./pricing";
+import { previewPrice } from "./previewPrice";
 import { RoomSurveyEditor } from "./RoomSurveyEditor";
 import { VernissagePicker } from "./VernissagePicker";
 import { DEFAULT_VERNISSAGE, sideFacadeSpec } from "./facadesVernissage";
@@ -242,7 +242,7 @@ export function RoomTools({
               <strong>{v.title}</strong> {v.approvedAt ? "согласован" : "эскиз"}{" "}
               ·{" "}
               {v.project.modules.length
-                ? (estimate(v.project).retail ?? "неполная цена")
+                ? (previewPrice(v.project) ?? "неполная цена")
                 : 0}{" "}
               ₽{" "}
               <button onClick={() => run(() => loadVariant(document, v.id))}>

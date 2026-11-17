@@ -5,13 +5,13 @@ import { Plus, X, Users, Download, Pencil, Copy, FilePlus2, CookingPot } from "l
 import { kitchenProject } from "./kitchenProject";
 import { RoomWorkspace } from "./RoomWorkspace";
 import { type RoomDocument } from "./roomDocument";
-import { estimate } from "./pricing";
+import { previewPrice } from "./previewPrice";
 import { saveFile } from "./exports";
 import { activeClient, addClient, addProject, clientBundle, clientTotal, importBundle, loadIndex, projectStorageKey, readClientRooms, removeProject, renameClient, renameProject, saveIndex, setPrice, switchClient, switchProject, type ClientBundle, type ClientIndex } from "./clientIndex";
 import "./client-bar.css";
 
 const rub = (n: number) => n.toLocaleString("ru-RU") + " ₽";
-function documentPrice(d:RoomDocument):number|null {let total=0;for(const r of d.rooms){const price=r.project.modules.length?estimate(r.project).retail:0;if(price===null)return null;total+=price;}return total;}
+function documentPrice(d:RoomDocument):number|null {let total=0;for(const r of d.rooms){const price=previewPrice(r.project);if(price===null)return null;total+=price;}return total;}
 function priceOf(key: string): number | null { try { return documentPrice(readClientRooms(localStorage,key)); } catch { return null; } }
 
 export function ClientWorkspace() {

@@ -38,7 +38,7 @@ test('«разные»: у отмеченных разный декор фаса
   assert.equal(groupFacadeValue(p,['w1','w2','w3'],'facadeDecor').value,null,'декор разный — «разные»');
   assert.equal(groupFacadeValue(p,['w1','w3'],'facadeDecor').value,src.facadeDecor);
   assert.equal(groupFacadeValue(p,['w1','w2','w3'],'hingeBrand').value,null);
-  assert.equal(groupFacadeValue(p,['w1','w2'],'hingeBrand').value,'gtv');
+  assert.equal(groupFacadeValue(p,['w1','w2'],'hingeBrand').value,'premial');
   const all=groupFacadeValue(p,ALL,'handle');assert.equal(all.total,6);assert.equal(all.applicable,3,'ручки дверей — только у шкафов (комод без дверей, стеллаж, купе — нет)');
 });
 
@@ -125,7 +125,7 @@ test('«Редактор фасадов» с областью «Выделенн
 test('ни один не подходит — понятная ошибка, проект не меняется; поле без значения у корпуса — ничего не меняет',()=>{
   const p=room();
   assert.throws(()=>applyGroupFacade(p,['sh','ku'],'hingeBrand','blum'),/Не применено ни к одному.*К 2 модулям не применено/);
-  const same=applyGroupFacade(p,['w1'],'hingeBrand','gtv');assert.deepEqual(same.changed,[]);assert.equal(same.project,p);
+  const same=applyGroupFacade(p,['w1'],'hingeBrand','premial');assert.deepEqual(same.changed,[]);assert.equal(same.project,p);
   // у каждого поля есть подпись и правка
   for(const f of Object.values(GROUP_FIELDS)){assert.ok(f.label);assert.equal(typeof f.apply,'function');}
   // дверей 3 шкафов — по ручке на створку после группы

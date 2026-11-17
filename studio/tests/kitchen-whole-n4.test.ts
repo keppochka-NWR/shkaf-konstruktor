@@ -108,7 +108,7 @@ test('Firmax — комплектами по ящикам (правило Мак
 
 test('петли: тип Базиса «под фальшпанель», «полунакладная», «накладная 180гр» — без цены накладной (уточнить), накладная — по счёту',{skip:!has('k22')},()=>{
   const k22=kitchen('k22');
-  const typed=lines(k22,/^hinge-bazis:/);
+  const typed=lines(k22,/^hinge-bazis:(?!накладная:|вкладная:)/);
   assert.ok(typed.length>=2);
   assert.ok(typed.every(l=>l.unitPrice===null&&/уточнить/.test(l.source)),'цена типа не подставлена от накладной');
   assert.ok(lines(k22,/^hinge$/).every(l=>l.unitPrice===157),'накладная GTV — 157 ₽ по счёту');

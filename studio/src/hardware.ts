@@ -14,9 +14,13 @@ export const SLIDES = {
 } as const;
 /** Петли распашных фасадов: бренд выбирает клиент (решение Макса 06.10.2026: GTV, Pulse, Blum). soft — с доводчиком (фасады с ручками),
  *  free — без пружины под толкатель push-to-open. Цены — закупка, оценки помечены явно. */
-export type HingeBrand = 'gtv' | 'pulse' | 'blum';
+export type HingeBrand = 'premial' | 'gtv' | 'pulse' | 'blum';
 /** simple — без доводчика, с пружиной (самозакрывающаяся; Module.hingeSoft = false, заказ 7441182). */
 export const HINGE_BRANDS: Record<HingeBrand, { label: string; note: string; soft: { label: string; price: number; source: string }; free: { label: string; price: number; source: string }; simple: { label: string; price: number; source: string } }> = {
+  premial: {label:'Premial',note:'основная фурнитура · ПРЕСТО',
+    soft:{label:'Premial ПРЕСТО 3D · 044408',price:181.1,source:'https://allpremial.ru/catalog/presto-3d-s-dovodchikom/57760/ · цена сайта 16.11.2026'},
+    free:{label:'Premial ПРЕСТО беспружинная · 044422',price:117.7,source:'https://allpremial.ru/catalog/presto-3d-bespruzhinnye/58194/ · цена сайта 16.11.2026'},
+    simple:{label:'Premial ПРЕСТО без доводчика · 044421',price:106.4,source:'https://allpremial.ru/catalog/presto-3d-bez-dovodchika/58193/ · цена сайта 16.11.2026'}},
   gtv: { label: 'GTV', note: 'стандарт цеха',
     soft: { label: 'Петля GTV SOLID PRO с доводчиком', price: 157, source: 'Счёт Мега-Трейд 6219, 2026 · стандарт цеха при ручках' },
     free: { label: 'Петля GTV без пружины', price: 80, source: 'ФАМ: петля GTV ZP-COCA клиповая без пружины' },

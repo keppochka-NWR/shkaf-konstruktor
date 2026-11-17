@@ -7,12 +7,14 @@ test('right-click rehangs the selected facade and supports undo redo reload',asy
  await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
  await page.getByRole('button',{name:'Спереди',exact:true}).click();
  await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();
+ await page.getByRole('button',{name:'Показать размеры',exact:true}).click();
  await page.waitForTimeout(700);const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;
  await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});
- await page.getByRole('menuitem',{name:/^Фасад\./}).click();
+ // Right-clicking the face opens its actions directly.
+ await expect(page.getByRole('menu',{name:'Действия: Фасад',exact:true})).toHaveCount(1);
  await expect(page.getByRole('menuitem',{name:/^Открывание\./})).toBeVisible();
  await page.getByRole('menuitem',{name:/^Открывание\./}).click();
- await page.getByRole('menuitem',{name:/^Петли справа\./}).click();
+ await page.getByRole('menuitem',{name:/^Петли справа\. Только выбранный фасад/}).click();
  const hinges=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules[0].module.sections[0].doorHinges);
  expect((await hinges())[0]).toBe('right');await page.keyboard.press('Control+z');expect(await hinges()).toBeUndefined();
  await page.keyboard.press('Control+y');expect((await hinges())[0]).toBe('right');await page.reload();expect((await hinges())[0]).toBe('right');
@@ -118,10 +120,10 @@ test('drawer front increase shifts fixed upper drawers as one undoable command',
  await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await openSettings(page,'Ящики');
  const input=page.getByLabel('Высота фасада ящика',{exact:true});await input.fill('350');await input.press('Enter');
  const values=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules[0].module.sections[0].drawerConfigs);
- expect((await values()).map((c:any)=>c.y)).toEqual([0,353,553]);
+ expect((await values()).map((c:any)=>c.y)).toEqual([0,286,486]);await expect(page.getByLabel('Высота фасада ящика',{exact:true})).toHaveValue('350');
  await page.keyboard.press('Control+z');expect((await values()).map((c:any)=>c.y)).toEqual([0,200,400]);
- await page.keyboard.press('Control+y');expect((await values()).map((c:any)=>c.y)).toEqual([0,353,553]);
- await page.reload();expect((await values()).map((c:any)=>c.y)).toEqual([0,353,553]);
+ await page.keyboard.press('Control+y');expect((await values()).map((c:any)=>c.y)).toEqual([0,286,486]);
+ await page.reload();expect((await values()).map((c:any)=>c.y)).toEqual([0,286,486]);
 });
 
 test('ordinary URL: empty start, last module deletion, undo, reload and re-add',async({page})=>{
@@ -396,7 +398,7 @@ test('Premial sink: real cutout, persistence, invalid edit and small viewport ca
  await page.getByRole('button',{name:'Вписать модель',exact:true}).click();
  const viewport=page.locator('.viewport');
  expect(await viewport.evaluate(e=>e.scrollTop)).toBe(0);
- const r=await viewport.boundingBox(),c=await page.locator('.scene canvas').boundingBox();/* 31.10: холст под полосой видов */expect(Math.abs(r!.y+44-c!.y)).toBeLessThan(1);
+ const r=await viewport.boundingBox(),c=await page.locator('.scene canvas').boundingBox();/* 31.10: холст под полосой видов */const toolbar=await page.getByRole('toolbar',{name:'Вид и режим сцены',exact:true}).boundingBox();expect(Math.abs(toolbar!.y+toolbar!.height-c!.y)).toBeLessThan(2);expect(c!.y).toBeGreaterThan(r!.y);
  await page.setViewportSize({width:1600,height:1000});
  const tip=page.getByRole('button',{name:'Понятно',exact:true});if(await tip.isVisible())await tip.click();
  await page.getByRole('button',{name:'Вписать модель',exact:true}).click();

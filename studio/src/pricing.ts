@@ -1,3 +1,9 @@
+import {sinkByArticle} from './sinkCatalog';
+import {premialAluHingeQuote} from './premialPricing';
+import {joinedUnderLightParts} from './joinedUnderLight';
+import {premialSlideQuote,premialClientPrice,premialHingeQuote,premialArticleQuote} from './premialPricing';
+import {premialCatalog} from './premialCatalog';
+import {facadePanel} from './facadePanels';
 import {legatoPriceLines} from './legato';
 import {FRAME_LABEL,metalFramePriceKey} from './metalFrame';
 import {facadeHandleId} from './model';
@@ -44,11 +50,11 @@ export type PriceSettings={markup:number;overrides:Record<string,number>;sheetPr
 /** Коэффициент сметы по умолчанию (клиенту = закупка × коэффициент); в проекте — calculation.markup. */
 export const MARKUP_DEFAULT=2.2;
 export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (модель 08.2026): цена клиенту за лист ЛДСП с фурнитурой и работой
-/** Решение Макса 10.10.2026: фасады «Вернисаж» — покупное изделие, цена клиенту = закупка по прайсу Вернисажа × 1,6. Свой коэффициент
+/** Решение Макса 16.11.2026: фасады «Вернисаж» — покупное изделие, цена клиенту = закупка по прайсу Вернисажа × 2. Свой коэффициент
  *  вместо общего (2,2) в обеих моделях цены: «себестоимость × коэффициент» и «цена за лист» (сверху листов). Строки Вернисажа — фасады
  *  и присадка под петли по прайсу Вернисажа (id «vernissage…»); в смете у них закупка, в цене клиента — × коэффициент Вернисажа.
  *  В проекте можно поменять (calculation.vernissageMarkup). */
-export const VERNISSAGE_MARKUP_DEFAULT=1.6;
+export const VERNISSAGE_MARKUP_DEFAULT=2;
 export const isVernissageLine=(id:string)=>id.startsWith('vernissage');
 /** pending — позиция без цены «после финального расчёта конструктором» (pendingPrices.ts, решение Макса 16.10.2026): не в missing, в итог не входит. */
 /** Склейка составного фальша 32 мм — розничная цена цеха за м² (решение Макса 16.10.2026). */
@@ -96,7 +102,7 @@ const MAX_SRC_2610 = 'Макс 26.10.2026: цена клиенту (розниц
 export const edgeHandleRetail = (lenMm: number) => Math.round(EDGE_HANDLE_RETAIL_PER_MM * lenMm);
 /** Петля с доводчиком бренда: Blum 110° — розница Макса (800 ₽), остальные — закупка из hardware.ts. */
 function softHinge(bk: string, hb: { soft: { price: number; source: string } }): { price: number; source: string; retail: boolean } {
-  return bk === 'blum' ? { price: HINGE110_RETAIL, source: MAX_SRC + ': петля Blum 110° — ' + HINGE110_RETAIL + ' ₽/шт', retail: true } : { price: hb.soft.price, source: hb.soft.source, retail: false };
+  return bk==='premial'?{...premialHingeQuote(false,'soft'),price:premialHingeQuote(false,'soft').price!}:bk === 'blum' ? { price: HINGE110_RETAIL, source: MAX_SRC + ': петля Blum 110° — ' + HINGE110_RETAIL + ' ₽/шт', retail: true } : { price: hb.soft.price, source: hb.soft.source, retail: false };
 }
 export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean;pending?:boolean;
   /** розница Лемана как есть, если отличается от цены строки (публичная сборка: цена строки запечена × коэффициент) — для «цены за лист» */
@@ -155,6 +161,7 @@ export const SHOP_WORK_LDSP_SHEET=3500;
 export const SHOP_WORK_HDF_SHEET=2000;
 export type DecorPrice={price:number|null;source:string};
 export function decorPrice(name:string):DecorPrice{
+  if(facadePanel(name))return {price:null,source:"Мебельная панель: закупочная цена требует подтверждения; клиентская цена — отдельной строкой за лист с раскроем"};
   if(sheets[name]!==undefined)return {price:sheets[name],source:'База закупки СФЗ / Победа'};
   const c=catalog.find(c=>c.n===name);
   if(!c)return {price:null,source:'Декор вне каталога Lamarty; цену уточнить'};
@@ -202,8 +209,7 @@ export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'leng
     return {price:est((1040+steps*50)*(sys.motion==='soft-close'?1.05:1)),source:'Оценка от DTC F10D300H (1040 ₽ за 300 мм), +50 ₽ на каждые 50 мм; подтвердить счётом ФАМ',label};
   }
   if(sys.brand==='premial'){
-    const soft=1729+(L-400)/50*60;
-    return {price:est(sys.motion==='soft-close'?soft:soft*0.95),source:'Оценка: Premial Morendo с доводчиком 400 мм — 1729 ₽ (розница allpremial.ru, 10.2026), ±60 ₽ на 50 мм'+(sys.motion==='push'?', push ≈ −5 %':'')+'; подтвердить закупкой',label};
+    return premialSlideQuote(L,sys.motion);
   }
   const uni=hidden[L]?.price??(1100+steps*50);
   return {price:est(sys.motion==='soft-close'?uni:uni*0.95),source:'Оценка по классу Unihopper (1000–1250 ₽); цены в счетах нет, подтвердить',label};
@@ -228,10 +234,10 @@ export type LineGroup='material'|'hardware';
  *  столешницы, стеновые панели) и детали, не попавшие в лист. Всё остальное — фурнитура (аудит 11.10.2026: покупные шли в «Фурнитуру»). */
 /** Фигурные детали (shapes.ts, задача 29.10.2026): цены работы «вырез / сложный выпил» и «кромка по кривой» Макс ещё не назвал. */
 export const CUT_WORK_SRC='Цех: цена работы не задана — вопрос Максу (фигурные детали 29.10.2026)';
-export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|cut-work$|edge|small$|work$|work-hdf$|falsh-glue$|seat-glue$|worktop-glue$|glue32$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
+export function lineGroup(id:string):LineGroup{return /^(facade-panel:|sheet:|mat:|cut-work$|edge|small$|work$|work-hdf$|falsh-glue$|seat-glue$|worktop-glue$|glue32$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
 /** Покупные материалы (фасады МДФ, цоколь из фасадного, столешницы, стеновые панели, не ЛДСП-материалы Базиса): в раскрой ЛДСП не идут,
  *  в цене «за лист» их нет. Сумма закупки × коэффициент — для включения в bySheet сверху листов; пока не вызывается (ярус B: коэффициент —
- *  решение Макса, вариант «закупка × 1,6 как Вернисаж» или свой на группу). */
+ *  решение Макса, вариант «закупка × 2 как Вернисаж» или свой на группу). */
 export const isPurchasedLine=(id:string)=>/^(facade-external|plinth-external|worktop:|wallpanel:raw:|mat:)/.test(id);
 export function purchasedOnTop(lines:readonly PriceLine[],coef:number):number{
   return Math.round(lines.filter(l=>!l.retail&&isPurchasedLine(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0)*coef/100)*100;
@@ -272,7 +278,7 @@ export function hardwareKind(id:string):HardwareKind{
     if(c==='прочее'||/рафикс|шуруп|саморез|гвозд|винт|заглушк/.test(n))return 'fasteners';
     return 'other';}
   if(id.startsWith('firmax'))return 'slides';
-  if(/^(hinge|push-latch|lift-mechanism|kitchen-lift|tip-on)/.test(id))return 'hinges';
+  if(/^(hinge|premial-hinge:|premial-alu-hinge:|premial-push:|push-latch|lift-mechanism|kitchen-lift|tip-on)/.test(id))return 'hinges';
   // комплекты направляющих и ящики кухни (guideKits) — к направляющим, не в «Прочее»
   if(/^(slide:|mesh:|pantograph|pullout|axis-pro|guides:|versalite-h45:|modern-slide:|indigo:|start-sc:)/.test(id))return 'slides';
   if(id.startsWith('handle:'))return 'handles';
@@ -304,8 +310,10 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // ручная цена менеджера — в закупке: в публичной сборке строка считается в запечённых единицах (ручная цена × базовый коэффициент проекта)
       if(pub&&!retail){const k=isVernissageLine(id)?pub.ovVernissage:pub.ov;if(k===null){blocked=true;price=null;}else price=Math.round(ov*k*100)/100;}}
     lines.push({id,label,quantity,unit,unitPrice:price,source:ov===undefined?source:'Цена в этом проекте',...(retail?{retail:true}:{})});}
-  for(const l of legatoPriceLines(p.modules.map(a=>a.module)))add(l.id,l.label,l.quantity,l.unit,l.price,l.source,true);
+  for(const extra of p.premialExtras??[]){const item=premialCatalog.find(d=>d.article===extra.article);add('premial-extra:'+extra.article,item?.name??('Premial '+extra.article),extra.quantity,'ед. сайта',premialClientPrice(item?.sitePrice??null),item?item.url+'; '+item.checkedAt+'; цена сайта ×1,3; дополнительно к модели':'Артикул отсутствует в проверенном каталоге',true);}
+  for(const l of legatoPriceLines(p.modules.map(a=>a.module)))add(l.id,l.label,l.quantity,l.unit,premialArticleQuote(l.id.slice(7)).price,premialArticleQuote(l.id.slice(7)).source,true);
   for(const sheet of plan){
+    const panel=facadePanel(sheet.decor);if(panel){add('facade-panel:'+panel.n,panel.n+' · панель и раскрой',1,'лист',panel.clientSheetPrice,'Предварительная цена клиенту за использованный лист, согласовано 16.11.2026',true);continue;}
     if(sheet.material==='hdf'){add('sheet:hdf','ЛХДФ 3 мм',1,'лист',HDF_SHEET,'Древиз: ХДФ Kronospan 2800×2070');continue;}
     // толщина листа — из раскроя (у кухонь Базиса бывает 19 мм); строка 16 мм как раньше
     const d=decorPrice(sheet.decor),t=sheet.thickness??16,t16=Math.abs(t-16)<.01;
@@ -346,7 +354,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   function addHinges(names:Record<string,number>,bk:string){const hb=HINGE_BRANDS[bk as keyof typeof HINGE_BRANDS]??HINGE_BRANDS.gtv,suffix=bk==='gtv'?'':':'+bk;
     for(const [name,n] of Object.entries(names)){const t=hingeType(name);
       const sh=softHinge(bk,hb);
-      if(/^накладная$/i.test(t))add('hinge'+suffix,hb.soft.label,n,'шт',sh.price,sh.source,sh.retail);
+      if(bk==='premial'){const q=/^(накладная|вкладная)$/i.test(t)?premialHingeQuote(/^вкладная$/i.test(t),'soft'):{price:null,label:'Premial · '+t,source:'Тип из Базиса требует подбора артикула — уточнить'};add('hinge-bazis:'+t+suffix,q.label,n,'шт',q.price,q.source,true);}
+      else if(/^накладная$/i.test(t))add('hinge'+suffix,hb.soft.label,n,'шт',sh.price,sh.source,sh.retail);
       else if(/^вкладная$/i.test(t))add('hinge-inset'+suffix,hb.soft.label+' · вкладная',n,'шт',sh.price,sh.source,sh.retail);
       else add('hinge-bazis:'+t+suffix,'Петля '+hb.label+' · '+t+' (тип как в Базисе)',n,'шт',null,'Тип петли — по Базису; закупочной цены этого типа в прайсах нет (есть только накладная '+hb.soft.price+' ₽) — уточнить');}}
   function addShelfHolders(names:Record<string,number>){for(const [name,n] of Object.entries(names))add('shelf-holder:'+name,/^полкодержатель/i.test(name)?name:'Полкодержатель '+name,n,'шт',FASTENERS.shelfHolder.price,'Артикул — как в Базисе; цена — оценка как у Boyard p521, подтвердить');}
@@ -359,12 +368,12 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     if(a.module.metalFrame){const m=a.module,f=m.metalFrame!;add(metalFramePriceKey(m),`${FRAME_LABEL[f.kind]} ${m.width} × ${m.height} × ${m.depth}, профиль ${f.tubeWidth} × ${f.tubeDepth}${f.tubeWall!==undefined?` × ${f.tubeWall} мм`:' (стенка не задана)'}`,1,'шт',null,'Готовый металлокаркас с окраской: цена клиенту по согласованию с изготовителем',true);continue;}
     if(a.module.kitchen?.premialPullout) {
       const art=a.module.kitchen.premialPullout.article;
-      add('premial-allegro:'+art,'Бутылочница Premial АЛЛЕГРО '+art,1,'компл',null,'Официальный каталог Premial; закупочная цена не задана. Крепёж и направляющие входят в комплект.');
+      const item=premialCatalog.find(d=>d.article===art);add('premial-allegro:'+art,item?.name??('Бутылочница Premial АЛЛЕГРО '+art),1,'компл',premialClientPrice(item?.sitePrice??null),item?item.url+'; '+item.checkedAt+'; цена сайта ×1,3; крепёж и направляющие в комплекте':'Цена конкретного артикула не подтверждена',true);
     }
     // Двери-купе: строки по формуле калькулятора купе, розничные; корпусных деталей и крепежа у объекта нет.
     if(a.module.kupe){for(const l of kupeLines(a.module,n=>kupeLdspPerM2(n,settings.markup)))add(l.id,l.label,l.quantity,l.unit,l.unitPrice,l.source,true);continue;}
     // Столешница (kitchen.ts): за погонный метр по материалу и толщине, вырезы под мойку и варку — отдельно. Цен поставщика пока нет.
-    for(const c of a.module.worktop?.cutouts??[])if(c.fixture==='210245')add('premial-sink:210245','Мойка Premial PRODIGY 6045, графит, 210245 (слив в комплекте)',1,'компл',null,'Артикул подтверждён allpremial.ru; закупочную цену уточнить');
+    for(const c of a.module.worktop?.cutouts??[])if(c.fixture){const item=sinkByArticle(c.fixture);const current=premialCatalog.find(p=>p.article===c.fixture);add('premial-sink:'+c.fixture,item?.name??('Мойка '+c.fixture),1,'шт',item?.brand==='Premial'?premialClientPrice(current?.sitePrice??item.sitePrice):null,(item?.source??'')+'; '+(item?.brand==='Premial'?'цена сайта ×1,3':'цена и наличие Лемана требуют подтверждения для региона'),true);}
     // ЛДСП 32 (16+16, заказ 7437584 — ТВ-зона): две плиты в раскрое ЛДСП, кромка 2 — как детали корпуса (ниже), склейка — розничной строкой
     // (1000 ₽/м², как фальш 32, решение Макса 16.10); без мелочёвки корпуса и заглушек — это не корпус
     const slab=!!a.module.worktop&&isSlabWorktop(a.module.worktop);
@@ -505,7 +514,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     let bzHinges=0;
     const legs=a.module.kitchen?0:legCount(a.module,a.y??0);if(legs){const low=a.module.feet&&a.module.feet.height<=30;add(low?'legs-m6':'legs',low?'Ножка мебельная M6×18 с гайкой':'Опора регулируемая INTEGRATO TECH G с шипами',legs,'шт',low?LEG_M6.price:LEG.price,low?LEG_M6.source:LEG.source);}
 
-    const allParts=parts(a.module);
+    const allParts=joinedUnderLightParts(a,p.modules);
     // газлифт подъёмного фасада кухни (Базис: PD-G-N02 — шток, газблок, фиксаторы на фасад и боковину; комплект на боковину), без цены
     const lifts=a.module.kitchenLift?allParts.filter(p=>p.id.startsWith('lift:')&&/:(gl-)?block$/.test(p.id)).length:0;
     if(lifts)add('kitchen-lift:'+a.module.kitchenLift!.system,(a.module.kitchenLift!.system==='gl104'?'Газлифт GL104 с фиксацией положения — комплект на боковину (шток, газ патрон, кронштейны на боковину и фасад)':'Газлифт PD-G-N02 — комплект на боковину (шток, газблок, 2 фиксатора, саморезы)'),lifts,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
@@ -554,8 +563,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // сайта 122,5 (решение Макса 27.10.2026, карточки allpremial.ru — ADAGIO_STD_URL); ПРЕМИУМ 60/80N (347,2) — только явным выбором серии
         // (критик 28.10.2026: раньше ПРЕМИУМ шёл первым, выбора серии в интерфейсе нет); тяжелее 120N — подбор другого подъёмника
         if(d.hinge==='top'&&selectedLift==='adagio'){const lc=adagioChoice(d,a.module),wt=weightText(lc.weight)+' кг';
-          if(lc.force&&lc.premium)add('lift-mechanism:premial-adagio:'+lc.force,`Лифт газовый Premial АДАЖИО ПРЕМИУМ ${lc.force}N — ${lc.count} шт на фасад (фасад ${wt}, нужно ${lc.required}N на газлифт)`,lc.count,'шт',ADAGIO_RETAIL,'allpremial.ru/catalog/gazlifty-premial/ карточки 62617/62618/59951/59952 (АДАЖИО ПРЕМИУМ 60N/80N), 347,2 ₽ (26.10, проверено 27.10.2026) — цена клиенту (решение Макса 26.10); усилие по весу фасада (gasLift.ts)',true);
-          else if(lc.force)add('lift-mechanism:premial-adagio:'+lc.force,`Лифт газовый Premial АДАЖИО ${lc.force}N (стандартный) — ${lc.count} шт на фасад (фасад ${wt}, нужно ${lc.required}N)`,lc.count,'шт',ADAGIO_STD_RETAIL,MAX_SRC_2710+': АДАЖИО всех усилий по цене сайта Premial — '+ADAGIO_STD_URL[lc.force]+', '+String(ADAGIO_STD_RETAIL).replace('.',',')+' ₽ (белый) на 27.10.2026; усилие по весу фасада (gasLift.ts)',true);
+          if(lc.force){const article=lc.premium?(lc.force===60?'020791':'020792'):({50:'020754',60:'020756',80:'020758',100:'020760',120:'020762'} as Record<number,string>)[lc.force];const q=premialArticleQuote(article);add('lift-mechanism:premial-adagio:'+(lc.premium?'premium:':'')+lc.force,q.label+` — ${lc.count} шт на фасад (фасад ${wt})`,lc.count,'шт',q.price,q.source,true);}
           else add('lift-mechanism:premial-adagio:heavy',`Подъёмник для тяжёлого фасада (фасад ${wt}, нужно ${lc.required}N — больше 120N АДАЖИО)`,1,'компл',null,'Тяжелее ряда АДАЖИО (до 120N): подбор подъёмника Premial для тяжёлых фасадов — цена после финального расчёта конструктором');}
         else if(d.hinge==='top'&&selectedLift)add('lift-mechanism:premial-'+selectedLift,'Подъёмный механизм Premial СЕМПРЕ — подбор типоразмера',1,'компл',null,'Premial: комплект на фасад; артикул, количество механизмов, присадка и закупочная цена требуют подбора');
         if(d.hinge==='top'&&!selectedLift&&!a.module.kitchenLift&&!kitchen)add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
@@ -564,10 +572,17 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         if(d.hinge==='top'&&selectedLift&&!kitchen&&(push||!allParts.some(p=>p.role==='handle'&&p.id===d.id.replace(':door:',':handle:'))))add('tip-on-lift','Толкатель TIP-ON для откидного фасада без ручки',1,'шт',TIP_ON_RETAIL,MAX_SRC_2710+': толкатель TIP-ON — '+TIP_ON_RETAIL+' ₽/шт',true);
         // подъёмный фасад кухни: петли по верху поставлены по Базису — считаем их как обычные; без петель (шкаф) — только механизм
         if(d.hinge==='top'&&!placedHinges){/* петли не расставлены */}
+        else if(d.material==='alu'){
+          const falsePanel=allParts.some(p=>p.falsePanelHinge&&p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':'));
+          const q=premialAluHingeQuote(inset,push?'free':a.module.hingeSoft===false?'simple':'soft',a.module.alu?.color==='black',d.hingeAngle,falsePanel);
+          add('premial-alu-hinge:'+q.label,q.label,n,'шт',q.price,q.source,true);
+          if(d.hingeAngle===90)add('premial-alu-limiter:90','Ограничитель 90° для Premial ПРЕСТО АЛЮМ',n,'шт',null,'Требуется совместимый ограничитель, угловая петля 90° не является ограничителем',true);
+        }
         else if(nm?.hinges&&!push)bzHinges+=n; // тип петли — по Базису (после цикла)
         // нижний угловой студии (kitchenCorner.ts): дверь у фальша на «Петля под фальшпанель» — другое изделие, цены в прайсах нет:
         // позиция финального расчёта конструктором (pendingPrices.ts), не цена накладной
         else if(allParts.some(p=>p.falsePanelHinge&&p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')))add('hinge-false-panel'+suffix,'Петля под фальшпанель'+(bk==='gtv'?'':' · '+hb.label),n,'шт',null,'Петля под фальшпанель (угловой модуль): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
+        else if(bk==='premial'){const q=premialHingeQuote(inset,push?'free':a.module.hingeSoft===false?'simple':'soft',d.hingeAngle);add('premial-hinge:'+q.label,q.label,n,'шт',q.price,q.source,true);if(d.hingeAngle===90)add('premial-required-limiter:90','Ограничитель Premial на 90°',n,'шт',null,'Требуется точный артикул: ограничитель на 85° не заменяет 90°',true);}
         else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
         // угол открывания створки (решение Макса 26.10.2026): «петля на 90°» = петля 110° бренда + ограничитель угла на каждую петлю
         // (50 ₽ клиенту); петля 155° (155–165°) — 1 700 ₽/шт клиенту. Розница сверх цены листов.
@@ -577,7 +592,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // петли без доводчика (Module.hingeSoft = false, заказ 7441182): накладная самозакрывающаяся с пружиной
         else if(a.module.hingeSoft===false)add((inset?'hinge-simple-inset':'hinge-simple')+suffix,inset?hb.simple.label+' · вкладная':hb.simple.label,n,'шт',hb.simple.price,hb.simple.source);
         else{const sh=softHinge(bk,hb);add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',sh.price,sh.source,sh.retail);}
-        if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
+        if(push&&d.hinge!=='top'){if(bk==='premial'||d.material==='alu'){const q=premialArticleQuote('070501');add('premial-push:070501',q.label,1,'шт',q.price,q.source,true);}else add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);}
       }
       if((d.role==='door'||d.id.endsWith(':facade'))&&d.material==='alu'&&a.module.alu){ // распашные и фасады ящиков в рамке (aluDrawers)
         // Калькулятор фасадов ALU (источник истины по цене, 18.10.2026): профиль по периметру, наполнение по площади фасада,
@@ -642,7 +657,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(mm.lightSwitch==='piezo')add('light-piezo','Беспроводной пьезовыключатель подсветки',1,'шт',LIGHT_PIEZO_RETAIL,MAX_SRC_2610+': беспроводной пьезовыключатель — '+LIGHT_PIEZO_RETAIL+' ₽',true);
       if(mm.lightPsu||mm.lightSensor||mm.lightDimmer||mm.lightSwitch)add('light-psu','Блок питания 12 В для подсветки',1,'шт',LIGHT_PSU_RETAIL,MAX_SRC_2610+': блок питания — '+LIGHT_PSU_RETAIL+' ₽',true);}
     for(const s of a.module.sections){
-      if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги',RULES.rodMountScrews*(s.rodLower!==undefined?3:1),'шт',0.3,'ФАМ: шуруп 4×16 — 0,28 ₽ (ориентир); 6 на штангу по фрагменту цеха'+(s.rodLower!==undefined?' (в два яруса: + нижняя штанга и фланцы трубы)':''));
+      if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги',RULES.rodMountScrews*(s.rodLower!==undefined?2:1),'шт',0.3,'ФАМ: шуруп 4×16 — 0,28 ₽ (ориентир); 6 на штангу по фрагменту цеха'+(s.rodLower!==undefined?' (в два яруса: + нижняя штанга)':''));
       if(s.pantograph)add('pantograph','Пантограф GTV',1,'компл',null,'Закупочная цена не найдена; 9000 ₽ в прайсе — цена продажи');
       if(s.pullouts)add('pullout:'+pulloutLength(a.module),'Выдвижной тремпель GTV '+pulloutLength(a.module)+' мм',s.pullouts,'шт',PULLOUT_PRICE,'Цена Макса 07.10.2026: 500 ₽ за тремпель');
       for(let j=0;j<s.drawers;j++){
@@ -661,13 +676,13 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const kitchenOnly=p.modules.length>0&&p.modules.every(a=>a.module.kitchen||rawKitchen(a.module.raw)||a.module.worktop);
   const rub=(n:number)=>String(n).replace(/\B(?=(\d{3})+(?!\d))/g,' '),notBazis=bazisProject?' (работа цеха, не из Базиса)':'';
   const hdfSheets=plan.filter(s=>s.material==='hdf').length;
-  add('work','Работа цеха: ЛДСП',plan.length-hdfSheets,'лист',SHOP_WORK_LDSP_SHEET,'Цех: '+rub(SHOP_WORK_LDSP_SHEET)+' ₽ за лист ЛДСП'+(kitchenOnly&&hdfSheets?' (у кухни лист ЛХДФ без работы)':'')+notBazis);
+  add('work','Работа цеха: ЛДСП',plan.filter(s=>s.material!=='hdf'&&!facadePanel(s.decor)).length,'лист',SHOP_WORK_LDSP_SHEET,'Цех: '+rub(SHOP_WORK_LDSP_SHEET)+' ₽ за лист ЛДСП'+(kitchenOnly&&hdfSheets?' (у кухни лист ЛХДФ без работы)':'')+notBazis);
   if(!kitchenOnly)add('work-hdf','Работа цеха: ЛХДФ',hdfSheets,'лист',SHOP_WORK_HDF_SHEET,'Цех: '+rub(SHOP_WORK_HDF_SHEET)+' ₽ за лист ЛХДФ (сам лист — строкой «ЛХДФ 3 мм»)'+notBazis);
   for(const l of lines)l.quantity=Math.round(l.quantity*1000)/1000;
   for(const l of lines)if(l.unitPrice===null){const pp=pendingPrice(l.id);if(pp){l.pending=true;l.source=pp.source;}}
   const missing=lines.filter(l=>l.unitPrice===null&&!l.pending),pending=lines.filter(l=>l.pending),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT;
+  const ldspSheets=plan.filter(s=>s.material!=='hdf'&&!facadePanel(s.decor)).length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT;
   // R2: без цены листа итога нет, пока её не укажут (цена — только по листам, решение Макса 30.10.2026)
   const needSheetPrice=!(sheetPrice>0);
   // Решение Макса 06.10.2026: клиенту показываем отдельно «материалы» (плита, кромка, работа, фасадные материалы) и «фурнитуру»,
@@ -702,7 +717,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   for(const l of lines){const s=shelf.get(l.id);if(s!==undefined&&s!==l.unitPrice&&l.unitPrice!==null)l.shelf=s;}
   const lemana=Math.round(lines.filter(l=>!l.retail&&isLemanaLine(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice===null?0:l.shelf??l.unitPrice),0));
   // Фасады «Вернисаж» (и присадка под петли на них) — покупное изделие стороннего производителя: в раскрой ЛДСП не идут, значит в цену листа
-  // не входят. В цене клиента они в любой модели: при «цене за лист» — сверху листов, закупка × коэффициент Вернисажа (1,6), как и в
+  // не входят. В цене клиента они в любой модели: при «цене за лист» — сверху листов, закупка × коэффициент Вернисажа (2), как и в
   // «Материалах» модели наценки; розничными строками их не делаем — закупка остаётся в себестоимости сметы.
   const vernissageOnTop=vernissageClient;
   // Стекло и зеркало (зеркало на фасаде с плёнкой и полировкой, стеклянная крыша) в раскрой ЛДСП не идут — в «цене за лист» они сверху

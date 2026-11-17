@@ -1,3 +1,5 @@
+import {joinedUnderLightParts} from './joinedUnderLight';
+import {compactMaterialGroups} from './compactEdges';
 import {legatoModel} from './legatoGeometry';
 import {dishwasherServiceModel} from './dishwasherServices';
 import {applianceModel,APPLIANCE_MODEL_TYPES} from './applianceGeometry';
@@ -119,7 +121,7 @@ function fitProfile(src: THREE.Group, part: { size: [number, number, number]; mo
   return outer;
 }
 import { boxes, parts, shelfGaps, drawerConfig, drawerStackHeight, RULES, type Module } from "./model";
-import { catalog } from "./catalog";
+import {surfaceCatalog as catalog} from './surfaceCatalog';
 import {localToRoom,roomToLocal,moduleCenter,moduleFootprint,bounds,sideExtension,type Room,type PlacedModule} from "./project";
 import type {GapSide,StretchPlan} from './rowResize';
 import {wallPanels} from './roomGeometry';
@@ -568,7 +570,7 @@ export function Scene(p: Props) {
           active = placed.id === focus.id;
         const origin=localToRoom(placed,0,0),center=moduleCenter(focus);
         moduleGroup.position.set(origin.x-center.x,placed.y??0,origin.z-center.z);moduleGroup.rotation.y=(placed.rotation??0)*Math.PI/180;moduleGroup.userData.base=moduleGroup.position.clone();moduleGroup.userData.baseRot=moduleGroup.rotation.y;
-        const mParts = parts(m), byId = new Map(mParts.map((q) => [q.id, q]));
+        const mParts = joinedUnderLightParts(placed,state.arrangement), byId = new Map(mParts.map((q) => [q.id, q]));
         for (const part of mParts) {
           // «Скрыть фасады» убирает двери (распашные и полотна купе) с петлями и их ручками; ящики остаются с фасадами — это наполнение.
           if(state.hideFacades&&hiddenWithFacades(part))continue;
@@ -675,7 +677,10 @@ export function Scene(p: Props) {
           // фасад Вернисажа под стекло: вторая группа сетки — стекло своим материалом (n5-vernissage); у процедурной модели бокс без групп
           const vGlass = !proc && vern && geometry.groups.some((g) => g.materialIndex === 1)
             ? new THREE.MeshStandardMaterial({ color: 0xdfe8ec, transparent: true, opacity: state.clearFacades ? 0.25 : 0.42, roughness: 0.05, metalness: 0.1, depthWrite: false }) : null;
-          const mesh = new THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>(geometry, vGlass ? [mat, vGlass] : mat);
+          const compact = m.worktop?.material==='compact'&&(part.id==='worktop'||part.id.startsWith('worktop:waterfall:'));
+          let compactCore:THREE.MeshStandardMaterial|null=null;
+          if(compact){const axis=part.size.indexOf(Math.min(...part.size)) as 0|1|2;compactMaterialGroups(geometry,axis);compactCore=mat.clone();compactCore.map=null;compactCore.color.set(0x171717);compactCore.roughness=.72;}
+          const mesh = new THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>(geometry, compactCore?[mat,compactCore]:vGlass ? [mat, vGlass] : mat);
           if (isLegato) {
             const model=legatoModel(part);
             model.traverse(o=>{o.userData={partId:part.id,moduleId:placed.id,role:part.role,sectionId:part.sectionId,active};});

@@ -29,6 +29,7 @@ import { join, dirname, extname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { KUPE_SYSTEMS, KUPE_PROFILE_MULT } from "../src/kupeData";
+import {selectableKupeFill} from "../src/kupeFillSelection";
 import { kupeGrad } from "../src/kupe";
 import { kupeLdspPerM2, MARKUP_DEFAULT } from "../src/pricing";
 
@@ -116,7 +117,7 @@ function bakeData(kupeSrc: string) {
     "\n];\n\n// h — горизонтальных разделителей, v — вертикальных; доли рядов и колонок\nconst SECTION_OPTS = [\n" + d.SECTION_OPTS.map((o) => "  " + obj(o) + ",").join("\n") + "\n];\n\n" +
     `const SOFT_CLOSE_PRICE = ${d.SOFT_CLOSE_PRICE};\nconst COMPLEX_WORK_PRICE = ${d.COMPLEX_WORK_PRICE};\nconst COMPLEX_SECTIONS_THRESHOLD = ${d.COMPLEX_SECTIONS_THRESHOLD};\n` +
     `const FILM_ARMOR  = ${obj(d.FILM_ARMOR)};\nconst FILM_SAFETY = ${obj(d.FILM_SAFETY)};\n`;
-  const plain = d.FILLINGS.filter((f) => f.g !== "ЛДСП Lamarty");
+  const plain = d.FILLINGS.filter((f) => f.g !== "ЛДСП Lamarty" && selectableKupeFill({n:String(f.n)}));
   const fillings = head("data/fillings.js", "Наполнения дверей-купе: p — ₽ за м², mat — класс для схемы.") + "// Public: FILLINGS_VERSION, FILLINGS\n\n" +
     `const FILLINGS_VERSION = ${lit(fv)};\n\nconst FILLINGS = [\n` + plain.map((f) => "  " + obj(f) + ",").join("\n") + "\n];\n";
   const noPrice: string[] = [];

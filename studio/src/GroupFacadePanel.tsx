@@ -1,3 +1,4 @@
+import {applyKitchenGola} from './applyKitchenGola';
 // «Фасады выделенных модулей» (решение Макса 29.10.2026): отмеченные Shift+щелчком корпуса правятся разом. Меняется только то поле,
 // которое правит менеджер; у корпусов с разными значениями поле показывает «— разные —». Корпуса, к которым поле не относится,
 // пропускаются с сообщением «к N модулям не применено: причина». Каждая правка — одно изменение проекта (одна отмена Ctrl+Z).
@@ -74,6 +75,7 @@ export function GroupFacadePanel({project,ids,commit}:{project:Project;ids:strin
  return <details className="property-section group-facades" open data-testid="group-facades">
   <summary><strong>Фасады выделенных модулей · {ids.length}</strong></summary>
   <p className="field-note">Отмечены: {names.join(', ')}. Изменённое поле применяется ко всем отмеченным сразу, остальные настройки не меняются; «— разные —» — у модулей сейчас разные значения. Одна отмена Ctrl+Z возвращает всех. Отметить — Shift+щелчок по модулю в сцене или в списке слева.</p>
+  {project.modules.some(a=>ids.includes(a.id)&&a.module.kitchen?.role==='base')&&<div className="group-patch"><b>Профиль Gola · только выделенные</b><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{[true,false].map(enabled=><button key={String(enabled)} className="outline" onClick={()=>{try{const r=applyKitchenGola(project,enabled,ids);if(r.changed.length&&!commit(r.project)){setNote({ok:false,text:'Изменение не принято. Исходные модули сохранены.'});return;}setNote({ok:true,text:`Gola: изменено ${r.changed.length} из ${ids.length}. `+(r.skipped.length?'Пропущены: '+r.skipped.map(x=>x.name+' — '+x.reason).join('; '):'')+' Отменить — Ctrl+Z.'});}catch(e){setNote({ok:false,text:(e as Error).message});}}}>{enabled?'Включить Gola у выделенных':'Убрать Gola у выделенных'}</button>)}</div></div>}
   {field('kind',(['ldsp','vernissage','alu'] as const).map(k=>[k,KIND_LABEL[k]]))}
   {vern.count>0&&vern.base&&<div className="group-patch" data-group-field="vernissage"><p className="field-note">МДФ Вернисаж · {vern.count} мод.{mixedNote(vern.mixed)}. Меняется только то, что вы выберете.</p>
    <VernissagePicker value={vern.base as unknown as VernissageFacade} sizes={vernModule?vernissageSizes(vernModule):undefined} onChange={v=>run(()=>applyGroupPatch(project,ids,'vernissage',changedKeys(vern.base!,v as unknown as Record<string,unknown>)),'МДФ Вернисаж')}/></div>}

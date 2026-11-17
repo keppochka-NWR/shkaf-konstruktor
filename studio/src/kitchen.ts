@@ -1,3 +1,5 @@
+import {worktopDecors} from './worktopCatalog';
+import {compactDecor,DEFAULT_COMPACT_DECOR} from './compactCatalog';
 // Кухня в Ё Конструкторе (основа 08.10.2026; конструктив по проектам Базиса цеха — разбор базы кухонь цеха 09.10.2026).
 // Кухонный корпус — обычный модуль студии с пометкой kitchen (нижний, навесной, пенал, антресоль): наполнение, фасады, петли,
 // смета и раскрой работают как у шкафов. Здесь — только кухонное: регламенты, опоры с клипсами и цоколем, навесы, ниши техники,
@@ -395,6 +397,9 @@ export function setWorktopMaterial(m: Module, material: WorktopMaterial, thickne
   // иначе «Компакт 12» → «ЛДСП» давал деталь ЛДСП 12 мм в раскрое (ревью 19.10); ЛДСП тоже 38, не 32 (баг Макса по демо 20.10)
   const t = thickness ?? (fixed ? (fixed.includes(cur) ? cur : fixed[0]) : worktopSolid(m.worktop!) ? KITCHEN.worktopThickness : cur);
   m.worktop = { ...m.worktop!, material, thickness: t };
+  const decors=worktopDecors(material);
+  if(decors.length&&!decors.some(d=>d.n===m.decor))m.decor=decors[0].n;
+  else if(!decors.length&&compactDecor(m.decor))m.decor='Белый';
   if (!worktopSolid(m.worktop)) delete m.worktop.waterfall; // водопад только из камня: на ЛДСП/постформинге его снимаем, а не отказываем
   m.height = t;
 }

@@ -1,3 +1,5 @@
+import {premialCatalog} from './premialCatalog';
+import {premialArticleQuote,premialClientPrice} from './premialPricing';
 import {useState} from 'react';
 import './legato.css';
 import type {Module,Section} from './model';
@@ -9,7 +11,7 @@ export function LegatoPanel({m,s,modify}:{m:Module;s:Section;modify:(fn:(s:Secti
   const options=legatoShelves().sort((a,b)=>a.depth-b.depth||a.color.localeCompare(b.color));
   return <div data-testid="legato-panel">
     {block?<p className="field-note">{block}</p>:<>
-    <label>Сетка для добавления<select aria-label="Сетка Premial для добавления" value={article} onChange={e=>setArticle(e.target.value)}>{options.map(p=><option key={p.article} value={p.article}>{p.depth} мм · {color(p.color)} · {p.price.toLocaleString('ru-RU')} ₽ / 3 м</option>)}</select></label>
+    <label>Сетка для добавления<select aria-label="Сетка Premial для добавления" value={article} onChange={e=>setArticle(e.target.value)}>{options.map(p=><option key={p.article} value={p.article}>{p.depth} мм · {color(p.color)} · {(premialArticleQuote(p.article).price)?.toLocaleString('ru-RU')??'Цена уточняется'} ₽ / 3 м · {premialCatalog.find(x=>x.article===p.article)?.availability??'Наличие не подтверждено'}</option>)}</select></label>
     <button type="button" onClick={()=>modify(n=>{(n.shoeShelves??=[]).push(nextLegato(m,n,article));})}>Добавить сетку для обуви</button>
     {(s.shoeShelves??[]).map((q,i)=>{const a=legatoLayout(m,s,q),p=legatoByArticle(q.article)!;return <fieldset key={q.id}><legend>Сетка {i+1}</legend>
       <label>Глубина и цвет<select aria-label={`Сетка ${i+1}: изделие`} value={q.article} onChange={e=>update(q.id,n=>{n.article=e.target.value;if(!INCLINED[legatoByArticle(n.article)!.depth])n.mount='horizontal';})}>{options.map(p=><option key={p.article} value={p.article}>{p.depth} мм · {color(p.color)} · {p.article}</option>)}</select></label>
@@ -19,7 +21,7 @@ export function LegatoPanel({m,s,modify}:{m:Module;s:Section;modify:(fn:(s:Secti
       <button type="button" onClick={()=>modify(n=>{n.shoeShelves=n.shoeShelves?.filter(v=>v.id!==q.id);if(!n.shoeShelves?.length)delete n.shoeShelves;})}>Убрать сетку {i+1}</button>
     </fieldset>;})}
     <p className="field-note">Задние клипсы и кронштейны крепятся к несущей панели или стене. ХДФ не является опорой. Крепление к стене подбирается по её материалу.</p>
-    <p className="field-note">В смете — целые заготовки 3 м с совместным раскроем сеток одного артикула, карманы или кронштейны, клипсы и наконечники. Розничные цены для Нижегородской области от 05.11.2026.</p>
+    <p className="field-note">В смете — целые заготовки 3 м с совместным раскроем сеток одного артикула, карманы или кронштейны, клипсы и наконечники. Цена сайта ×1,3; дата и наличие — в каталоге Premial.</p>
     <a href={LEGATO_SOURCE} target="_blank" rel="noreferrer">Каталог и монтаж Premial</a>
     </>}
   </div>;

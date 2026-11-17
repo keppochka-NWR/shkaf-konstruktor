@@ -1,3 +1,4 @@
+import {PremialCatalogPicker} from './PremialCatalogPicker';
 // Окно «Фурнитура» для клиента (менеджеры 22.10.2026, п. 15): вместо выпадающих списков нижней панели — группы (петли, открывание,
 // направляющие, ручки, кромка, крепёж — то, что меняет hardwareSwap), у варианта — схема-иконка, понятное название, ключевые свойства
 // и розничная разница «+N ₽ к заказу» (итог сметы после замены минус текущий; закупки здесь нет), текущий выбор отмечен.
@@ -118,6 +119,7 @@ export function HardwareWindow({ project, commit, onClose, initialModuleId = nul
           </button>)}{!shown.length && <p className="hw-hint">Ничего не найдено.</p>}</div>
         </div>
       </div>
+      <PremialCatalogPicker project={project} commit={commit}/>
       {note && <p className="hw-note" role="status">{note}</p>}
     </section>
   </div>;

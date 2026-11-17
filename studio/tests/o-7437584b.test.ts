@@ -7,7 +7,6 @@ import { createKupeWardrobe, assembleModule, hangingDrawer, KIND_LABEL } from ".
 import { setWorktopMaterial, WORKTOP_CHOICES } from "../src/kitchen";
 import { partCollisions } from "../src/collisions";
 import { estimate } from "../src/pricing";
-import { pendingPrice } from "../src/pendingPrices";
 import { appendModule, newProject, type Project } from "../src/project";
 import { removePart, applyDrawerSlide, captureSectionFilling, pasteSectionFilling } from "../src/operations";
 import { editDrawerConfig } from "../src/drawerEditing";
@@ -20,16 +19,17 @@ const wardrobe = (): Module => {
   return m;
 };
 
-test("вешалка в два яруса: нижняя штанга, вертикальная труба, фланцы и держатели; без пересечений", () => {
+test("вешалка в два яруса: две горизонтальные штанги без центральной трубы; без пересечений", () => {
   const m = wardrobe(), s = m.sections[0];
   setRodTiers(m, s, true);
   assert.ok(s.rod && s.rodLower! > 0.3 && s.rodLower! < 0.6, String(s.rodLower));
   assert.deepEqual(validate(m), []);
   const ps = parts(m), up = ps.find((p) => p.id === s.id + ":rod")!, low = ps.find((p) => p.id === s.id + ":rod:lower")!, pipe = ps.find((p) => p.id === s.id + ":pipe")!;
-  assert.ok(up && low && pipe);
+  assert.ok(up && low);
+  assert.equal(pipe, undefined);
   assert.ok(up.position[1] - low.position[1] >= RULES.rodTierClear, "ярус между штангами");
-  assert.ok(pipe.size[1] > pipe.size[0] && pipe.size[1] > 1500, "труба вертикальная, от дна до полки");
-  assert.equal(ps.filter((p) => p.id.startsWith(s.id + ":pipe:holder:")).length, 2);
+  assert.ok(!ps.some(p => p.id.includes(":pipe")), "нет центральной трубы и её крепежа");
+  assert.equal(ps.filter((p) => p.id.startsWith(s.id + ":pipe:holder:")).length, 0);
   assert.equal(ps.filter((p) => p.id.startsWith(s.id + ":flange:lower:")).length, 2);
   assert.deepEqual(partCollisions(ps, m), []);
 });
@@ -42,17 +42,17 @@ test("вешалка в два яруса: проверки ярусов, сня
   assert.ok(validate(m).some((e) => /между штангами/.test(e)));
   setRodTiers(m, s, true);
   const p = newProject(m), e = estimate(p), ids = e.lines.map((l) => l.id);
-  assert.ok(ids.includes("pipe25") && ids.includes("rod-pipe-holder"), ids.join(","));
-  assert.equal(e.lines.find((l) => l.id === "rod-pipe-holder")!.quantity, 2);
-  assert.ok(pendingPrice("rod-pipe-holder"), "держатель — после финального расчёта конструктором");
-  assert.equal(e.lines.find((l) => l.id === "screw35x16-rod")!.quantity, 3 * RULES.rodMountScrews);
+  assert.ok(!ids.includes("pipe25") && !ids.includes("rod-pipe-holder"));
+  assert.equal(e.lines.find(l => l.id === "flange25")!.quantity, 4);
+  assert.equal(e.lines.find((l) => l.id === "screw35x16-rod")!.quantity, 2 * RULES.rodMountScrews);
   const r = removePart(p, p.modules[0].id, s.id, s.id + ":rod:lower");
   const s2 = r.modules[0].module.sections[0];
   assert.ok(s2.rod && s2.rodLower === undefined, "ПКМ «Удалить» по нижней штанге снимает только второй ярус");
   // переживает сохранение/открытие проекта (parseModule)
   const again = parseModule(JSON.parse(JSON.stringify(m)));
   assert.equal(again.sections[0].rodLower, s.rodLower);
-  assert.ok(parts(again).some((x) => x.id.endsWith(":pipe")));
+  assert.ok(!parts(again).some((x) => x.id.includes(":pipe")));
+  assert.ok(parts(again).some((x) => x.id.endsWith(":rod:lower")));
   setRodTiers(m, s, false);
   assert.equal(s.rodLower, undefined);
 });
@@ -146,7 +146,7 @@ test("заказ 7437584 (изделия 2, 4, 5): собирается функ
   assert.equal(e.missing.length, 0, e.missing.map((l) => l.label).join("; "));
   assert.ok((e.byMarkup ?? 0) > 100000);
   assert.ok(PRODUCTS.every(([, re]) => p.modules.some((a) => re.test(a.module.name))));
-  assert.ok(e.lines.some((l) => l.id === "pipe25"), "в сохранённом проекте вешалка в два яруса (труба в смете)");
+  assert.ok(!e.lines.some((l) => l.id === "pipe25" || l.id === "rod-pipe-holder"), "в сохранённом проекте нет центральной трубы и её держателей в смете");
   const kupe = p.modules.find((a) => a.module.kupeZone)!.module, bb = boxes(kupe);
   assert.deepEqual(bb.map((b) => Math.round(b.width)), [816, 390, 390]);
   assert.equal(kupe.plinthHeight, 100);
