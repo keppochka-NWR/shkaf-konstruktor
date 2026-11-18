@@ -215,3 +215,5 @@
     grid-row: 3;
   }
 }
+
+.yo-assistant-access{padding:0 16px;display:grid;gap:8px}.yo-assistant-access:empty{display:none}.yo-assistant-access form,.yo-assistant-access label{display:grid;gap:6px}.yo-assistant-access form{padding:12px 0;gap:10px}.yo-assistant-access input{width:100%;box-sizing:border-box;min-height:40px}

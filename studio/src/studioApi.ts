@@ -5,5 +5,6 @@ export async function studioApi(path:string,body?:unknown){
   let data;
   try{data=await r.json();}catch{throw Error('Сервер кабинета недоступен. Запустите студию с сервером.');}
   if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'Проверьте введённые данные.');
+  if(path==='/auth/login'||path==='/logout')window.dispatchEvent(new Event('studio-auth-changed'));
   return data;
 }

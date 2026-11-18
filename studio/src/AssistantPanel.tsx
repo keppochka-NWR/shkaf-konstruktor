@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { assistantContext, type AssistantProposal } from "./assistantProposal";
 import type { RoomDocument } from "./roomDocument";
+import { studioApi } from "./studioApi";
+
 type Attachment = { name: string; data: string };
 export function AssistantPanel({
   document,
@@ -29,50 +31,67 @@ export function AssistantPanel({
   const [connection, setConnection] = useState(""),
     [applied, setApplied] = useState(false);
   useEffect(() => () => request.current?.abort(), []);
+  const [access, setAccess] = useState<"checking" | "login" | "ready" | "offline">("checking");
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [login, setLogin] = useState(""), [password, setPassword] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
+  const publicSite = window.location.hostname.endsWith(".github.io");
+  const checkConnection = useCallback(async (signal?: AbortSignal) => {
+    setAccess("checking");
+    if (publicSite) {
+      setConnection("На этой публичной странице помощник не подключён. Откройте серверную версию конструктора и войдите в кабинет.");
+      setAccess("offline"); return;
+    }
+    try {
+      const r = await fetch("/api/studio/assistant/status", {signal});
+      if (signal?.aborted) return;
+      if (r.status === 401) {
+        setConnection("Для помощника нужен вход в кабинет. Войдите здесь — проект и черновик останутся открыты.");
+        setAccess("login"); return;
+      }
+      if (!r.ok) throw Error("Сервер помощника недоступен. Повторите проверку подключения.");
+      const status = await r.json();
+      if (signal?.aborted) return;
+      setAccess(status.configured ? "ready" : "offline");
+      setConnection(status.configured ? (status.ownerPilot ? "Astra · пилот для владельца" : status.model) : "Подключение модели ещё не настроено.");
+    } catch (e) {
+      if (signal?.aborted) return;
+      setAccess("offline"); setConnection("Сервер помощника недоступен. Повторите проверку подключения.");
+    }
+  }, [publicSite]);
   useEffect(() => {
     if (hidden) return;
-    let disposed = false;
-    if (!messages.length)
-      void fetch(
-        "/api/studio/assistant/history/" + encodeURIComponent(conversationId),
-      )
-        .then(async (r) => {
-          if (r.ok) {
-            const data = await r.json();
-            if (!disposed) setMessages((m) => (m.length ? m : data.messages));
-          }
-        })
-        .catch(() => {});
-    void fetch("/api/studio/assistant/status")
-      .then(async (r) => {
-        if (r.status === 401)
-          return "Войдите в кабинет через «Заказ и инструменты» → серверные проекты.";
-        if (!r.ok) return "Сервер помощника недоступен.";
-        const s = await r.json();
-        return s.configured
-          ? s.ownerPilot
-            ? "Astra · пилот для владельца"
-            : s.model
-          : "Подключение модели ещё не настроено.";
-      })
-      .then((s) => {
-        if (!disposed) setConnection(s);
-      })
-      .catch(() => {
-        if (!disposed) setConnection("Сервер помощника недоступен.");
-      });
-    return () => {
-      disposed = true;
-    };
-  }, [hidden]);
+    const controller = new AbortController();
+    const refresh = () => { void checkConnection(controller.signal); };
+    refresh();
+    window.addEventListener("studio-auth-changed", refresh);
+    return () => { controller.abort(); window.removeEventListener("studio-auth-changed", refresh); };
+  }, [hidden, checkConnection]);
+  useEffect(() => {
+    if (hidden || access !== "ready") return;
+    const controller = new AbortController();
+    void fetch("/api/studio/assistant/history/" + encodeURIComponent(conversationId), {signal:controller.signal})
+      .then(async r => { if(r.ok) { const data=await r.json(); if(!controller.signal.aborted && Array.isArray(data.messages)) setMessages(m=>m.length?m:data.messages); } })
+      .catch(()=>{});
+    return () => controller.abort();
+  }, [hidden, access, conversationId]);
+  async function signIn() {
+    if (signingIn) return;
+    setSigningIn(true); setError("");
+    try {
+      await studioApi("/auth/login", {login, password});
+      setLoginOpen(false);
+      await checkConnection();
+    } catch (e) { setError((e as Error).message); }
+    finally { setPassword(""); setSigningIn(false); }
+  }
   async function send() {
-    if (!text.trim() || busy) return;
+    if (!text.trim() || busy || access !== "ready") return;
     setBusy(true);
     setError("");
     setProposal(null);
     const message = text.trim(),
       history = messages.slice(-8);
-    setMessages((m) => [...m, { role: "user", text: message }]);
     setText("");
     const base = document.revision;
     request.current = new AbortController();
@@ -93,12 +112,17 @@ export function AssistantPanel({
         }),
         signal: request.current.signal,
       });
-      const data = await response.json();
+      if (response.status === 401) {
+        setAccess("login");
+        setConnection("Сессия завершилась. Войдите снова: черновик и вложения сохранены.");
+        throw Error("Войдите в кабинет, затем повторите отправку.");
+      }
+      const data = await response.json().catch(() => { throw Error("Сервер помощника вернул некорректный ответ. Повторите проверку подключения."); });
       if (!response.ok)
         throw Error(data.detail || "Не удалось получить ответ.");
       setProposal(data);
       setRevision(base);
-      setMessages((m) => [...m, { role: "assistant", text: data.message }]);
+      setMessages((m) => [...m, { role: "user", text: message }, { role: "assistant", text: data.message }]);
     } catch (e) {
       setError(
         e instanceof Error && e.name === "AbortError"
@@ -164,6 +188,16 @@ export function AssistantPanel({
           ×
         </button>
       </header>
+      <div className="yo-assistant-access">
+        {access === "login" && <button type="button" onClick={() => setLoginOpen(v=>!v)}>Войти в кабинет</button>}
+        {access !== "ready" && !publicSite && <button type="button" disabled={access === "checking"} onClick={()=>void checkConnection()}>Проверить подключение</button>}
+        {access === "login" && loginOpen && <form onSubmit={e=>{e.preventDefault();void signIn();}}>
+          <label>Логин<input autoComplete="username" value={login} onChange={e=>setLogin(e.target.value)} required maxLength={64}/></label>
+          <label>Пароль<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required maxLength={128}/></label>
+          <button type="submit" disabled={signingIn}>{signingIn?"Входим…":"Войти"}</button>
+          <small>Используйте логин и пароль кабинета конструктора. Доступ выдаёт администратор.</small>
+        </form>}
+      </div>
       <div className="yo-assistant-messages" aria-live="polite">
         {!messages.length && (
           <>
@@ -358,7 +392,7 @@ export function AssistantPanel({
               Прекратить ожидание
             </button>
           ) : (
-            <button className="primary" disabled={!text.trim()}>
+            <button className="primary" disabled={!text.trim() || access !== "ready"}>
               Отправить
             </button>
           )}
