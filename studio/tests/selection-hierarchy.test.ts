@@ -20,5 +20,6 @@ for(const wing of ['left','right'] as const)test('Upper corner without junction 
  const repaired=applyAutoFillers(old),r=repaired.modules.find(x=>x.id===a.id)!;assert.equal(r.module.width,first.module.width);assert.equal(r.module.cornerKind,undefined);assert.deepEqual(projectErrors(repaired),[]);assert.deepEqual(applyAutoFillers(repaired),repaired);
 });
 test('Rotated cabinets with overlapping axis-aligned bounds but separated faces are not connected',()=>{
- const p=newProject(),m={...initialModule(),width:1200,height:720,depth:200};p.modules=[{id:'a',x:100,z:100,y:0,rotation:45,module:m},{id:'b',x:300,z:300,y:0,rotation:45,module:structuredClone(m)}];assert.deepEqual(connectedModuleIds(p,['a']),['a']);
+ const p=newProject(),m={...initialModule(),width:1200,height:720,depth:600};p.modules=[{id:'a',x:100,z:100,y:0,rotation:45,module:m},{id:'b',x:600,z:600,y:0,rotation:45,module:structuredClone(m)}];assert.deepEqual(connectedModuleIds(p,['a']),['a']);
 });
+
