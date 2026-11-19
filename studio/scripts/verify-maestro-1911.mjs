@@ -11,5 +11,5 @@ const browser=await chromium.launch({headless:true,channel:'chrome'});try{
  await system.selectOption('axis-pro');await expect(page.getByRole('combobox',{name:'Цвет Axis PRO',exact:true})).toBeVisible();
  await system.selectOption('maestro-7d');await page.getByRole('combobox',{name:'Цвет МАЭСТРО',exact:true}).selectOption('grey');
  await page.reload();await page.getByRole('button',{name:'Построение мебели',exact:true}).click();await page.locator('.properties').getByText('Наполнение',{exact:true}).click();await page.getByText('Ящики Premial МАЭСТРО 7D',{exact:true}).click();await expect(system).toHaveValue('maestro-7d');await expect(page.getByRole('combobox',{name:'Цвет МАЭСТРО',exact:true})).toHaveValue('grey');
- await page.getByRole('button',{name:'Открыть фасады',exact:true}).click();await page.waitForTimeout(600);await page.screenshot({path:'reports/maestro-open-1911.png'});expect(errors).toEqual([]);console.log('Maestro UI system/color/switch/reload/open PASS');
+ await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();await page.getByRole('button',{name:'Открыть фасады',exact:true}).click();await page.waitForTimeout(600);await page.screenshot({path:'reports/maestro-open-1911.png'});expect(errors).toEqual([]);console.log('Maestro UI system/color/switch/reload/open PASS');
 }finally{await browser.close();}
