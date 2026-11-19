@@ -123,7 +123,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import {
-  initialModule,
+  newInitialModule as initialModule,
   boxes,
   parts,
   validate,

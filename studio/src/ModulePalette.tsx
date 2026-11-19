@@ -30,10 +30,11 @@ function readPalette():PaletteChoice|null{
 }
 const MAX_BODIES=6;
 const plural=(n:number,one:string,few:string,many:string)=>{const a=n%10,b=n%100;return a===1&&b!==11?one:a>=2&&a<=4&&(b<10||b>=20)?few:many;};
-export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit,room}:{source:Module;onAdd:(module:Module)=>boolean;/** keep — группа встаёт на свои координаты (угловая кухня — в угол комнаты), без поиска места */onAddGroup:(group:PlacedModule[],keep?:boolean)=>boolean;kitchenTemplates?:ReactNode;
+export function ModulePalette({source:originalSource,onAdd,onAddGroup,kitchenTemplates,fit,room}:{source:Module;onAdd:(module:Module)=>boolean;/** keep — группа встаёт на свои координаты (угловая кухня — в угол комнаты), без поиска места */onAddGroup:(group:PlacedModule[],keep?:boolean)=>boolean;kitchenTemplates?:ReactNode;
   /** комната — для «Кухня угловая (Г)» и «Кухня П-образная»: ряды у задней и боковых стен, длины — в пределах стен (проверка формы) */room?:{width:number;depth:number;height:number};
   /** Нехватка места в ряду у стены (rowFit.ts): модуль сужается под остаток с сообщением (решение Макса 29.10) или отказ с причиной. */
   fit?:(module:Module)=>RowShortage|null}) {
+ const source=useMemo(()=>({...originalSource,defaultDrawerPremial:true}),[originalSource]);
   // T1 (18.10): выбор палитры живёт дольше экземпляра — после первого шкафа редактор пересоздаётся, а категория и размеры остаются.
   const [saved]=useState(readPalette);
   const [kind,setKind]=useState<ModuleKind>(saved?.kind??'empty'),[width,setWidth]=useState(saved?.width??600),[height,setHeight]=useState(saved?.height??2000),[depth,setDepth]=useState(saved?.depth??550),[error,setError]=useState('');

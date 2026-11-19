@@ -470,6 +470,8 @@ export type Module = {
   radius?: { side: "left" | "right"; r: number; top?: false; bottom?: false };
   /** Вырезы в деталях и фасадах (shapes.ts): под плинтус, трубу, подоконник, розетку, кабель. */
   cutouts?: Cutout[];
+  /** Default for newly created drawers; absent in legacy files. */
+  defaultDrawerPremial?: boolean;
   /** Крепёж корпуса по СТП: видимый — евровинты (конфирматы), скрытый — эксцентриковые стяжки. По умолчанию евровинты. */
   fastening?: "confirmat" | "eccentric";
   /** Двери-купе (kupe.ts): объект-проём с направляющими и полотнами, глубина 100. Перед корпусами или в нише. */
@@ -660,8 +662,14 @@ export const section = (): Section => ({
   drawers: 0,
   rod: false,
 });
+export function newDrawerConfig(m: Module, s: Section): DrawerConfig {
+  const available=m.depth-rearClear(m)-(drawersBehindDoors(m,s)?44:25);
+  const length=[550,500,450,400,350,300].find(l=>l<=available)??300;
+  return {slide:"gtv0fpo",brand:"premial",operation:"soft-close",height:RULES.drawerH,length};
+}
 export function drawerConfig(m: Module, s: Section, j: number): DrawerConfig {
   if(m.corner)return cornerDrawer(m,s,j);
+  if(!s.drawerConfigs?.[j]&&(m.defaultDrawerPremial||j>=s.drawers))return newDrawerConfig(m,s);
   return (
     s.drawerConfigs?.[j] || {
       slide: "ball",
@@ -1095,10 +1103,11 @@ export function drawerFillerFrom(s: Section, h: number): number {
 export function drawerStackHeight(s: Section) {
   const yy=drawerOffsets(s);return Math.max(0,...yy.map((y,j)=>y+drawerPitch(s.drawerConfigs?.[j]??{},s.drawerGap)));
 }
-export function initialModule(): Module {
+export function initialModule(premial = false): Module {
   return {
     version: 1,
     hingeBrand: "premial",
+    ...(premial?{defaultDrawerPremial:true}:{}),
     name: "Шкаф в прихожую",
     width: 600,
     height: 2000,
@@ -1111,6 +1120,7 @@ export function initialModule(): Module {
     ],
   };
 }
+export function newInitialModule():Module{return initialModule(true);}
 export function boxes(m: Module): SectionBox[] {
   if(m.corner)return cornerBoxes(m);
   if(m.sectionLayout)return resolveLayout(m).boxes;
@@ -3303,6 +3313,7 @@ export function parseModule(input: unknown, allowDesignIssues = false): Module {
     depth: x.depth as number,
     decor: x.decor,
     facadeDecor: x.facadeDecor,
+    ...(x.defaultDrawerPremial===true?{defaultDrawerPremial:true}:{}),
     ...(x.metalFrame===undefined?{}:{metalFrame:parseMetalFrame(x.metalFrame)}),
     ...(x.casework===undefined?{}:{casework:structuredClone(x.casework) as Casework}),
     ...(x.corner===undefined?{}:{corner:structuredClone(x.corner) as CornerSpec}),

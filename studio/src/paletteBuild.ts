@@ -24,7 +24,7 @@ const fail=(sink:Sink,text:string)=>{if(sink)sink.push(text);else throw Error(te
 const check=(m:Module,sink:Sink,prefix='')=>{if(sink){sink.push(...validate(m).map(e=>prefix+e));return;}const error=validate(m)[0];if(error)throw Error(prefix+error);};
 /** Двери купе: проём W×H, глубина зоны направляющих 100 мм. */
 export function createKupeModule(width:number,height:number,source:Module,doors?:number,sink?:string[]):Module{
-  const m:Module={...initialModule(),name:'Двери купе',width,height,depth:KUPE_DEPTH,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,plinthHeight:0,sections:[section()],kupe:{...structuredClone(DEFAULT_KUPE),...(doors?{doors}:{})}};
+  const m:Module={...initialModule(source.defaultDrawerPremial),name:'Двери купе',width,height,depth:KUPE_DEPTH,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,plinthHeight:0,sections:[section()],kupe:{...structuredClone(DEFAULT_KUPE),...(doors?{doors}:{})}};
   check(m,sink);
   return m;
 }
@@ -36,7 +36,7 @@ export function createKupeWardrobe(width:number,height:number,depth:number,sourc
   if(depth<350+KUPE_DEPTH){fail(sink,`Глубина шкафа-купе от ${350+KUPE_DEPTH} мм: ${KUPE_DEPTH} мм занимают направляющие.`);depth=350+KUPE_DEPTH;}
   if(mount==='inside'){
     const t=RULES.panel,bodyDepth=depth-KUPE_DEPTH,n=Math.max(1,Math.ceil((width-2*t)/1000));
-    const m:Module={...initialModule(),name:'Корпус шкафа-купе',width,height,depth:bodyDepth,kupeZone:KUPE_DEPTH,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,sections:Array.from({length:n},()=>section())};
+    const m:Module={...initialModule(source.defaultDrawerPremial),name:'Корпус шкафа-купе',width,height,depth:bodyDepth,kupeZone:KUPE_DEPTH,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,sections:Array.from({length:n},()=>section())};
     m.sections.forEach((s,i)=>{if(i%2===0){s.rod=true;s.shelves=distribute(m,s,1);}else s.shelves=distribute(m,s,5);});
     // задник ХДФ одним листом 2800×2070: у широкого и высокого шкафа (оба размера больше 2050) не выкраивается — без задника, к стене (вопрос Максу)
     if(Math.min(width,height)>RULES.hdfH-2*RULES.sheetMargin)m.backType='none';
@@ -47,7 +47,7 @@ export function createKupeWardrobe(width:number,height:number,depth:number,sourc
   const n=Math.max(1,Math.ceil(width/1200)),bw=Math.floor(width/n),bodyDepth=depth-KUPE_DEPTH,out:PlacedModule[]=[];
   for(let i=0;i<n;i++){
     // K6: корпус шкафа-купе (двери отдельно) — высота до листа, как при дверях внутри (kupeBody)
-    const m:Module={...initialModule(),name:'Корпус шкафа-купе',width:i<n-1?bw:width-bw*(n-1),height,depth:bodyDepth,kupeBody:true,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,sections:[section()]};
+    const m:Module={...initialModule(source.defaultDrawerPremial),name:'Корпус шкафа-купе',width:i<n-1?bw:width-bw*(n-1),height,depth:bodyDepth,kupeBody:true,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,sections:[section()]};
     const s=m.sections[0];if(i%2===0){s.rod=true;s.shelves=distribute(m,s,1);}else s.shelves=distribute(m,s,5);
     check(m,sink);
     out.push({id:id(),x:30+i*bw,y:0,z:30,rotation:0,module:m});
@@ -61,19 +61,20 @@ export function createKitchenRow(length:number,source:Module,height:number=KITCH
   if(!Number.isFinite(height)||!Number.isFinite(depth)){fail(sink,'Введите высоту и глубину кухни в миллиметрах.');return [];}
   const look=(m:Module)=>({...m,decor:source.decor,facadeDecor:source.facadeDecor}),out:PlacedModule[]=[],z=3;let x=0;
   const widths=kitchenRowWidths(length);
-  for(const w of widths){const b=look(kitchenBase(initialModule(),w.width,w.kind));b.height=height;b.depth=depth;b.sections.forEach(s=>s.shelfDepth=depth-2.5);if(b.kdrawers)b.kdrawers=refitKDrawers(b);check(b,sink,b.name+': ');out.push({id:id(),x,y:0,z,rotation:0,module:b});
-    const top=look(kitchenWall(initialModule(),w.width));out.push({id:id(),x,y:height+KITCHEN.worktopThickness+KITCHEN.wallGap,z:0,rotation:0,module:top});x+=w.width;}
+  for(const w of widths){const b=look(kitchenBase(initialModule(source.defaultDrawerPremial),w.width,w.kind));b.height=height;b.depth=depth;b.sections.forEach(s=>s.shelfDepth=depth-2.5);if(b.kdrawers)b.kdrawers=refitKDrawers(b);check(b,sink,b.name+': ');out.push({id:id(),x,y:0,z,rotation:0,module:b});
+    const top=look(kitchenWall(initialModule(source.defaultDrawerPremial),w.width));out.push({id:id(),x,y:height+KITCHEN.worktopThickness+KITCHEN.wallGap,z:0,rotation:0,module:top});x+=w.width;}
   const pieces=length>4100?[Math.round(length/2),length-Math.round(length/2)]:[length];let wx=0;
-  for(const p of pieces){out.push({id:id(),x:wx,y:height,z:0,rotation:0,module:look({...kitchenWorktop(initialModule(),p),depth:depth+KITCHEN.worktopDepth-KITCHEN.baseDepth,sections:[{...section(),shelves:[],drawers:0,rod:false}]})});wx+=p;}
+  for(const p of pieces){out.push({id:id(),x:wx,y:height,z:0,rotation:0,module:look({...kitchenWorktop(initialModule(source.defaultDrawerPremial),p),depth:depth+KITCHEN.worktopDepth-KITCHEN.baseDepth,sections:[{...section(),shelves:[],drawers:0,rod:false}]})});wx+=p;}
   return out;
 }
 /** Подвесной ящик (заказ 7437584, изделия 1, 4, 5): навесной корпус без цоколя на навесах, один ящик на всю высоту — скрытые направляющие
  *  DTC push-to-open (без ручки), длина — самая длинная, что встаёт в глубину. В комнату ставится низом на RULES.hangingFloorY от пола. */
 export function hangingDrawer(width:number,height:number,depth:number,source:Module):Module{
-  const m:Module={...initialModule(),name:KIND_LABEL['hanging-drawer'],width,height,depth,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,hanging:true,plinthHeight:0,sections:[section()]};
+  const m:Module={...initialModule(source.defaultDrawerPremial),name:KIND_LABEL['hanging-drawer'],width,height,depth,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,hanging:true,plinthHeight:0,sections:[section()]};
   const s=m.sections[0];s.drawers=1;s.drawerCap=false; // ящик на всю высоту — полки над ним нет
-  const len=[...SLIDES.gtv0fpo.lengths].reverse().find(l=>l<=depth-rearClear(m)-25)??SLIDES.gtv0fpo.lengths[0];
-  try{const c=drawersToRoof(m,s)[0];s.drawerConfigs=[{...c,slide:'gtv0fpo',operation:'push',brand:'dtc',length:len}];}catch{/* низкий корпус — ошибку покажет validate */return m;}
+  const len=(source.defaultDrawerPremial?[550,500,450,400,350,300]:[...SLIDES.gtv0fpo.lengths].reverse()).find(l=>l<=depth-rearClear(m)-25);
+  if(!len)throw Error("Для направляющих Premial с доводчиком нужна глубина под длину от 300 мм. Увеличьте глубину корпуса.");
+  try{const c=drawersToRoof(m,s)[0];s.drawerConfigs=[{...c,slide:'gtv0fpo',operation:source.defaultDrawerPremial?'soft-close':'push',brand:source.defaultDrawerPremial?'premial':'dtc',length:len}];}catch{/* низкий корпус — ошибку покажет validate */return m;}
   // навесы ABS стоят в задних верхних углах боковин: короб — ниже них (шаг 4 мм), фасад — на всю высоту корпуса (без зазора над ним)
   const cfg=s.drawerConfigs[0],hit=()=>partCollisions(parts(m),m).some(x=>x.names.some(n=>/^Навес|^Заглушка навеса/.test(n)));
   cfg.facadeH=height-2*RULES.panel-RULES.drawerFrontGap; // шаг = проём: ящик «до крыши», накладной фасад растягивается на дно и крышу
@@ -87,7 +88,7 @@ export function hangingDrawer(width:number,height:number,depth:number,source:Mod
 /** Стеллаж с радиусными полками (задача Макса 29.10.2026, shapes.ts): открытый торцевой, скругление у правого переднего угла
  *  радиусом «четверть круга» (до глубины/ширины полки), 4 полки поровну, дно и крыша тоже радиусные. */
 export function radiusShelving(width:number,height:number,depth:number,source:Module,opts:{side?:'left'|'right';r?:number;shelves?:number}={}):Module{
-  const m:Module={...initialModule(),name:KIND_LABEL.radius,width,height,depth,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,sections:[section()],radius:{side:opts.side??'right',r:Math.max(RADIUS.min,Math.min(opts.r??radiusMax({width,depth}),radiusMax({width,depth})))}};
+  const m:Module={...initialModule(source.defaultDrawerPremial),name:KIND_LABEL.radius,width,height,depth,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,sections:[section()],radius:{side:opts.side??'right',r:Math.max(RADIUS.min,Math.min(opts.r??radiusMax({width,depth}),radiusMax({width,depth})))}};
   m.sections[0].shelves=distribute(m,m.sections[0],opts.shelves??4);
   return m;
 }
@@ -162,12 +163,12 @@ export function paletteFitNotes(kind:ModuleKind,width:number,height:number,depth
 }
 function assembleRaw(kind:ModuleKind,width:number,height:number,depth:number,source:Module,doors?:number):Module{
   if(kind==='kitchen-base'||kind==='kitchen-wall'){
-    const m={...(kind==='kitchen-base'?kitchenBase(initialModule(),width):kitchenWall(initialModule(),width)),height,depth,decor:source.decor,facadeDecor:source.facadeDecor};
+    const m={...(kind==='kitchen-base'?kitchenBase(initialModule(source.defaultDrawerPremial),width):kitchenWall(initialModule(source.defaultDrawerPremial),width)),height,depth,decor:source.decor,facadeDecor:source.facadeDecor};
     m.sections.forEach(s=>s.shelfDepth=depth-(kind==='kitchen-base'?2.5:22));
     return m;
   }
   if(kind==='worktop'){
-    const m=kitchenWorktop(initialModule(),width);m.height=height;m.depth=depth;m.decor=source.decor;m.worktop!.thickness=height;
+    const m=kitchenWorktop(initialModule(source.defaultDrawerPremial),width);m.height=height;m.depth=depth;m.decor=source.decor;m.worktop!.thickness=height;
     // мельче 400 кухонной столешницы не бывает (WORKTOP_LDSP_MIN_DEPTH…400): это шкафная — ЛДСП 32 в цвет корпуса (ТВ-зона заказа 7437584)
     if(depth<400)setWorktopMaterial(m,'ldsp',32);
     m.sections=[{...section(),shelves:[],drawers:0,rod:false}];
@@ -178,7 +179,7 @@ function assembleRaw(kind:ModuleKind,width:number,height:number,depth:number,sou
   if(kind==='radius')return radiusShelving(width,height,depth,source);
   if(kind==='corner')return createCornerModule(width,height,depth,source);
   if(kind==='kupe')return createKupeModule(width,height,source,doors);
-  let m:Module={...initialModule(),name:KIND_LABEL[kind],width,height,depth,decor:source.decor,facadeDecor:source.facadeDecor,sections:[section()]};
+  let m:Module={...initialModule(source.defaultDrawerPremial),name:KIND_LABEL[kind],width,height,depth,decor:source.decor,facadeDecor:source.facadeDecor,sections:[section()]};
   if(kind==='desk')m={...deskModule(m),width,height,depth};
   else {
     const s=m.sections[0];

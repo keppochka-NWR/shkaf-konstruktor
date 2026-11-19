@@ -1,3 +1,4 @@
+import {newInitialModule} from "./model";
 import { EmptyRoomView } from "./EmptyRoomView";
 import { RoomTools } from "./RoomTools";
 import { useRef, useState, useMemo, useEffect, type ReactNode } from "react";
@@ -417,7 +418,7 @@ export function RoomWorkspace({
         run((d) =>
           updateRoom(d, room.id, {
             ...room.project,
-            modules: newProject().modules,
+            modules: newProject(newInitialModule()).modules,
           }),
         )
       }

@@ -1,7 +1,7 @@
 import {saveFile} from './exports';
 import {useState} from 'react';
 import {newProject,parseProject,type Project} from './project';
-import {initialModule,section} from './model';
+import {newInitialModule as initialModule,section} from './model';
 import {DAMAGED_PROJECT,PREVIOUS_PROJECT as BACKUP,backupProject} from './projectStorage';
 export function NewProjectPanel({project,open,allowEmpty=false}:{project:Project;open:(p:Project,source?:'резервной копии')=>boolean;allowEmpty?:boolean}){
   const [name,setName]=useState('Новый шкаф'),[error,setError]=useState('');
