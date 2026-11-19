@@ -1,0 +1,1 @@
+import {writeFileSync} from 'node:fs';import {initialModule} from '../src/model';import {kitchenWorktop} from '../src/kitchen';import {newProject} from '../src/project';const m=kitchenWorktop(initialModule(),2000);m.worktop!.cutouts=[];writeFileSync('reports/sink-picker-review.json',JSON.stringify(newProject(m)));

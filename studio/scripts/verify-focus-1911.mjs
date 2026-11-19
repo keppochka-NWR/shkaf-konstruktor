@@ -2,7 +2,7 @@ import {chromium,expect} from '@playwright/test';import fs from 'node:fs';
 const browser=await chromium.launch({headless:true,channel:'chrome'});try{
  const page=await browser.newPage({viewport:{width:1600,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/local-projects/focus-review.json',r=>r.fulfill({json:JSON.parse(fs.readFileSync('reports/focus-review.json','utf8'))}));
- await page.goto('http://127.0.0.1:5197/?project=focus-review');await page.getByRole('button',{name:'Построение мебели',exact:true}).click();
+ await page.goto((process.env.REVIEW_URL||'http://127.0.0.1:5197/')+'?project=focus-review');await page.getByRole('button',{name:'Построение мебели',exact:true}).click();
  await page.locator('.properties').getByText('Наполнение',{exact:true}).click();
  const select=page.locator('select[aria-label="Выкатная корзина"]');
  async function show(){for(const d of await select.locator('xpath=ancestor::details').all())if(await d.getAttribute('open')===null)await d.locator('summary').first().click();}

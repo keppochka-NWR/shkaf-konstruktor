@@ -507,10 +507,11 @@ function WorktopPanel(props: KitchenPanelProps) {
   const setCut = (i: number, patch: Partial<WorktopSpec["cutouts"][number]>) => modifyCutout((n) => { const c = [...n.worktop!.cutouts]; c[i] = { ...c[i], ...patch }; n.worktop = { ...n.worktop!, cutouts: c }; });
   // вырез — над модулем под мойку (варочная — над духовкой), если он под этой столешницей; иначе по центру
   const over = (kind: "sink" | "hob") => props.project.modules.find((a) => a.module.kitchen?.appliance === (kind === "sink" ? "sink" : "oven") && (a.rotation ?? 0) === (props.placed.rotation ?? 0) && a.x >= props.placed.x - 1 && a.x + a.module.width <= props.placed.x + m.width + 1);
-  const addCut = (kind: "sink" | "hob") => modifyCutout((n) => {
-    const [cw, cd] = kind === "sink" ? [500, 450] : [560, 490], below = over(kind);
+  const addCut = (kind: "sink" | "hob", article?:string) => modifyCutout((n) => {
+    const item=article?sinkByArticle(article):undefined;
+    const [cw, cd] = item?[item.cutWidth,item.cutDepth]:kind === "sink" ? [500, 450] : [560, 490], below = over(kind);
     const x = below ? below.x - props.placed.x + (below.module.width - cw) / 2 : (n.width - cw) / 2;
-    n.worktop = { ...n.worktop!, cutouts: [...n.worktop!.cutouts, { kind, x: Math.max(50, Math.min(n.width - 50 - cw, Math.round(x))), width: cw, depth: cd }] };
+    n.worktop = { ...n.worktop!, cutouts: [...n.worktop!.cutouts, { kind, x: Math.max(50, Math.min(n.width - 50 - cw, Math.round(x))), width: cw, depth: cd, ...(item?{fixture:item.article}:{}) }] };
   });
   return <div className="kitchen-panel">
     <div className="property-section kitchen-head"><span className="eyebrow">Столешница</span><h2>{m.name}</h2><p>{m.width} × {m.depth} мм · {worktopLabel(w)} {w.thickness} мм</p></div>
@@ -546,7 +547,9 @@ function WorktopPanel(props: KitchenPanelProps) {
           <Num label="Ширина выреза" value={c.width} min={200} max={Math.max(200, m.width - 100)} change={(v) => setCut(i, { width: v })} />
           <Num label="Глубина выреза" value={c.depth} min={200} max={Math.max(200, m.depth - 80)} change={(v) => setCut(i, { depth: v })} />
         </div>)}
-        <div className="kitchen-chips"><button type="button" onClick={() => addCut("sink")}>+ под мойку</button><button type="button" onClick={() => addCut("hob")}>+ под варочную</button></div>
+        <label className="hardware-field">Добавить мойку<select aria-label="Добавить мойку из каталога" value="" onChange={e=>{if(e.target.value)addCut('sink',e.target.value);}}><option value="">Выберите модель — мойка и вырез добавятся вместе</option>{['Premial','Лемана ПРО'].map(brand=><optgroup key={brand} label={brand}>{sinkCatalog.filter(item=>item.brand===brand).map(item=><option key={item.article} value={item.article}>{item.name} · {item.article} · {item.width}×{item.depth}</option>)}</optgroup>)}</select></label>
+        <p>Монтажные шаблоны пока не подтверждены: при добавлении используются предварительные вырезы. Для производственного раскроя они не подходят.</p>
+        <div className="kitchen-chips"><button type="button" onClick={() => addCut("sink")}>+ произвольный вырез</button><button type="button" onClick={() => addCut("hob")}>+ под варочную</button></div>
       </div>
       <p className="field-note">Столешница — отдельное изделие: в раскрой ЛДСП не идёт (кроме ЛДСП 16+16), в смете — {WORKTOP_THICKNESS[w.material] ? "за м² и обработка лицевого торца за погонный метр" : "за погонный метр"}, вырезы — отдельными работами.</p>
     </Group>
