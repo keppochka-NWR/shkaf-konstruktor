@@ -1,3 +1,4 @@
+import {KitchenLegIcon} from './KitchenLegIcon';
 import {isMaestro,maestroFits} from './maestroDrawer';
 import {textureContentStyle} from './textureContent';
 import {sinkCatalog,sinkByArticle} from './sinkCatalog';
@@ -25,7 +26,7 @@ import {layoutKitchenDrawers,resizeKitchenDrawerFront,setKitchenDrawerCount,setK
 import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { WALL_LABEL, type PlaceTarget, type Wall, type CornerTurn } from "./wallPlacement";
 import { ManagerMode, FACADE_KIND_LABEL, hingeBrandLabel, allegroLabel, allegroVisible } from "./clientLabels";
-import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck, Lightbulb } from "lucide-react";
+import { Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck, Lightbulb } from "lucide-react";
 import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, grooveInsetMax, aluDrawersAvailable, isDrawerFront, handleDoors, doorHandlePos, setModuleHandlePos, isUpperModule, handlePosIssue, HANDLE_POS_LABEL, type HandlePos, type Module, type Part } from "./model";
 import { KITCHEN, APPLIANCES, wallFloorY, kitchenLegs, worktopLabel, hardwareRows, WORKTOP_CHOICES, WORKTOP_THICKNESS, setWorktopMaterial, worktopSolid, type WorktopSpec, type WorktopMaterial } from "./kitchen";
 import { toggleWaterfall, waterfallFloorDrop } from "./worktopWaterfall";
@@ -349,7 +350,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       {k.fasteners === false && <p className="field-note">Как в проекте Базиса: крепежа нет — ни конфирматов, ни эксцентриков, ни полкодержателей в 3D, присадке и смете. Добавили полку или стык — <button className="text-action" onClick={() => modify((n) => { delete n.kitchen!.fasteners; })}>Поставить крепёж</button></p>}
     </Group>
 
-    {legged && <Group icon={<Footprints size={15} />} title="Опоры и цоколь" open={stage === "bodies"} note={`${legCount} оп. · ${clipCount} клипс`}>
+    {legged && <Group icon={<KitchenLegIcon />} title="Опоры и цоколь" open={stage === "bodies"} note={`${legCount} оп. · ${clipCount} клипс`}>
       {/* нижний предел — как в проверке модуля (RULES.feetMin 15), а не 55: иначе поле отвергало то, что validate принимает */}
       <Num label="Высота опор" value={m.feet!.height} min={RULES.feetMin} max={RULES.feetMax} change={(v) => legsAll(v)} note="Опора H100-120: корпус не меняется, модуль и столешница поднимаются" />
       <Check label="Только у этого модуля" checked={onlyThis} change={setOnlyThis} />
