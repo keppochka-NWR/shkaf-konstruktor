@@ -1,0 +1,4 @@
+import {writeFileSync} from 'node:fs';import {initialModule} from '../src/model';import {newProject,applyAutoFillers,localToRoom} from '../src/project';import {createKitchenCornerRow} from '../src/kitchenCornerRow';
+const p=newProject();p.room={...p.room,width:4000,depth:3000,height:2700};p.modules=createKitchenCornerRow(initialModule(),{back:3000,side:2400,wing:'right',room:p.room});const n=applyAutoFillers(p);
+const a=n.modules.filter(a=>a.module.kitchen?.role==='wall'&&(a.rotation??0)!==0).sort((a,b)=>a.z-b.z)[0];const side=localToRoom(a,0,0).z<localToRoom(a,a.module.width,0).z?'left':'right';const keep=localToRoom(a,side==='left'?a.module.width:0,0);a.module.width-=16;const moved=localToRoom(a,side==='left'?a.module.width:0,0);a.x+=keep.x-moved.x;a.z+=keep.z-moved.z;a.module.cornerFiller=side;a.module.cornerKind='plank';
+writeFileSync('reports/corner-1911.json',JSON.stringify(n));

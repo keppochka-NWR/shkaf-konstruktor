@@ -120,6 +120,17 @@ export function applyAutoFillers(p:Project):Project{
       if(n.modules.some(b=>perpendicular(b)&&overlap(strip,bodyBounds(b)))){corner=side;kind='plank';break;}
     }
     const hadCorner=a.module.cornerFiller,hadKind=a.module.cornerKind;
+    // Верхнее крыло стыкуется без узкой корпусной планки (решение 19.11).
+    // В старом ряду расширяем первый шкаф в пространство прежней планки, сохраняя противоположный торец.
+    if(a.module.kitchen?.role==='wall'&&kind==='plank'){
+      corner=undefined;kind=undefined;
+      if(hadCorner&&hadKind==='plank'){
+        const keep=localToRoom(a,hadCorner==='left'?a.module.width:0,0);
+        a.module.width+=t;
+        const after=localToRoom(a,hadCorner==='left'?a.module.width:0,0);a.x+=keep.x-after.x;a.z+=keep.z-after.z;
+      }
+    }
+
     if(corner){a.module.cornerFiller=corner;a.module.cornerKind=kind;}else{delete a.module.cornerFiller;delete a.module.cornerKind;}
     if(corner&&kind==='plank'&&(hadCorner!==corner||hadKind!=='plank')){const b=bounds(a);for(const other of n.modules)if(other!==a&&overlap(b,bounds(other))){shiftAlongWidth(a,corner==='left'?t:-t);
       // Кухня, угол впритык (KITCHEN_TIGHT_CORNER, ниже): 'butt' — как в эталонах Базиса k19/k07/k27 (стык без планки, если сдвиг на

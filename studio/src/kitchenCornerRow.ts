@@ -105,10 +105,10 @@ function layout(source: Pick<Module, "decor" | "facadeDecor">, o: { back: number
     if (wingW.some((x) => x.kind === "sink")) sink = true;
     let z = Zf + PLANK;
     wingW.forEach((x, i) => { const a = put(base(x.width, x.kind), rot, 0, z, rear, R); if (i === 0) plankToBack(a); out.push(a); z += x.width; });
-    const extra = Math.round(Zf - Dw), wingWall = wingW.map((x) => x.width);
+    const extra = Math.round(Zf + PLANK - Dw), wingWall = wingW.map((x) => x.width);
     if (wingWall.length && wingWall[0] + extra <= 1000) wingWall[0] += extra; else if (extra >= KITCHEN.minWidth) wingWall.unshift(extra);
-    let wz = Dw + PLANK;
-    wingWall.forEach((x, i) => { const a = put(wall(x), rot, wallY, wz, 0, R); if (i === 0) plankToBack(a); out.push(a); wz += x; });
+    let wz = Dw;
+    wingWall.forEach((x, i) => { const a = put(wall(x), rot, wallY, wz, 0, R); out.push(a); wz += x; });
   }
   // столешница: кусок по задней стене (над угловыми — до боковых стен), кусок на каждое крыло от глубины заднего куска
   const wtDepth = depth + KITCHEN.worktopDepth - KITCHEN.baseDepth;

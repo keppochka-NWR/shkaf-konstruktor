@@ -140,7 +140,7 @@ for(const wing of ['right','left'] as const)
     assert.ok(Math.abs(wcb.x-(wing==='right'?cb.x:0))<1,'навесной угловой — над нижним угловым');
     const wingWalls=walls.filter(a=>(a.rotation??0)!==0).sort((a,b)=>bounds(a).z-bounds(b).z);
     assert.equal(Math.round(bounds(wingWalls[0]).z),Math.round(wcb.z+wcb.d));
-    assert.equal(wingWalls[0].module.cornerKind,'plank');
+    assert.equal(wingWalls[0].module.cornerKind,undefined); // верхнее крыло без стыковочной планки, 19.11
     // автофальши ничего не сдвигают: раскладка уже с планками
     group.forEach((a,i)=>{assert.ok(Math.abs(p.modules[i].x-a.x)<0.01&&Math.abs(p.modules[i].z-a.z)<0.01,a.module.name);});
     // мойка одна

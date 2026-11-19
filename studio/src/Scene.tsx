@@ -145,6 +145,7 @@ import './guides.css';
 export type View = "iso" | "front" | "side" | "left" | "top";
 type Props = {
   hiddenModuleIds?:string[];
+  isolatedPart?:{mid:string;pid:string};
   viewKey?:string;
   isoDirection?: [number, number];
   captureReady: (fn: ((opts?: {frame?: boolean}) => string) | undefined) => void;
@@ -573,6 +574,7 @@ export function Scene(p: Props) {
         moduleGroup.position.set(origin.x-center.x,placed.y??0,origin.z-center.z);moduleGroup.rotation.y=(placed.rotation??0)*Math.PI/180;moduleGroup.userData.base=moduleGroup.position.clone();moduleGroup.userData.baseRot=moduleGroup.rotation.y;
         const mParts = joinedUnderLightParts(placed,state.arrangement), byId = new Map(mParts.map((q) => [q.id, q]));
         for (const part of mParts) {
+          if(state.isolatedPart&&(placed.id!==state.isolatedPart.mid||part.id!==state.isolatedPart.pid))continue;
           // «Скрыть фасады» убирает двери (распашные и полотна купе) с петлями и их ручками; ящики остаются с фасадами — это наполнение.
           if(state.hideFacades&&hiddenWithFacades(part))continue;
           const isMetal = part.material === "metal",
@@ -1412,13 +1414,13 @@ export function Scene(p: Props) {
       if(!fromMark)current.current.onPlainModuleClick?.(String(hit.object.userData.moduleId));
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
       const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
-      // Клик по ручке в любом режиме открывает выбор ручки для этого корпуса.
-      if(hit.object.userData.role==='handle'&&state.onHandleClick&&!state.presentation){if(a.id!==state.activeId)state.onModuleSelect(a.id);state.onHandleClick(a.id,pid.includes(':drawer:')?pid.replace(':handle',':facade'):pid.replace(':handle:',':door:'));return;}
+      // Обычный клик выбирает саму деталь, включая ручку; параметры доступны через меню.
+      
       if(state.mode==='select'){if(a.id!==state.activeId)state.onModuleSelect(a.id);state.onPartSelect(sid,pid,a.id);return;}
       const isPart=state.mode==='fill'&&(!a.module.corner||pid.includes(':shelf:')||pid.includes(':drawer:')||pid.endsWith(':rod'))&&(['shelf','drawer','rod','pantograph','flange'].includes(hit.object.userData.role)||(hit.object.userData.role==='handle'&&pid.includes(':drawer:')))&&!pid.includes(':drawer-cap');
       const isDivider=state.mode==='fill'&&!a.module.corner&&pid.endsWith(':divider');
       const isDividerEnd=state.mode==='fill'&&!a.module.corner&&!!state.onMoveDividerEnd&&/:divider:(under|over)$/.test(pid);
-      if(state.mode==='fill'&&!isPart&&!isDivider&&!isDividerEnd){if(a.id!==state.activeId)state.onModuleSelect(a.id);else state.onPartSelect(sid,pid);return;}
+      if(state.mode==='fill'&&!isPart&&!isDivider&&!isDividerEnd){state.onPartSelect(sid,pid,a.id);return;}
       const normal=isPart&&a.module.corner?camera.getWorldDirection(new THREE.Vector3()):isPart||isDivider||isDividerEnd||state.view==='front'?new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),(a.rotation??0)*Math.PI/180):sideView(state.view)?camera.getWorldDirection(new THREE.Vector3()):new THREE.Vector3(0,1,0); // сбоку — плоскость экрана: глубина и высота (критик 29.10 п.7)
       const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(normal,hit.point);
       const anchor=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,anchor))return;
@@ -1515,7 +1517,7 @@ export function Scene(p: Props) {
             current.current.onTransfer(d.mid,d.sid,d.pid,toMid,toSid,hit.point.y-(placed.y??0));
           }else current.current.onMovePart(d.mid,d.sid,d.pid,d.delta);
         }
-      }else{if(d.kind==='part')current.current.onPartSelect(d.sid,d.pid,d.mid);else if(d.mid!==current.current.activeId)current.current.onModuleSelect(d.mid);else current.current.onPartSelect(d.sid,d.pid,d.mid);}
+      }else{current.current.onPartSelect(d.sid,d.pid,d.mid);}
       resetDrag();if(renderer.domElement.hasPointerCapture(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);
     }
     // Растяжение мышью за ручку «↔» (запрос Макса 20.10.2026): корпус (и сосед при стыке) масштабируется по ширине на экране,
@@ -2066,7 +2068,7 @@ export function Scene(p: Props) {
       p.clearFacades,
       p.hideFacades,
       p.hideFurniture,
-      p.hiddenModuleIds?.join(','),
+      p.hiddenModuleIds?.join(','),p.isolatedPart?.mid,p.isolatedPart?.pid,
       p.selected,
       p.selectedPart,
       p.texture,

@@ -1,3 +1,4 @@
+import {connectedModuleIds,type SelectionIsolation} from './selectionHierarchy';
 import {WorktopDecorPicker} from './WorktopDecorPicker';
 import {surfaceCatalog} from './surfaceCatalog';
 import { blockingDesignChanges } from './editableDesignIssues';
@@ -453,7 +454,18 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const [hideFacades,setHideFacades]=useState(false);
   const [cutaway,setCutawayState]=useState(readCutaway);const toggleCutaway=()=>setCutawayState(v=>{saveCutaway(!v);return !v;});
   const [hiddenModules,setHiddenModules]=useState<string[]>([]);
-  const hiddenIds=hiddenModules.filter(id=>project.modules.some(a=>a.id===id));
+  const [isolation,setIsolation]=useState<SelectionIsolation|null>(null);
+  const hiddenIds=project.modules.filter(a=>hiddenModules.includes(a.id)||(isolation&&!isolation.ids.includes(a.id))).map(a=>a.id);
+  function isolateSelection(){
+    if(nothingSelected)return;
+    const ids=liveGroupIds.length?liveGroupIds:[placed.id];
+    setIsolation({ids, ...(!liveGroupIds.length&&selectedPart?{part:{mid:selectedPart.mid,pid:selectedPart.pid}}:{})});
+    setHiddenModules(old=>old.filter(id=>!ids.includes(id)));
+  }
+  function selectParent(){
+    if(selectedPart){selectModule(selectedPart.mid);return;}
+    if(!nothingSelected)setGroupIds(connectedModuleIds(project,liveGroupIds.length?liveGroupIds:[placed.id]));
+  }
   const [compactTop,setCompactTop]=useState(()=>{try{return localStorage.getItem('yo-compact-top')!=='0';}catch{return true;}});
   const toggleTop=()=>setCompactTop(v=>{try{localStorage.setItem('yo-compact-top',v?'0':'1');}catch{}return !v;});
   const hideModule=(id:string)=>{setHiddenModules(ids=>ids.includes(id)?ids:[...ids,id]);setSelectedPart(null);setCtxMenu(null);};
@@ -488,6 +500,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     setDirectValue(String(value));
   }
   function selectModule(mid: string) {
+    if(isolation&&!isolation.ids.includes(mid))setIsolation(null);
     setDeselected(false);
     setHiddenModules(ids=>ids.filter(id=>id!==mid));
     setSelectedOpening(undefined);
@@ -544,7 +557,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const pid=insertedPartId(project,next,mid,sid,kind);
     // из кругового меню режим не переключаем (ручной тест 19.10: в «Наполнении» менеджер терял меню)
     setActive(mid);chooseSection(sid);if(!keepMode)setMode('fill');setOpenDoors(true);
-    if(pid){setSelectedPart({mid,sid,pid});if(kind==='drawer'||kind==='mesh')setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));}
+    if(pid){setGroupIds([]);setSelectedPart({mid,sid,pid});if(kind==='drawer'||kind==='mesh')setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));}
   }
   /** Сырой модуль из Базиса (m.raw): наполнение не настраивается — пресеты, композер и перетаскивание выходят без записи в историю (A5). */
   const RAW_FILLING_MESSAGE='Модуль перенесён из Базиса как есть — наполнение здесь не настраивается. Правится в Базисе (переимпорт).';
@@ -1143,6 +1156,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       if(command){e.preventDefault();command==='undo'?undo():redo();return;}
       // окно поверх редактора (подсветка, фурнитура, крупные фасады Вернисажа…) или фокус в поле/списке — клавиши редактора не действуют (критик 29.10)
       if(direct||modal||document.querySelector('[aria-modal="true"]'))return;
+      // Tab: от выбранной детали к её корпусу; обычная навигация по полям/кнопкам сохраняется.
+      if(e.key==='Tab'&&!e.shiftKey&&!e.ctrlKey&&!e.altKey&&!nothingSelected&&!ctxMenu&&!gapMenu&&!lightMode&&!(e.target instanceof Element&&e.target.closest('button,a,input,select,textarea,[contenteditable="true"]'))){
+        e.preventDefault();selectParent();return;
+      }
+      if(e.code==='KeyX'&&e.shiftKey&&!e.ctrlKey&&!e.altKey&&!ctxMenu&&!gapMenu&&!lightMode){e.preventDefault();isolateSelection();return;}
       // Delete (правка Макса 29.10: «удаление шкафов по нажатию на Delete»): выбранная деталь — сразу (ящик — целиком), корпус или
       // отмеченные Shift+щелчком корпуса — через «Да, удалить / Отмена», как «Удалить корпус» в меню правой кнопки (решение 19.10)
       if(e.key==='Delete'&&!ctxMenu&&!gapMenu&&!lightMode&&!cutHost&&!presentation&&!(e.target instanceof Element&&e.target.closest('input,select,textarea'))){
@@ -1633,8 +1651,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             {/* Макс 01.11: «иконки непонятные, вернём текст» — режимы и переключатели подписями, без значков; группы переносятся целиком */}
             {!presentation&&!roomPlan&&!(!advanced&&stage==='fixtures')&&<><div className="interaction-bar" data-tour="modes" role="group" aria-label="Режим">{([{id:'select',label:'Выбрать',hint:'Выбрать деталь щелчком'},{id:'move',label:'Двигать корпуса',hint:'Тянуть корпуса мышью'},{id:'fill',label:'Наполнение',hint:'Двигать полки, ящики и перегородки (створки открываются)'},{id:'orbit',label:'Свободная камера',hint:'Вращать камеру левой кнопкой'}] as const).map(t=><button key={t.id} aria-label={t.label} title={t.hint} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true);else if(!doorsByUser.current)setOpenDoors(false);}}><span className="mode-label">{t.label}</span></button>)}</div><span className="toolbar-sep toolbar-sep-toggles" aria-hidden="true"/><div className="interaction-bar tool-toggles" role="group" aria-label="Показ">{(()=>{const none=!hideableFacades;return <button className="tool-toggle" aria-label={hideFacades?'Показать фасады':'Скрыть фасады'} aria-pressed={hideFacades} disabled={none&&!hideFacades} title={none&&!hideFacades?'Недоступно: в проекте нет фасадов':hideFacades?'Показать фасады — вернуть двери на место':'Скрыть фасады — видно наполнение'} onClick={()=>setHideFacades(v=>!v)}><span className="mode-label">{hideFacades?'Показать фасады':'Скрыть фасады'}</span></button>;})()}{stage==='bodies'&&!m.corner&&<button className="gap-toggle tool-toggle" aria-label="Размеры проёмов между полками" title="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}><span className="mode-label">Проёмы</span></button>}</div></>}
           </SceneToolbar>
-          {hiddenIds.length>0&&!presentation&&<button className="restore-modules" onClick={()=>setHiddenModules([])}><Eye size={16}/>Показать все скрытые ({hiddenIds.length})</button>}
-          <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} stretchable={!widthLock(m)&&!deselected} cornerPlan={pull=>planCorner(pull)} onCorner={commitCorner} guides={project.guides} onGuides={commitGuides} onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject} shapeEdit={shapeEdit} onShapeEdit={shapeStage?setShapeEdit:undefined}/>:<Scene onToggleModule={toggleModuleGroup} onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} hiddenModuleIds={hiddenIds} viewKey={viewKey}
+          {(hiddenIds.length>0||isolation)&&!presentation&&<button className="restore-modules" onClick={()=>{setHiddenModules([]);setIsolation(null);}}><Eye size={16}/>{isolation?'Показать всё':`Показать все скрытые (${hiddenIds.length})`}</button>}
+          <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} stretchable={!widthLock(m)&&!deselected} cornerPlan={pull=>planCorner(pull)} onCorner={commitCorner} guides={project.guides} onGuides={commitGuides} onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject} shapeEdit={shapeEdit} onShapeEdit={shapeStage?setShapeEdit:undefined}/>:<Scene isolatedPart={isolation?.part} onToggleModule={toggleModuleGroup} onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} hiddenModuleIds={hiddenIds} viewKey={viewKey}
             moveAll={moveAll}
             groupIds={liveGroupIds}
             mode={presentation||editingFacades?'orbit':mode}
@@ -1660,8 +1678,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             module={sceneProject.modules.find(a=>a.id===placed.id)?.module??m}
             arrangement={sceneProject.modules}
             activeId={placed.id}
-            room={showRoom ? project.room : undefined}
-            appliances={project.room.obstacles}
+            room={showRoom&&!isolation ? project.room : undefined}
+            appliances={isolation?[]:project.room.obstacles}
             onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})}
             selectedObstacle={selectedObstacle}
             onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);setSelectedPart(null);setTab('room');}}
@@ -1698,7 +1716,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               setDeselected(false);
               setActive(mid);
               chooseSection(sid);
-              setSelectedPart({mid,sid,pid});
+              setGroupIds([]);setSelectedPart({mid,sid,pid});
               if(mode!=="select"&&(pid.includes(":shelf:")||pid.includes(":drawer:")))setMode("fill");
               if (pid.includes(":drawer:")) {
                 setDrawerIndex(Number(pid.split(":drawer:")[1].split(":")[0]));
@@ -1893,7 +1911,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {/* Макс 31.10: клавиши — плашками на сплошной полосе, по режиму; «?» — полный список */}
           {!presentation&&!roomPlan&&<KeyHints mode={presentation||editingFacades?'orbit':mode} moveAll={moveAll} group={liveGroupIds.length} snapping={snapping} focus={focusActive} onHelp={()=>setModal('help')}/>}
         </section>
-        <aside className="properties" ref={propertiesRef}><SafeBoundary label="Свойства" resetKey={project}>
+        <aside className="properties" ref={propertiesRef}><SafeBoundary label="Свойства" resetKey={project}><div className="selected-module-heading">{project.modules.some(a=>a.module.kitchen?.role==='wall'&&a.module.cornerKind==='plank'&&!a.module.bazis&&!a.module.raw)&&<button className="outline" onClick={()=>commitProject(applyAutoFillers(project))}>Убрать планки стыков верхних модулей</button>}<button className="outline" disabled={nothingSelected} onClick={isolateSelection}>Скрыть невыделенные · Shift+X</button>{isolation&&<button className="outline" onClick={()=>{setIsolation(null);setHiddenModules([]);}}>Показать всё</button>}</div>
+          {selectedPart&&<div className="selected-module-heading" role="status" aria-label="Выбранная деталь"><strong>{selectedDetail?.name??'Деталь модуля'}</strong><button className="outline" onClick={()=>selectModule(selectedPart.mid)}>Выбрать весь модуль · Tab</button></div>}
           {editingFacades?<section className="facade-panel" role="region" aria-label="Редактор фасадов" onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setModal(null);}}}>
             <header><h2>Редактор фасадов</h2><button className="text-action" aria-label="Закрыть редактор фасадов" onClick={()=>setModal(null)}><X size={18}/></button></header>
             <p className="facade-preview-note">Предпросмотр · камера доступна. Чтобы продолжить построение, примените изменения или отмените.</p>
