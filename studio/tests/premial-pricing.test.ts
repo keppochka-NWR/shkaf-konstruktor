@@ -32,3 +32,24 @@ test('invalid quantity is rejected and missing articles remain explicitly unpric
  p.premialExtras[0].quantity=-1;assert.ok(projectErrors(p).length);
  assert.throws(()=>parseProject(JSON.parse(JSON.stringify(p))));
 });
+
+import {premialKitchenLegQuote,premialMaestroArticle} from '../src/premialPricing';
+import {kitchenBase} from '../src/kitchen';
+import {initialModule} from '../src/model';
+test('Maestro article table covers all 18 combinations without substituting Axis sizes',()=>{
+ const arts=[93,131,178].flatMap(h=>[400,450,500].flatMap(l=>(['white','grey'] as const).map(c=>premialMaestroArticle(h,l,c))));
+ assert.equal(new Set(arts).size,18);assert.ok(arts.every(Boolean));
+ assert.equal(premialMaestroArticle(93,500,'grey'),'033500');assert.equal(premialMaestroArticle(93,400,'white'),'033515');
+ assert.equal(premialMaestroArticle(120,500,'white'),undefined);
+});
+test('kitchen feet use compatible height ranges and client multiplier exactly once',()=>{
+ assert.equal(premialKitchenLegQuote(100).article,'090020');assert.equal(premialKitchenLegQuote(150).article,'090017');assert.equal(premialKitchenLegQuote(140).price,null);
+ const p=newProject();p.modules[0].module=kitchenBase(initialModule(),600);p.calculation={markup:5,overrides:{},sheetPrice:23000};
+ const ls=estimate(p).lines,leg=ls.find(x=>x.id==='kitchen-leg')!;
+ assert.ok(leg);assert.equal(leg.quantity,4);assert.equal(leg.retail,true);assert.equal(leg.unitPrice,premialClientPrice(premialCatalog.find(x=>x.article==='090020')!.sitePrice));
+});
+
+import {premialGolaQuote,premialArticleQuote} from '../src/premialPricing';
+test('Gola converts a 6m bar to metres after the 1.3 multiplier once',()=>{
+ for(const [kind,article] of [['L','240034'],['C','240025']] as const){const q=premialGolaQuote(kind);assert.equal(q.price,Math.round(premialArticleQuote(article).price!/6*100)/100);assert.equal(q.retail,true);}
+});

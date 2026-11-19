@@ -1,3 +1,4 @@
+import {isMaestro,maestroLayout,maestroFits,maestroTop,maestroParts,type MaestroDrawer} from './maestroDrawer';
 import {OVEN} from './ovenDimensions';
 // Ящики кухни по проектам Базиса цеха (база проектов цеха, разбор 09.10.2026).
 // Система Axis PRO (GTV): металлические царги H-86/120/168/200, дно и задняя стенка ЛДСП 16, направляющие скрытого монтажа
@@ -9,7 +10,7 @@ import { ALU_EXTRAS, aluLabel } from "./alu";
 import { qrot, type Quat } from "./quat";
 import { handleById } from "./handles";
 
-export type KDrawerSystem = "axis-pro" | "firmax-ldsp" | "versalite-h45" | "start-sc" | "indigo" | "modern-slide";
+export type KDrawerSystem = "maestro-7d" | "axis-pro" | "firmax-ldsp" | "versalite-h45" | "start-sc" | "indigo" | "modern-slide";
 /** Короб ящика Firmax скрытого монтажа (ЛДСП 16), по 37 ящикам Базиса (k03–k31): боковины в gap от боковин корпуса, длина len;
  *  дно между боковинами на bottomUp выше их низа (10, у мелких 5); задняя стенка и фальшпанель — между боковинами на дне, до верха боковин.
  *  Конфирматы ставятся в Базисе вручную (шаг разный), поэтому их высоты храним как в проекте: conf — от низа задней стенки
@@ -106,7 +107,7 @@ export type ModernDrawer = { system: "modern-slide"; y0: number; y1: number; run
  *  одинаково), поэтому длина не подбирается под глубину: не входит — ошибка проверки, а не выдуманная длина. */
 export const MODERN = { gap: 8.5, bottomUp: 13, confBottom: 37, confUnder: 83.5, runner: 500, box: 490 };
 export type BoxDrawer = FirmaxDrawer | VersaliteDrawer | ModernDrawer;
-export type KDrawer = AxisDrawer | FirmaxDrawer | VersaliteDrawer | StartDrawer | IndigoDrawer | ModernDrawer;
+export type KDrawer = MaestroDrawer | AxisDrawer | FirmaxDrawer | VersaliteDrawer | StartDrawer | IndigoDrawer | ModernDrawer;
 export const isFirmax = (k: KDrawer): k is FirmaxDrawer => k.system === "firmax-ldsp";
 export const isVersalite = (k: KDrawer): k is VersaliteDrawer => k.system === "versalite-h45";
 /** Ящик с коробом ЛДСП (Firmax или Versalite). */
@@ -114,7 +115,7 @@ export const isBox = (k: KDrawer): k is BoxDrawer => k.system === "firmax-ldsp" 
 export const isModern = (k: KDrawer): k is ModernDrawer => k.system === "modern-slide";
 export const isStart = (k: KDrawer): k is StartDrawer => k.system === "start-sc";
 export const isIndigo = (k: KDrawer): k is IndigoDrawer => k.system === "indigo";
-export const isAxis = (k: KDrawer): k is AxisDrawer => k.system === "axis-pro" || (!isBox(k) && !isStart(k) && !isIndigo(k));
+export const isAxis = (k: KDrawer): k is AxisDrawer => k.system === "axis-pro" || (!isBox(k) && !isStart(k) && !isIndigo(k) && !isMaestro(k));
 /** Indigo по Базису (k16, разброс 0): царга на 44 ниже оси, дно на 5 ниже оси (уже корпуса на 19, глубина 479,2 от 0,4),
  *  задняя стенка на 11,4 выше оси (уже на 42, 147,2 / 62,2), «3x3» в боковину корпуса, заднюю стенку и фасад. */
 export const INDIGO = {
@@ -360,7 +361,7 @@ export const AXIS_RUNNER_DOWN = 44;
 /** Запасы раскладки (по базе: верх ящика не ближе 21,5 к верху фасада; до царг корпуса — 5). */
 export const AXIS_FIT = { facadeTop: 21.5, ceiling: 5 };
 /** Верх короба ящика от пола модуля: задняя стенка, царга, держатель — что выше. */
-export function axisTop(k: KDrawer) { if (isBox(k)) return k.box.y + k.box.h; if (isStart(k)) return startTop(k); if (isIndigo(k)) return indigoTop(k); return k.runnerY + Math.max(-22 + (k.backH ?? AXIS_BACK[k.h]), SIDE_TOP[k.h], REAR_TOP[k.h]); }
+export function axisTop(k: KDrawer) { if(isMaestro(k))return maestroTop(k); if (isBox(k)) return k.box.y + k.box.h; if (isStart(k)) return startTop(k); if (isIndigo(k)) return indigoTop(k); return k.runnerY + Math.max(-22 + (k.backH ?? AXIS_BACK[k.h]), SIDE_TOP[k.h], REAR_TOP[k.h]); }
 /** Низ под царгами/крышей корпуса (нижний кухонный: царги 16 лёжа у верха; на ребре — их высота). */
 export function axisCeiling(m: Module) {
   // верхняя стяжка с atTop (пакет 0) стоит ниже кромки: её низ от верха = atTop + height (та же формула, что railAt в model.ts), а не высота стяжки
@@ -406,6 +407,7 @@ export function golaBand(m: Module, y0: number, y1: number): [number, number] {
 /** Фурнитура ящика по высоте от пола модуля [низ, верх]: направляющая под осью (Axis/Indigo −44, СТАРТ −33), короб ЛДСП — боковины;
  *  верх — короб/царга/задняя стенка/рейлинг (axisTop). undefined — ящик с неверными полями (об этом скажут проверки системы). */
 export function kdHardwareSpan(k: KDrawer): [number, number] | undefined {
+  if(isMaestro(k))return [k.runnerY,maestroTop(k)];
   if (isBox(k)) return Number.isFinite(k.box?.y) && Number.isFinite(k.box?.h) ? [k.box.y, k.box.y + k.box.h] : undefined;
   if (!Number.isFinite(k.runnerY)) return undefined;
   if (isStart(k)) return START[k.sb] ? [k.runnerY - START_RUN_DOWN, startTop(k)] : undefined;
@@ -443,6 +445,7 @@ function facadeColumn(m: Module): [number, number] {
 }
 /** Ящик входит: верх короба не ближе запасов к верху своего фасада и к царгам корпуса, не заходит в профили Gola. */
 export function axisFits(m: Module, k: KDrawer) {
+ if(isMaestro(k))return maestroFits(m,k);
   if (isBox(k)) return firmaxFits(m, k); if (isStart(k)) return startFits(m, k); if (isIndigo(k)) return indigoFits(m, k);
   const [lo, hi] = golaBand(m, k.y0, k.y1);
   return axisTop(k) <= Math.min(k.y1 - AXIS_FIT.facadeTop, axisCeiling(m) - AXIS_FIT.ceiling, hi) + 1e-6 && k.runnerY - AXIS_RUNNER_DOWN >= lo - 1e-6;
@@ -498,6 +501,7 @@ export function withAxisH(m: Module, k: AxisDrawer, h: AxisDrawer["h"]): AxisDra
 /** Наименьший фасад верхнего ящика, в который входит самая низкая царга с моделью под эту глубину и цвет:
  *  направляющая 59 над низом фасада + верх короба + запас 21,5 до верха фасада (H-86 → 143,5). */
 export function kdrawerMinTop(m: Module) {
+  if(m.kdrawers?.[0]?.system==='maestro-7d')return 144;
   const k0 = m.kdrawers?.[0], color = k0 && isAxis(k0) ? k0.color : undefined;
   const t = AXIS_HEIGHTS.filter((h) => !!axisBestLen(m, h, color)).map((h) => 59 + axisTop({ system: "axis-pro", y0: 0, y1: 0, runnerY: 0, h, len: 500 }) + AXIS_FIT.facadeTop);
   return t.length ? Math.ceil(Math.min(...t) * 2) / 2 : 100;
@@ -524,7 +528,7 @@ export function relayoutProblem(m: Module, n: number): string | undefined {
   if (!ks.every((k) => fitsK(m, k))) {
     // по высоте не входит из-за глубины: у низких царг (H-86, H-168) нет длин короче 450 — назвать глубину, с которой войдёт
     const d = [325, 425, 475, 525, 575].find((dd) => dd > m.depth && relayoutKDrawers({ ...m, depth: dd }, n).every((k) => fitsK(m, k) && (!isAxis(k) || axisAvailable(k))));
-    const sn = ({ "versalite-h45": "Versalite", "firmax-ldsp": "Firmax", "start-sc": "СТАРТ", indigo: "Indigo", "modern-slide": "MODERN SLIDE", "axis-pro": "Axis PRO" } as Record<string, string>)[ks[0]?.system ?? "axis-pro"] ?? "Axis PRO";
+    const sn = ({ "versalite-h45": "Versalite", "firmax-ldsp": "Firmax", "start-sc": "СТАРТ", indigo: "Indigo", "modern-slide": "MODERN SLIDE", "maestro-7d": "Premial МАЭСТРО 7D", "axis-pro": "Axis PRO" } as Record<string, string>)[ks[0]?.system ?? "axis-pro"] ?? "Axis PRO";
     return d && sn === "Axis PRO" ? `На глубину ${m.depth} столько ящиков Axis PRO не входит (низких царг такой длины нет) — нужна глубина от ${d}` : `Столько ящиков ${sn} по высоте корпуса не входит`;
   }
   const miss = ks.filter(isAxis).find((k) => !axisAvailable(k));
@@ -601,6 +605,7 @@ export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): K
     if (what === "depth") return ks.map((k) => { if (!isStart(k)) return k; const len = startDepthLen(m, k); return len === k.len ? k : { ...k, len }; });
     return startLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isStart));
   }
+  if (isMaestro(ks[0])) return maestroLayout(m,ks.length,ks.map(k=>k.y1-k.y0),ks.filter(isMaestro));
   if (isIndigo(ks[0])) return what === "depth" ? ks : indigoLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isIndigo));
   if (isModern(ks[0])) return what === "depth" ? ks : modernLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isModern));
   if (isVersalite(ks[0])) {
@@ -628,6 +633,7 @@ export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): K
 /** Новое число ящиков или доли фасадов — с цветом и саморезами текущих ящиков; система — как у текущих. */
 export function relayoutKDrawers(m: Module, n: number, ratios?: number[], system?: KDrawerSystem): KDrawer[] {
   const k0 = m.kdrawers?.[0], sys = system ?? k0?.system ?? "axis-pro";
+  if (sys === "maestro-7d") return maestroLayout(m,n,ratios,m.kdrawers?.filter(isMaestro));
   if (sys === "versalite-h45") return versaliteLayout(m, n, ratios, m.kdrawers?.filter(isVersalite));
   if (sys === "start-sc") return startLayout(m, n, ratios, m.kdrawers?.filter(isStart));
   if (sys === "indigo") return indigoLayout(m, n, ratios, m.kdrawers?.filter(isIndigo));
@@ -780,7 +786,8 @@ function firmaxGeom(k: BoxDrawer, x0: number, xr: number, F: number) {
 }
 
 /** Есть ли модели Базиса на это сочетание (царга нужной длины и высоты, держатели, направляющая; антрацит — свои сетки). */
-export function axisAvailable(k: Pick<AxisDrawer, "h" | "len" | "color"> | BoxDrawer | StartDrawer | IndigoDrawer) {
+export function axisAvailable(k: Pick<AxisDrawer, "h" | "len" | "color"> | BoxDrawer | StartDrawer | IndigoDrawer | MaestroDrawer) {
+  if ("system" in k && k.system === "maestro-7d") return [93,131,178].includes(k.hc)&&[400,450,500].includes(k.len);
   if ("system" in k && k.system === "start-sc") return startAvailable(k.sb, k.len);
   if ("system" in k && k.system === "indigo") return k.len === 500 && (k.hc === 90 || k.hc === 175);
   if ("system" in k && (k.system === "firmax-ldsp" || k.system === "versalite-h45" || k.system === "modern-slide")) return true; // короб ЛДСП: Firmax без сеток, у Versalite сетки на все длины
@@ -794,7 +801,7 @@ export function axisFloor(m: Module) {
   return base + Math.max(0, ...low);
 }
 
-export function axisLabel(k: KDrawer) { if (isModern(k)) return `MODERN SLIDE, короб ЛДСП ${k.box.h}×${k.box.len} мм`; if (isIndigo(k)) return `Indigo H=${k.hc}, ${k.len} мм${k.color === "white" ? ", белая" : ", орион серый"}`; if (isStart(k)) return `СТАРТ ${k.sb} H${k.sb === "SB20" ? 167 : START[k.sb].back}, ${k.len} мм${k.rail ? ", рейлинг" : ""}`; if (isVersalite(k)) return `Versalite Light H45 ${k.len}, короб ЛДСП ${k.box.h}×${k.box.len} мм`; if (isFirmax(k)) return `Firmax ЛДСП, короб ${k.box.h}×${k.box.len} мм`; return `Axis PRO H-${k.h}, ${k.len} мм${k.color === "anthracite" ? ", антрацит" : ""}`; }
+export function axisLabel(k: KDrawer) { if(isMaestro(k))return `Premial МАЭСТРО 7D H${k.hc}, ${k.len} мм, ${k.finish==='white'?'белый':'серый'}`; if (isModern(k)) return `MODERN SLIDE, короб ЛДСП ${k.box.h}×${k.box.len} мм`; if (isIndigo(k)) return `Indigo H=${k.hc}, ${k.len} мм${k.color === "white" ? ", белая" : ", орион серый"}`; if (isStart(k)) return `СТАРТ ${k.sb} H${k.sb === "SB20" ? 167 : START[k.sb].back}, ${k.len} мм${k.rail ? ", рейлинг" : ""}`; if (isVersalite(k)) return `Versalite Light H45 ${k.len}, короб ЛДСП ${k.box.h}×${k.box.len} мм`; if (isFirmax(k)) return `Firmax ЛДСП, короб ${k.box.h}×${k.box.len} мм`; return `Axis PRO H-${k.h}, ${k.len} мм${k.color === "anthracite" ? ", антрацит" : ""}`; }
 
 /** Детали ящиков кухонного модуля: фасады, дно и задняя стенка ЛДСП, фурнитура Axis PRO сетками Базиса. */
 export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, facadeT: number, faceAir: number) {
@@ -848,6 +855,7 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
           out.push({ id: `${id}:drawer:handle`, name: "Ручка ящика · " + h.label, size: [h.len, 10, 25], position: [hx, hy, fz + 13], length: h.len, width: 25, thickness: 10, role: "handle", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], anchor: [hx, hy, fz] });
       }
     }
+    if(isMaestro(k)){out.push(...maestroParts(m,k,j,x0,xr,F));return;}
     if (isIndigo(k)) {
       // Indigo: дно и задняя стенка ЛДСП 16, царги и направляющие сетками Базиса, «3x3» — как в проекте
       const s0 = INDIGO[k.hc], y = k.runnerY, bd = 479.2, backH = k.backH ?? s0.back, bw = xr - x0 - 19, kw = xr - x0 - 42;
@@ -1057,6 +1065,7 @@ export function kitchenDrawerHoles(m: Module, ps: Part[], push: (src: string, at
   if (!m.kdrawers?.length) return;
   m.kdrawers.forEach((k, j) => {
     const id = `kd:${j}`;
+    if(isMaestro(k))return; // Factory drilling template required; never reuse Axis drilling.
     if (isIndigo(k)) {
       // Indigo (FurnList.Holes Базиса): направляющая — 12 × D6,5×2 в боковину корпуса; «3x3» — D3×3 в боковину, заднюю стенку, фасад
       for (const lr of ["L", "R"] as const) {
@@ -1175,6 +1184,11 @@ export function kitchenDrawerErrors(m: Module): string[] {
   });
   ks.forEach((k, j) => {
     const p = `Ящик ${j + 1}: `;
+    if(isMaestro(k)){
+      if(![k.y0,k.y1,k.runnerY,k.hc,k.len].every(Number.isFinite)||![93,131,178].includes(k.hc)||![400,450,500].includes(k.len)||!maestroFits(m,k))e.push(p+'МАЭСТРО 7D не помещается: проверьте высоту, глубину и царги.');
+      if(m.width<150)e.push(p+'Слишком узкий корпус для МАЭСТРО 7D.');
+      return;
+    }
     if (isIndigo(k)) {
       if (![k.y0, k.y1, k.runnerY].every(Number.isFinite) || k.y1 - k.y0 < 60 || k.y0 < 0 || k.y1 > m.height) { e.push(p + "фасад от 60 мм в пределах высоты модуля."); return; }
       if (!axisAvailable(k)) { e.push(p + "Indigo — царга H=90 или H=175, длина 500 (модели Базиса цеха)."); return; }
@@ -1261,7 +1275,8 @@ export function axisCombos(color?: AxisDrawer["color"]) { return AXIS_HEIGHTS.fl
 
 export function parseKDrawers(x: unknown): KDrawer[] | undefined {
   if (!Array.isArray(x)) return undefined;
-  return x.slice(0, 6).map((k0: Partial<AxisDrawer> | Partial<FirmaxDrawer> | Partial<VersaliteDrawer> | Partial<StartDrawer> | Partial<IndigoDrawer> | Partial<ModernDrawer>): KDrawer => {
+  return x.slice(0, 6).map((k0: Partial<AxisDrawer> | Partial<FirmaxDrawer> | Partial<VersaliteDrawer> | Partial<StartDrawer> | Partial<IndigoDrawer> | Partial<ModernDrawer> | Partial<MaestroDrawer>): KDrawer => {
+    if(k0.system==='maestro-7d'){const k=k0 as Partial<MaestroDrawer>;return {system:'maestro-7d',y0:Number(k.y0),y1:Number(k.y1),runnerY:Number(k.runnerY),hc:Number(k.hc) as MaestroDrawer['hc'],len:Number(k.len) as MaestroDrawer['len'],finish:k.finish==='grey'?'grey':'white'};}
     if (k0.system === "indigo") {
       const s = k0 as Partial<IndigoDrawer>;
       return { system: "indigo", y0: Number(s.y0), y1: Number(s.y1), runnerY: Number(s.runnerY), hc: Number(s.hc) === 90 ? 90 : 175, len: 500, ...(s.color === "white" ? { color: "white" as const } : {}), ...(s.backH === undefined ? {} : { backH: Number(s.backH) }), ...(s.mirror ? { mirror: true as const } : {}) };

@@ -809,6 +809,7 @@ export function Scene(p: Props) {
             active,
             role: part.role,
           };
+          if(part.material==='metal'&&part.name.includes('МАЭСТРО')){const k=m.kdrawers?.[Number(part.id.split(':')[1])];if(k?.system==='maestro-7d'){mat.color.set(k.finish==='white'?0xf1f2f3:0x80878e);mat.metalness=.25;mat.roughness=.5;}}
           if (part.role === "light" && !part.id.startsWith("groove:")) { mesh.castShadow = false; ledGlow(mesh, part, m, mParts); }
           if (state.exploded && active) {
             mesh.position.x = (mesh.position.x-m.width/2)*1.3+m.width/2;
@@ -840,27 +841,34 @@ export function Scene(p: Props) {
             // Чашка и плечо петли поворачиваются вместе с фасадом; монтажная планка остаётся на стойке.
             const pivot=doorPivots.get(part.id.replace(/:(hingecup|hingearm):/,':door:').replace(/:\d+$/,''))!;mesh.position.sub(pivot.position).applyAxisAngle(new THREE.Vector3(0,1,0),-(pivot.userData.rotY as number));pivot.add(mesh);
           } else moduleGroup.add(mesh);
-          const selectedPart=active&&!state.presentation?state.selectedPart:undefined;
-          const drawerPrefix=selectedPart?.includes(':drawer:')?selectedPart.split(':drawer:')[0]+':drawer:'+selectedPart.split(':drawer:')[1].split(':')[0]+':':undefined;
-          const picked=!!selectedPart&&(drawerPrefix?part.id.startsWith(drawerPrefix):part.id===selectedPart);
-          if (!isMetal || picked) {
+          // Selection is independent of the active editing section: detail -> whole module -> group.
+          const picked=!state.presentation&&active&&state.selectedPart===part.id;
+          const modulePicked=!state.presentation&&!state.selectedPart&&
+            (state.groupIds?.length?state.groupIds.includes(placed.id):active);
+          const highlighted=picked||modulePicked;
+          if (!isMetal || highlighted) {
             const edge = new THREE.LineSegments(
               new THREE.EdgesGeometry(geometry, vern ? 20 : 1),
               new THREE.LineBasicMaterial({
-                color: picked?0x087f94:0x4a4b40,
+                color: highlighted?0x527cd6:0x4a4b40,
                 transparent: true,
-                opacity: picked?1:0.16,
-                depthTest: !picked,
+                opacity: highlighted?.9:0.16,
+                depthTest: true,
+                depthWrite: false,
               }),
             );
-            edge.userData.captureGuide=picked;
+            edge.userData.captureGuide=highlighted;
+            edge.renderOrder=highlighted?4:0;
+            edge.raycast=()=>{};
             mesh.add(edge);
           }
-        }
-        if(!state.presentation&&state.groupIds?.includes(placed.id)){
-          const box=new THREE.BoxGeometry(m.width+3,m.height+3,m.depth+3);
-          const guide=new THREE.LineSegments(new THREE.EdgesGeometry(box),new THREE.LineBasicMaterial({color:0x168976,transparent:true,opacity:.85,depthTest:false}));
-          box.dispose();guide.position.set(m.width/2,m.height/2,m.depth/2);guide.userData.captureGuide=true;guide.renderOrder=10;moduleGroup.add(guide);
+          if(highlighted){
+            const wash=new THREE.Mesh(geometry.clone(),new THREE.MeshBasicMaterial({
+              color:0x729bea,transparent:true,opacity:picked?.18:.10,
+              depthTest:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1,
+            }));
+            wash.userData.captureGuide=true;wash.renderOrder=3;wash.raycast=()=>{};mesh.add(wash);
+          }
         }
       }
       for(const o of state.appliances??[]){const appliance=applianceModel(o);/* техника всегда закрыта: «Открыть створки» — только фасады мебели (K3, 22.10) */if(!appliance)continue;appliance.position.set(o.x+o.width/2-moduleCenter(focus).x,o.y+o.height/2,o.z+o.depth/2-moduleCenter(focus).z);modelGroup.add(appliance);products.add(appliance);if(o.sinkModuleId){const hoses=dishwasherServiceModel(o,state.arrangement);hoses.position.set(-moduleCenter(focus).x,0,-moduleCenter(focus).z);modelGroup.add(hoses);products.add(hoses);}}
@@ -1062,30 +1070,6 @@ export function Scene(p: Props) {
       }
       releaseFinishMaps();
       const b = state.hideFurniture||state.hiddenModuleIds?.includes(focus.id)||m.corner?undefined:boxes(m).find((b) => b.id === state.selected);
-      if (b) {
-        const geo = new THREE.BoxGeometry(
-          b.width,
-          b.top - b.bottom,
-          m.depth - 20,
-        );
-        const highlight = new THREE.LineSegments(
-          new THREE.EdgesGeometry(geo),
-          new THREE.LineBasicMaterial({
-            color: 0x24899b,
-            transparent: true,
-            opacity: 0.72,
-          }),
-        );
-        geo.dispose();
-        highlight.position.set(
-          b.x + b.width / 2 - m.width / 2,
-          (b.top + b.bottom) / 2+(focus.y??0),
-          5,
-        );
-        highlight.position.applyAxisAngle(new THREE.Vector3(0,1,0),(focus.rotation??0)*Math.PI/180);highlight.rotation.y=(focus.rotation??0)*Math.PI/180;
-        modelGroup.add(highlight);
-      }
-      // Размер блока ящиков: от верхней плоскости дна пенала до верха полки над ящиками — при редактировании ящиков.
       if (b && !state.presentation && !state.exploded) {
         const sec = m.sections.find((s) => s.id === b.id);
         if (sec && sec.drawers > 0 && parts(m).some(p=>p.id===sec.id+':drawer-cap') && (state.selectedPart?.includes(":drawer:") || state.drawerPreview)) {

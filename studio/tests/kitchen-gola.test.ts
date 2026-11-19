@@ -58,12 +58,12 @@ test('Gola recognizer: cuts from the Bazis side contour (k06/m03)',()=>{
   assert.deepEqual(g.map(x=>[x.top0,x.top1,x.depth,x.r]),[[0,57.5,27,6.5],[329.5,402.5,27,5]]);
 });
 
-test('Gola profiles: L on top, C in the middle, aluminium outside the cut list, estimate in metres without price, no collisions',()=>{
+test('Gola profiles: L on top, C in the middle, aluminium outside the cut list, estimate in metres at Premial retail, no collisions',()=>{
   const m=gola(),ps=parts(m),prof=ps.filter(p=>p.id.startsWith('gola:'));
   assert.deepEqual(prof.map(p=>p.id).sort(),['gola:C:1','gola:L:0']);
   assert.ok(prof.every(p=>p.material==='alu'&&p.external&&p.size[0]===m.width));
   const e=estimate(newProject(m)).lines.filter(l=>l.id.startsWith('gola-'));
-  assert.equal(e.length,2);assert.ok(e.every(l=>l.unit==='м'&&l.unitPrice===null&&Math.abs(l.quantity-m.width/1000)<1e-9));
+  assert.equal(e.length,2);assert.ok(e.every(l=>l.unit==='м'&&l.unitPrice!==null&&l.unitPrice>0&&l.retail&&Math.abs(l.quantity-m.width/1000)<1e-9));
   assert.ok(!labelData(newProject(m)).some(l=>/Gola/.test(l.name)),'профиль не идёт в бирки');
   // боковины — телом без вырезов (collide): профиль в вырезе их не задевает; фасады и петли — тоже (царги и полки у модулей Базиса стоят за вырезом)
   const c=partCollisions(ps,m).filter(x=>[x.a,x.b].some(id=>id.startsWith('gola:'))&&[x.a,x.b].some(id=>id==='left'||id==='right'||/door|facade|hinge/.test(id)));

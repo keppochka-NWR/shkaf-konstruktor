@@ -1,0 +1,7 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {initialModule,parts} from '../src/model';import {kitchenBase} from '../src/kitchen';import {maestroLayout,isMaestro} from '../src/maestroDrawer';import {parseKDrawers,kitchenDrawerErrors,refitKDrawers} from '../src/kitchenDrawers';import {newProject} from '../src/project';import {estimate} from '../src/pricing';import {premialMaestroArticle,premialArticleQuote} from '../src/premialPricing';
+test('Maestro layout, board sizes, exact kit prices and save roundtrip',()=>{
+ const m=kitchenBase(initialModule(),600,'drawers');m.kdrawers=maestroLayout(m,3);assert.deepEqual(kitchenDrawerErrors(m),[]);assert.deepEqual(parseKDrawers(JSON.parse(JSON.stringify(m.kdrawers))),m.kdrawers);
+ const ps=parts(m);for(let i=0;i<3;i++){const k:import('../src/kitchenDrawers').KDrawer=m.kdrawers[i];assert.ok(isMaestro(k));const b=ps.find(p=>p.id===`kd:${i}:bottom`)!;assert.deepEqual(b.size,[551,16,k.len-10]);assert.ok(!ps.some(p=>p.model?.file?.includes('axis')));}
+ const p=newProject();p.modules[0].module=m;p.calculation={markup:5,overrides:{},sheetPrice:23000};const e=estimate(p);assert.ok(!e.lines.some(l=>l.id.startsWith('axis-pro:')));for(const k of m.kdrawers){assert.ok(isMaestro(k));const a=premialMaestroArticle(k.hc,k.len,k.finish)!;const l=e.lines.find(l=>l.id==='maestro-7d:'+a)!;assert.equal(l.unitPrice,premialArticleQuote(a).price);assert.equal(l.retail,true);}
+});

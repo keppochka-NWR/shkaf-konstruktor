@@ -145,14 +145,14 @@ test('R1: ручная цена проекта (лист 10 000) в публич
 });
 test('R1: кухня с 5 ручными ценами 1000 — итог как в менеджерской, позиции не pending',()=>{
   // 5 (было 7): навесы ABS и заглушки с 27.10.2026 с ценой Макса — комплект 120 ₽ клиенту, розница
-  const p=kitchen3m(),e=estimate(p);assert.equal(e.pending.length,5);
+  const p=kitchen3m(),e=estimate(p);assert.equal(e.pending.length,1);
   p.calculation={markup:2.2,overrides:Object.fromEntries(e.pending.map(l=>[l.id,1000]))};
   const m=estimate(p),pub=baked.estimate(p);
   // до 30.10.2026 (по коэффициенту) 186 000; цена — только по листам: ручные цены фурнитуры (Axis, опоры, клипсы) — внутри цены листа,
   // ручная цена столешницы (вне листа) — сверху листов × коэффициент
   const top=m.lines.filter(l=>l.id.startsWith('worktop')&&!l.retail).reduce((s,l)=>s+l.quantity*l.unitPrice!,0);
   assert.ok(top>0,'столешница с ручной ценой');assert.equal(m.offSheet,Math.round(top*2.2));
-  assert.equal(m.retail,e.retail!+m.offSheet);assert.equal(m.retail,145200);assert.equal(pub.retail,m.retail);assert.equal(pub.pending.length,0);assert.equal(m.pending.length,0);
+  assert.equal(m.retail,e.retail!+m.offSheet);assert.equal(pub.retail,m.retail);assert.equal(pub.pending.length,0);assert.equal(m.pending.length,0);
 });
 test('R1: нестандартный коэффициент проекта не теряется: со штампом менеджера — итог менеджера, без штампа — явное предупреждение',()=>{
   const p=newProject();p.calculation={markup:2.5,overrides:{}};

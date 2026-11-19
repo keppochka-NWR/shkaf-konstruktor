@@ -13,7 +13,7 @@ import {drawersSweep,applyChange,silentCollisions,isParametric,SWEEP_CHANGES} fr
 const LP=existsSync('tests/local-kitchens')?'tests/local-kitchens':'public/local-projects';
 const lp=(k:string)=>`${LP}/kitchen-${k}.json`;
 const load=(k:string,i:number):Module=>parseProject(JSON.parse(readFileSync(lp(k),'utf8'))).modules[i].module;
-const base=(n=3,system?:'axis-pro'|'firmax-ldsp'|'versalite-h45'|'start-sc')=>{const m=kitchenBase(initialModule(),600,'drawers' as never);m.doors=false;m.sections[0].shelves=[];m.sections[0].drawers=0;m.kdrawers=relayoutKDrawers(m,n,undefined,system);return m;};
+const base=(n=3,system?:'axis-pro'|'firmax-ldsp'|'versalite-h45'|'start-sc')=>{const m=kitchenBase(initialModule(),600,'drawers' as never);m.doors=false;m.sections[0].shelves=[];m.sections[0].drawers=0;m.kdrawers=relayoutKDrawers(m,n,undefined,system??'axis-pro');return m;};
 const drawerErrors=(m:Module)=>validate(m).filter(x=>/^Ящик|ящики студии/.test(x));
 const clean=(m:Module)=>{assert.deepEqual(validate(m),[]);assert.deepEqual(silentCollisions(m),[]);};
 

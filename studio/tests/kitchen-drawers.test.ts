@@ -87,14 +87,14 @@ test('critic r3: number of drawers and facade heights keep anthracite and facade
 });
 
 test('critic r3: adding a bottom front rail lifts the drawers (refit) instead of rejecting the change',()=>{
-  const m=kitchenBase(initialModule(),600,'drawers' as never);m.rails=[...(m.rails??[]),{place:'front-bottom',height:100,lay:'flat'}];
+  const m=kitchenBase(initialModule(),600,'drawers' as never);m.kdrawers=axisLayout(m,3);m.rails=[...(m.rails??[]),{place:'front-bottom',height:100,lay:'flat'}];
   assert.ok(validate(m).some(x=>/уходит в дно/.test(x)),'without refit — error');
   m.kdrawers=refitKDrawers(m);
   assert.deepEqual(validate(m).filter(x=>/Ящик/.test(x)),[]);
   assert.deepEqual(partCollisions(parts(m),m).filter(c=>/Axis|ящик/i.test(c.names.join(' '))),[]);
 });
 // --- критик qdrawers (B1–B4, minor) ---
-const k04=()=>{const m=kitchenBase(initialModule(),600,'drawers' as never);return m;};
+const k04=()=>{const m=kitchenBase(initialModule(),600,'drawers' as never);m.kdrawers=axisLayout(m,3);return m;};
 const clean=(m:ReturnType<typeof k04>,tag:string)=>{
   assert.deepEqual(validate(m).filter(x=>/Ящик/.test(x)),[],tag+' errors');
   assert.deepEqual(partCollisions(parts(m),m).filter(c=>/Axis|ящик|Задняя стенка/i.test(c.names.join(' '))),[],tag+' collisions');

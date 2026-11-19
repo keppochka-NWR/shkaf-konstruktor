@@ -1,0 +1,2 @@
+import {writeFileSync} from 'node:fs';import {initialModule,validate,parts} from '../src/model';import {newProject} from '../src/project';import {kitchenBase} from '../src/kitchen';import {partCollisions} from '../src/collisions';
+const p=newProject();p.modules[0].module=kitchenBase(initialModule(),600,'drawers');writeFileSync('reports/maestro-1911.json',JSON.stringify(p));console.log('validation',validate(p.modules[0].module));console.log('collisions',partCollisions(parts(p.modules[0].module)).slice(0,8));

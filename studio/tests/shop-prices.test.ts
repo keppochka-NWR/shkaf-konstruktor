@@ -21,7 +21,7 @@ const kupe=():Project=>({...newProject(),modules:createKupeWardrobe(2400,2400,60
 test('кухня 3 м: позиции без счёта — «после финального расчёта конструктором», итог по известным позициям',()=>{
   const e=estimate(kitchen());
   // навесы ABS с 27.10.2026 — с ценой Макса (120 ₽ за комплект, заглушки в комплекте), не финальный расчёт
-  assert.deepEqual(e.pending.map(l=>l.id).sort(),['axis-pro:120:500:white','axis-pro:200:500:white','kitchen-clip','kitchen-leg','worktop:postforming:38']);
+  assert.deepEqual(e.pending.map(l=>l.id).sort(),['worktop:postforming:38']);
   const hk=e.lines.find(l=>l.id==='kitchen-hanger')!,hc=e.lines.find(l=>l.id==='kitchen-hanger-cap')!;
   assert.deepEqual([hk.unit,hk.unitPrice,hk.retail],['компл',120,true]);assert.equal(hc.unitPrice,0);assert.equal(hc.quantity,hk.quantity*2);
   assert.equal(e.missing.length,0,'не «нет цены»');
@@ -30,19 +30,19 @@ test('кухня 3 м: позиции без счёта — «после фин�
   assert.ok(e.pending.every(l=>l.unitPrice===null&&!e.missing.includes(l)));
   // поставщик и ориентир — менеджеру в источнике строки; в итог ориентир не входит
   const src=(id:string)=>e.pending.find(l=>l.id===id)!.source;
-  assert.match(src('kitchen-leg'),/^ФАМ/);assert.match(src('kitchen-clip'),/^ФАМ/);
-  assert.match(src('axis-pro:200:500:white'),/^Мегатрейд.*~7 000 ₽ за комплект/);
+  for(const id of ['kitchen-leg','kitchen-clip'])assert.match(e.lines.find(l=>l.id===id)!.source,/×1,3/);
+  assert.ok(e.lines.some(l=>l.id.startsWith('maestro-7d:')&&l.unitPrice!==null));
   assert.match(src('worktop:postforming:38'),/^Премиал \(предварительно\)/);
   // клиенту: та же цена, нейтральная подпись, без поставщика и ориентира
   const c=clientView(e),text=JSON.stringify(c.lines);
-  assert.equal(c.retail,e.retail);assert.equal(c.pending.length,5);assert.equal(c.missing.length,0);
+  assert.equal(c.retail,e.retail);assert.equal(c.pending.length,1);assert.equal(c.missing.length,0);
   assert.ok(c.pending.every(l=>l.source===PENDING_CLIENT&&l.unitPrice===null));
   for(const w of ['ФАМ','ФАС','Мегатрейд','7 000','~120','ориентир'])assert.ok(!text.includes(w),w);
   // КП, CSV, итог для клиента: явная строка с числом позиций
-  const label=pendingTotalLabel(5);assert.equal(label,'Позиции после финального расчёта конструктором: 5');
+  const label=pendingTotalLabel(1);assert.equal(label,'Позиции после финального расчёта конструктором: 1');
   assert.ok(quoteHTML(kitchen(),'Клиент',String(e.retail),'',undefined,{cost:e}).includes(label));
   assert.ok(estimateCSV(kitchen(),e).includes(label));
-  assert.ok(salesCSV(kitchen()).includes('Позиции после финального расчёта конструктором;5'));
+  assert.ok(salesCSV(kitchen()).includes('Позиции после финального расчёта конструктором;1'));
 });
 
 test('ручная цена снимает пометку «после расчёта», вырез под варочную — финальный расчёт (22.10)',()=>{
@@ -61,11 +61,11 @@ test('T2 18.10: кухня 2400 + Axis PRO + Gola + мойка Premial — Gola,
   const sink=p.modules.find(a=>a.module.kitchen?.appliance==='sink')!;assert.ok(sink,'в ряду 2400 есть тумба под мойку');
   const q=installSink(p,sink.id),e=estimate(q),ids=e.pending.map(l=>l.id);
   assert.deepEqual(e.missing.map(l=>l.id),[],'нет строк «нет цены»');
-  for(const id of ['gola-L','gola-C','worktop-cut:sink'])assert.ok(ids.includes(id),id);
+  for(const id of ['worktop-cut:sink'])assert.ok(ids.includes(id),id);
   assert.ok(e.lines.some(l=>l.id.startsWith('axis-pro:')&&l.pending),'Axis PRO — тоже после расчёта');
   assert.ok((e.retail??0)>0);assert.equal(e.retail,e.bySheet,'итог = листы + известные позиции вне листа');
   const src=(id:string)=>e.pending.find(l=>l.id===id)!.source;
-  assert.match(src('gola-L'),/Поставщик не указан — уточнить/);const pricedSink=e.lines.find(l=>l.id==='premial-sink:210245')!;assert.equal(pricedSink.retail,true);assert.ok(pricedSink.unitPrice!>0&&!pricedSink.pending);assert.match(pricedSink.source,/×1,3/);assert.match(src('worktop-cut:sink'),/^Премиал/);
+  assert.match(e.lines.find(l=>l.id==='gola-L')!.source,/6000 мм.*6/);const pricedSink=e.lines.find(l=>l.id==='premial-sink:210245')!;assert.equal(pricedSink.retail,true);assert.ok(pricedSink.unitPrice!>0&&!pricedSink.pending);assert.match(pricedSink.source,/×1,3/);assert.match(src('worktop-cut:sink'),/^Премиал/);
   // клиенту — нейтральная подпись без поставщиков, число позиций в итоговой строке
   const c=clientView(e);assert.equal(c.missing.length,0);assert.equal(c.pending.length,e.pending.length);
   assert.ok(c.pending.every(l=>l.source===PENDING_CLIENT));

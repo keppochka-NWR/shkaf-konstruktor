@@ -1,3 +1,4 @@
+import {maestroLayout} from './maestroDrawer';
 import {worktopDecors} from './worktopCatalog';
 import {compactDecor,DEFAULT_COMPACT_DECOR} from './compactCatalog';
 // Кухня в Ё Конструкторе (основа 08.10.2026; конструктив по проектам Базиса цеха — разбор базы кухонь цеха 09.10.2026).
@@ -1484,7 +1485,7 @@ export function kitchenBase(base: Module, width: number, kind: "doors" | "drawer
   // полка: в 1 мм от задника и в 1,5 от лица корпуса (k25 «НМ600»)
   m.sections = [{ ...m.sections[0], shelves: kind === "doors" ? [0.5] : [], drawers: 0, rod: false, shelfDepth: m.depth - 2.5 }];
   // ящики — Axis PRO по Базису (дно и задняя стенка ЛДСП, металлические царги), три фасада: нижний крупнее
-  if (kind === "drawers") { m.doors = false; m.kdrawers = axisLayout(m, 3); }
+  if (kind === "drawers") { m.doors = false; m.kdrawers = maestroLayout(m, 3); }
   return m;
 }
 /** Навесной (Базис «ВМ (Стенка в паз)»): дно и крыша между боковинами, ХДФ в паз П16-4×8, навесы ABS L/R. */

@@ -28,3 +28,20 @@ export function premialAluHingeQuote(inset:boolean,motion:'soft'|'free'|'simple'
  const q=premialArticleQuote(article);
  return {...q,source:q.source+'; совместимость присадки конкретного рамочного профиля проверяется по схеме производителя'};
 }
+
+/** Official Maestro 7D drilling sheet, article table: H93/131/178, L400/450/500. */
+export function premialMaestroArticle(height:number,length:number,color:'white'|'grey'){
+ const li=[400,450,500].indexOf(length),hi=[93,131,178].indexOf(height);
+ if(li<0||hi<0)return undefined;
+ const rows=color==='white'?[[33515,33516,33517],[33509,33510,33511],[33512,33513,33514]]:[[33502,33501,33500],[33505,33504,33503],[33508,33507,33506]];
+ return String(rows[hi][li]).padStart(6,'0');
+}
+export function premialKitchenLegQuote(height:number){
+ const article=height>=90&&height<=130?'090020':height>=150&&height<=180?'090017':undefined;
+ return article?{...premialArticleQuote(article),article}:{price:null,label:`Опора кухни H${height} — требуется подбор`,source:'Нет подтверждённой опоры Premial на эту высоту',retail:true,article:undefined};
+}
+
+export function premialGolaQuote(kind:'L'|'C'){
+ const q=premialArticleQuote(kind==='L'?'240034':'240025');
+ return {...q,price:q.price===null?null:Math.round(q.price/6*100)/100,label:q.label+' · за пог. м',source:q.source+'; хлыст 6000 мм, цена разделена на 6; по использованной длине'};
+}
