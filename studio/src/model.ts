@@ -2164,6 +2164,20 @@ function partsCore(m: Module): Part[] {
   if(m.facadeMaterial==='external')for(const p of out)if((p.role==='door'||p.id.endsWith(':facade'))&&p.id!=='face-filler:panel:facade'&&p.id!=='side-strip:fp:facade'){const fk=m.facadeEdge??0;p.external=true;p.edge=[fk,fk,fk,fk];if(!p.name.includes('фасадный материал'))p.name+=' · фасадный материал';}
   // Фасады «Вернисаж» (МДФ с фрезеровкой) — сторонний участок: не в раскрой ЛДСП, без кромки цеха; 3D и цена — по фрезеровке и прайсу.
   if(m.vernissage)for(const p of out)if((p.role==='door'||p.id.endsWith(':facade'))&&p.material==='board'&&!p.id.startsWith('face-filler')&&!p.taper&&!p.look&&!p.model){p.external=true;p.vernissage=true;p.edge=[0,0,0,0];if(!p.name.includes('Вернисаж'))p.name+=` · Вернисаж №${m.vernissage.milling}`;}
+  // Угловые фальши верхнего ряда наследуют покрытие фасадов, но всегда остаются гладкими.
+  // facadeMat определяет конструкцию угла, поэтому при смене покрытия его не меняем.
+  if(m.kitchen?.role==='wall'||m.kitchen?.role==='antresol')for(const p of out){
+    if(!p.id.startsWith('face-filler:')||!p.id.endsWith(':facade')||p.material!=='board')continue;
+    if(m.vernissage){
+      const spec=sideFacadeSpec(m.vernissage),dt=spec.thickness-p.size[2];
+      p.size[2]=spec.thickness;p.thickness=spec.thickness;p.position[2]+=dt/2;
+      p.external=true;p.sideFacade=true;p.edge=[0,0,0,0];p.decor='Вернисаж';
+      p.name='Угловая фальшпанель · МДФ Вернисаж №15 гладкий';
+      p.look={color:vernissageColor(spec),roughness:0.62};
+    }else if(!m.alu&&m.facadeMaterial!=='external'){
+      p.decor=m.facadeDecor??m.decor;
+    }
+  }
   // Выбор кромки (решение Макса 06.10.2026): видимые торцы корпуса и фасады — 2 мм по умолчанию, можно 1 или 0,8; скрытые 0,4 не меняются.
   if((m.edgeBody??2)!==2||(m.edgeFacade??2)!==2)for(const p of out){
     if(p.material!=='board')continue;

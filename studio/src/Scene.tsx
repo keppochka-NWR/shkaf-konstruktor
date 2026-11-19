@@ -17,7 +17,7 @@ import {frameDistance,frameHeight} from './framing';
 import {shapeGeometry,worktopGeometry,boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry,golaSideGeometry,faceContourGeometry,rearNotchSideGeometry,topNotchGeometry} from './boardGeometry';
 import {aluProfile,aluInsert,aluFill,aluFillLookId} from './alu';
 import {facadeGeometry} from './vernissageGeometry';
-import {vernissageLayout,vernissageColor,vernissageGlossy,vernissageTexture} from './facadesVernissage';
+import {sideFacadeSpec,vernissageLayout,vernissageColor,vernissageGlossy,vernissageTexture} from './facadesVernissage';
 import {meshById} from './mesh';
 import {meshModel} from './meshModels';
 import {procModel,faceAt,fastenerAxis,fastenerGeometry,hingeFallbackModel,nativePlacement} from './hardwareModels';
@@ -607,11 +607,12 @@ export function Scene(p: Props) {
           const texture = catalog.find(
             (c) => c.n === part.decor,
           )?.tex;
-          const vTex = part.vernissage && m.vernissage && !part.rotZ && part.size[2] <= Math.min(part.size[0], part.size[1]) ? vernissageTexture(m.vernissage) : null;
-          if (part.vernissage && m.vernissage) {
+          const faceSpec = m.vernissage && (part.vernissage ? m.vernissage : part.sideFacade && part.id.startsWith('face-filler:') ? sideFacadeSpec(m.vernissage) : undefined);
+          const vTex = faceSpec && !part.rotZ && part.size[2] <= Math.min(part.size[0], part.size[1]) ? vernissageTexture(faceSpec) : null;
+          if (faceSpec) {
             // плёнка с рисунком — текстура образца с сайта Вернисажа (UV фасада в образцах tileMm, повтор); однотонные и эмаль — цветом;
             // глянец — низкая шероховатость
-            mat.color.set(vernissageColor(m.vernissage)); mat.roughness = vernissageGlossy(m.vernissage) ? 0.14 : 0.62;
+            mat.color.set(vernissageColor(faceSpec)); mat.roughness = vernissageGlossy(faceSpec) ? 0.14 : 0.62;
             if (vTex) {
               pendingTextures++;
               cachedTexture(import.meta.env.BASE_URL + vTex.url).then(map=>{
@@ -630,7 +631,7 @@ export function Scene(p: Props) {
           const isAlu = part.material === "alu" && !!m.alu;
           // Фасад «Вернисаж»: сетка по фрезеровке строится заново под габарит детали (рамка постоянной ширины, филёнка тянется)
           // лицо фасада — в плоскости XY (толщина по Z); горизонтальная/боковая свободная панель МДФ Вернисаж — плитой цвета покрытия
-          const vern = part.vernissage && m.vernissage && !part.rotZ && part.size[2] <= Math.min(part.size[0], part.size[1]) ? m.vernissage : undefined;
+          const vern = faceSpec && !part.rotZ && part.size[2] <= Math.min(part.size[0], part.size[1]) ? faceSpec : undefined;
           // Цилиндр-заглушка только для деталей без модели: модель из Blender (part.model) — дочерний объект меша и унаследовала бы его поворот.
           // процедурная модель фурнитуры без сетки (hardwareModels.ts): профиль Gola, штанга, направляющая, эксцентрик, шкант, толкатель —
           // невидимый бокс детали для выбора + модель внутри; бокс не поворачивается (у модели свои оси)
