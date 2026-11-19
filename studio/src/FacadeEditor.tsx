@@ -25,6 +25,7 @@ export function FacadeEditor({project,moduleId,selectedIds=[],commit,close,onPre
  const kind=facadeKind(draft);
  const apply=()=>{try{const next=applyFacadeAppearance(project,moduleId,draft,scope==='group'?selectedIds:scope==='all',scope==='group'||target!=='all');if(commit(next))close();else setError('Изменение не принято. Проверьте ограничения проекта; исходные фасады сохранены.');}catch(e){setError((e as Error).message);}};
  return <div className="facade-editor">
+  <div className="facade-editor-scroll" tabIndex={0} role="region" aria-label="Каталог и настройки фасадов">
   <p><b>{source.name}</b></p>
   <p className="field-note">{target==='drawerFacadeDecor'?'Декор меняется у фасадов ящиков. Смена основы (МДФ / рамка / плита) относится ко всем фасадам корпуса. ':target==='facadeDecor'?'Декор меняется у дверей; ящики без отдельного декора наследуют его. ':''}Оформление всех дверей и фасадов ящиков этого корпуса. Отдельный рисунок для одной створки здесь не задаётся. В сцене — предварительный просмотр. Изменения сохранятся после «Применить».</p>
   <label className="hardware-field">Основа фасадов<select aria-label="Основа фасадов" value={kind==='ldsp'&&panelBrand?panelBrand:kind} onChange={e=>{const b=e.target.value;setPanelBrand(b==='AGT'||b==='Eterno'?b:'');setDraft(changeFacadeKind(draft,(b==='AGT'||b==='Eterno'?'ldsp':b) as FacadeKind));setError('');}}>
@@ -43,6 +44,7 @@ export function FacadeEditor({project,moduleId,selectedIds=[],commit,close,onPre
   <label className="hardware-field">Область применения<select aria-label="Область применения фасадов" value={scope} onChange={e=>setScope(e.target.value as typeof scope)}><option value="module">Фасады корпуса: {source.name}</option><option value="group" disabled={!selectedIds.length}>Выделенные модули ({selectedIds.length})</option><option value="all">Фасады всех редактируемых модулей</option></select></label>
   {scope==='group'&&<p className="field-note">Выделенным модулям переносится только то, что вы изменили здесь; их остальные настройки фасадов сохраняются. Поле за полем — раздел «Фасады выделенных модулей» справа.</p>}{scope!=='module'&&<p className="field-note">Корпуса без фасадов, импорт Базиса, двери купе и столешницы пропускаются. Размеры и наполнение сохраняются.</p>}
   {error&&<p role="alert" className="field-note">{error}</p>}
-  <div style={{display:'flex',gap:12,position:'sticky',bottom:0,background:'var(--surface, white)',padding:'12px 0'}}><button className="primary" onClick={apply}>{scope==='all'?'Применить ко всем модулям':scope==='group'?'Применить к выделенным ('+selectedIds.length+')':'Применить к корпусу'}</button><button className="outline" onClick={close}>Отмена</button></div>
+  </div>
+  <div className="facade-editor-actions" style={{display:'flex',gap:12,position:'sticky',bottom:0,background:'var(--surface, white)',padding:'12px 0'}}><button className="primary" onClick={apply}>{scope==='all'?'Применить ко всем модулям':scope==='group'?'Применить к выделенным ('+selectedIds.length+')':'Применить к корпусу'}</button><button className="outline" onClick={close}>Отмена</button></div>
  </div>;
 }

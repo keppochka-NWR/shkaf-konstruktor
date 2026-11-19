@@ -17,7 +17,7 @@
 .compact-top.empty-room-app>.header .header-actions{display:flex;margin-left:auto}
 
 .module-item.module-group-selected {box-shadow:inset 0 0 0 2px var(--accent);}
-.facade-editor > .field-note, .facade-editor [role="alert"] {display:block !important;}
+.facade-editor > .field-note, .facade-editor-scroll > .field-note, .facade-editor [role="alert"] {display:block !important;}
 
 .module-selection-hint {font-size:12px;color:#526570;margin:8px 0;}
 
@@ -32,3 +32,11 @@
 /* The hint must never intercept right-clicks on furniture. */
 .app .rmb-tip {left:12px;bottom:44px;transform:none;max-width:min(320px,calc(100% - 80px));pointer-events:none;font-size:11px}
 .app .rmb-tip button {pointer-events:auto}
+
+/* Bound the dialog body, not the page: all decors remain reachable, actions stay visible. */
+.modal:has(> .facade-editor) {overflow:hidden;}
+.modal:has(> .facade-editor) > .modal-head {flex-shrink:0;}
+.modal > .facade-editor {display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+.modal > .facade-editor > .facade-editor-scroll {min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:8px;}
+.modal > .facade-editor .decor-grid {overflow:visible;}
+.facade-editor-actions {flex-shrink:0;flex-wrap:wrap;}
