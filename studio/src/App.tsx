@@ -68,7 +68,7 @@ import {orderCalculationNotice,withOrderCalculation,type OrderCalculation} from 
 import {keepProjectCutouts} from './cutoutBinding';
 import {cutHost as cutHostOf} from './partIds';
 import {similarCutParts} from './cutoutCopy';
-import {applyDecorAll,deleteKeyTarget,deleteNames,deleteQuestion,groupAfterPlainClick,removeModules,sectionRemoveApplies} from './editActions';
+import {decorSkip,applyDecorAll,deleteKeyTarget,deleteNames,deleteQuestion,groupAfterPlainClick,removeModules,sectionRemoveApplies} from './editActions';
 import {fitUnderMansard} from './paletteBuild';
 import {keepRowPsu} from './kitchenUnderLightRow';
 import {NicheReadings} from './NicheReadings';
@@ -387,6 +387,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const visibleModules=project.modules.map((a,i)=>({a,i})).filter(({a,i})=>moduleWords.every(word=>([i+1,a.module.name,a.module.width,a.module.height,a.module.depth].join(' ').toLocaleLowerCase('ru-RU')).includes(word)));
   useEffect(()=>{setModuleSearch('');},[active]);
   useEffect(()=>{moduleList.current?.querySelector<HTMLElement>('[aria-pressed="true"]')?.scrollIntoView({block:'nearest'});},[active,moduleSearch]);
+  const [allCarcassPicker,setAllCarcassPicker]=useState(false);
   const [materialScope,setMaterialScope]=useState<"active"|"group"|"all">("active");
   const [mode,setMode]=useState<"move"|"fill"|"orbit"|"select">("move");
   const [drawerPreview,setDrawerPreview]=useState(false);
@@ -610,6 +611,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       "decor",
     ),
     [search, setSearch] = useState("");
+  useEffect(()=>{if(modal!=="materials")setAllCarcassPicker(false);},[modal]);
   const [facadePreview,setFacadePreview]=useState<{base:Project;next:Project}|null>(null);
   // окно «Вырезы детали» (фигурные детали 29.10.2026, CutoutEditor.tsx): корпус и деталь, с которой открыли
   const [cutHost,setCutHost]=useState<{mid:string;pid:string;copy?:boolean}|null>(null);
@@ -628,7 +630,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // ручки формы — только на «Помещении» с открытым планом (критик 30.10: режим оставался на «Построении мебели» и прятал ручки корпуса)
   const shapeStage=tab==='room'&&(advanced||stage==='room');
   useEffect(()=>{if(shapeEdit&&(!roomPlan||!shapeStage))setShapeEdit(false);},[shapeEdit,roomPlan,shapeStage]);
-  const materialRecipients=project.modules.filter(a=>materialScope==='all'||(materialScope==='group'?liveGroupIds.includes(a.id):a.id===placed.id));
+  const materialRecipients=project.modules.filter(a=>!(materialTarget==="decor"&&materialScope==="all"&&decorSkip(a.module))).filter(a=>materialScope==='all'||(materialScope==='group'?liveGroupIds.includes(a.id):a.id===placed.id));
   const capture = useRef<((opts?: {frame?: boolean}) => string) | undefined>(undefined);
   const upload = useRef<HTMLInputElement>(null),
     touched = useRef(false);
@@ -764,7 +766,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     return [fill('right'),fill('left'),push('right'),push('left'),{id:'gap-set',label:'Задать зазор',icon:Ruler,hint:'Сдвинуть модуль или изменить ширину так, чтобы зазор стал нужным',children:[gapItem('right',true),gapItem('right',false),gapItem('left',true),gapItem('left',false)]}];
   }
   // корпус в отмеченной группе (Shift+щелчок) — окна «Материалы»/«Ручки» сразу на всю группу (решение Макса 29.10, групповые фасады)
-  useEffect(()=>{setMaterialScope(inGroup(placed.id)?"group":"active");},[modal]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{setMaterialScope(modal==="materials"&&allCarcassPicker?"all":inGroup(placed.id)?"group":"active");},[modal]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Окно/дверь мышью (Макс 31.10, openingDrag.ts): новое место одной правкой, проём выбран — видны «от угла / до угла». */
   function moveOpeningTo(id:string,at:{s:number;sill:number}){try{if(!commitProject(placeOpening(project,id,at)))return false;setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);return true;}catch(e){setError((e as Error).message);return false;}}
   function movePlaced(key: "x" | "y" | "z", value: number) {
@@ -1912,7 +1914,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {/* Макс 31.10: клавиши — плашками на сплошной полосе, по режиму; «?» — полный список */}
           {!presentation&&!roomPlan&&<KeyHints mode={presentation||editingFacades?'orbit':mode} moveAll={moveAll} group={liveGroupIds.length} snapping={snapping} focus={focusActive} onHelp={()=>setModal('help')}/>}
         </section>
-        <aside className="properties" ref={propertiesRef}><SafeBoundary label="Свойства" resetKey={project}><div className="selected-module-heading">{project.modules.some(a=>a.module.kitchen?.role==='wall'&&a.module.cornerKind==='plank'&&!a.module.bazis&&!a.module.raw)&&<button className="outline" onClick={()=>commitProject(applyAutoFillers(project))}>Убрать планки стыков верхних модулей</button>}<button className="outline" disabled={nothingSelected} onClick={isolateSelection}>Скрыть невыделенные · Shift+X</button>{isolation&&<button className="outline" onClick={()=>{setIsolation(null);setHiddenModules([]);}}>Показать всё</button>}</div>
+        <aside className="properties" ref={propertiesRef}><SafeBoundary label="Свойства" resetKey={project}><div className="selected-module-heading">
+              <button className="outline" disabled={!project.modules.some(a=>!decorSkip(a.module))} onClick={()=>{setAllCarcassPicker(true);setMaterialTarget("decor");setMaterialScope("all");setSearch("");setModal("materials");}}>Цвет всех каркасов ЛДСП</button>{project.modules.some(a=>a.module.kitchen?.role==='wall'&&a.module.cornerKind==='plank'&&!a.module.bazis&&!a.module.raw)&&<button className="outline" onClick={()=>commitProject(applyAutoFillers(project))}>Убрать планки стыков верхних модулей</button>}<button className="outline" disabled={nothingSelected} onClick={isolateSelection}>Скрыть невыделенные · Shift+X</button>{isolation&&<button className="outline" onClick={()=>{setIsolation(null);setHiddenModules([]);}}>Показать всё</button>}</div>
           {selectedPart&&<div className="selected-module-heading" role="status" aria-label="Выбранная деталь"><strong>{selectedDetail?.name??'Деталь модуля'}</strong><button className="outline" onClick={()=>selectModule(selectedPart.mid)}>Выбрать весь модуль · Tab</button></div>}
           {editingFacades?<section className="facade-panel" role="region" aria-label="Редактор фасадов" onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setModal(null);}}}>
             <header><h2>Редактор фасадов</h2><button className="text-action" aria-label="Закрыть редактор фасадов" onClick={()=>setModal(null)}><X size={18}/></button></header>
@@ -2581,7 +2584,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   {modal === "room-setup" ? "Шаг 1 · Параметры помещения" : modal === "new" ? "Новый проект" : modal === "library" ? "Моя библиотека модулей" : modal === "render" ? "Изображение проекта" : modal === "cloud" ? "Кабинет проектов" : modal === "output"
                     ? "Документы проекта"
                     : modal === "materials"
-                      ? (m.worktop&&materialTarget==="decor"?"Декор столешницы":materialTarget!=="decor"?"Материалы фасадов":"Материалы Lamarty")
+                      ? (allCarcassPicker?"Цвет всех каркасов ЛДСП":m.worktop&&materialTarget==="decor"?"Декор столешницы":materialTarget!=="decor"?"Материалы фасадов":"Материалы Lamarty")
                       : modal === "handles"
                       ? "Ручка фасадов и ящиков"
                       : modal === "parts"
@@ -2614,9 +2617,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
 
                 update={commitProject}
               /></SafeBoundary>
-            ) : modal === "materials" && materialTarget==="decor" && m.worktop ? (<WorktopDecorPicker module={m} apply={name=>{if(modify(n=>{n.decor=name;}))setModal(null);}}/>) : modal === "materials" && materialTarget!=="decor" ? (<FacadeEditor key={placed.id+materialTarget} target={materialTarget} project={project} moduleId={placed.id} selectedIds={materialScope==="all"?project.modules.map(a=>a.id):liveGroupIds} commit={commitProject} close={()=>setModal(null)} onPreview={setFacadePreview}/>) : modal === "materials" ? (
+            ) : modal === "materials" && materialTarget==="decor" && materialScope!=="all" && m.worktop ? (<WorktopDecorPicker module={m} apply={name=>{if(modify(n=>{n.decor=name;}))setModal(null);}}/>) : modal === "materials" && materialTarget!=="decor" ? (<FacadeEditor key={placed.id+materialTarget} target={materialTarget} project={project} moduleId={placed.id} selectedIds={materialScope==="all"?project.modules.map(a=>a.id):liveGroupIds} commit={commitProject} close={()=>setModal(null)} onPreview={setFacadePreview}/>) : modal === "materials" ? (
               <>
-                <p className="field-note">Материал: {materialTarget==='decor'?'корпуса':materialTarget==='facadeDecor'?'распашных фасадов':'фасадов ящиков'}.</p><label className="hardware-field">Применить материал<select aria-label="К каким корпусам применить материал" value={materialScope} onChange={e=>setMaterialScope(e.target.value as typeof materialScope)}><option value="active">Выбранный корпус: {m.name}</option><option value="group" disabled={!liveGroupIds.length}>Отмеченная группа ({liveGroupIds.length})</option><option value="all">Все корпуса проекта ({project.modules.length})</option></select></label>{project.modules.length>1&&<label className="hardware-field"><span><input type="checkbox" aria-label="Заменить у всех" checked={materialScope==='all'} onChange={e=>setMaterialScope(e.target.checked?'all':'active')}/> Заменить у всех ({project.modules.length}) — {materialTarget==='decor'?'каркасы':'фасады'} всех корпусов проекта</span></label>}<p className="field-note">Меняется только указанный выше материал. Группу можно отметить в списке корпусов, в разделе «Двигать группу».</p>
+                {allCarcassPicker ? <p className="field-note">Выберите декор — он применится ко всем каркасам ЛДСП проекта ({materialRecipients.length}). Фасады, столешницы, двери купе и импортированные модели сохранят свои материалы. Замену можно отменить одним нажатием «Отменить».</p> : <><p className="field-note">Материал: {materialTarget==='decor'?'корпуса':materialTarget==='facadeDecor'?'распашных фасадов':'фасадов ящиков'}.</p><label className="hardware-field">Применить материал<select aria-label="К каким корпусам применить материал" value={materialScope} onChange={e=>setMaterialScope(e.target.value as typeof materialScope)}><option value="active">Выбранный корпус: {m.name}</option><option value="group" disabled={!liveGroupIds.length}>Отмеченная группа ({liveGroupIds.length})</option><option value="all">Все корпуса проекта ({project.modules.length})</option></select></label>{project.modules.length>1&&<label className="hardware-field"><span><input type="checkbox" aria-label="Заменить у всех" checked={materialScope==='all'} onChange={e=>setMaterialScope(e.target.checked?'all':'active')}/> Заменить у всех ({project.modules.length}) — {materialTarget==='decor'?'каркасы':'фасады'} всех корпусов проекта</span></label>}<p className="field-note">Меняется только указанный выше материал. Группу можно отметить в списке корпусов, в разделе «Двигать группу».</p></>}
                 <label className="search">
                   <Search size={18} />
                   <input

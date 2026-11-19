@@ -52,6 +52,7 @@ export function sectionRemoveApplies(m: Module): boolean {
 
 /** Почему декор корпуса к модулю не относится (null — относится). */
 export function decorSkip(m: Module): string | null {
+  if (m.metalFrame) return "металлокаркас — свой материал";
   if (m.kupe) return "двери купе — профиль и наполнение в их панели";
   if (m.worktop) return "столешница — свой материал";
   if (m.raw) return "импорт Базиса как есть";
