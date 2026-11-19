@@ -1,3 +1,4 @@
+import {applyBasketParts} from './kitchenBasket';
 import { isEditableDesignIssue } from './editableDesignIssues';
 import {legatoParts,legatoErrors,legatoCollisionErrors,parseShoeShelves,type ShoeShelf} from './legato';
 import { metalFrameParts, metalFrameErrors, parseMetalFrame, type MetalFrame } from './metalFrame';
@@ -2186,6 +2187,7 @@ function partsCore(m: Module): Part[] {
   for(const id of m.kitchen?.dupParts??[]){const p=out.find(q=>q.id===id);if(p&&!out.some(q=>q.id===id+':dup'))out.push({...p,id:id+':dup',position:[...p.position] as Part['position']});}
   finishFacadeSides(m, out);
   applyAllegroParts(m, out);
+  applyBasketParts(m,out);
   // заказ 7427796: зеркало на фасадах (основа — фасад ЛДСП) и угол открывания петель по створкам — признаки деталей для сцены и сметы
   for (const s of m.sections) s.hingeAngles?.forEach((a, k) => { const p = a ? out.find((q) => q.id === `${s.id}:door:${k}`) : undefined; if (p) p.hingeAngle = a!; });
   if (m.mirror && !m.alu && !m.vernissage) for (const p of out) if (p.role === "door" && /:door:\d+$/.test(p.id) && p.material === "board") p.mirror = m.mirror;

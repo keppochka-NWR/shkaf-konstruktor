@@ -156,9 +156,9 @@ export const premialCatalog:PremialItem[]=[
   {
     "article": "060500",
     "name": "Бутылочница двухуровневая на напр. скр. монтажа Premial АЛЛЕГРО в базу 150мм, хром, левая",
-    "sitePrice": 4358,
     "url": "https://allpremial.ru/catalog/butylochnitsy-premial/59617/",
-    "checkedAt": "2026-11-19T14:00:04.623521+00:00",
+    "sitePrice": 4358,
+    "checkedAt": "2026-11-19T15:16:28.928438+00:00",
     "inStock": true,
     "availability": "В наличии"
   },
@@ -174,36 +174,36 @@ export const premialCatalog:PremialItem[]=[
   {
     "article": "060504",
     "name": "Бутылочница двухуровневая на напр. скр. монтажа Premial АЛЛЕГРО в базу 300 мм, хром/диагональное крепление",
-    "sitePrice": 8301,
     "url": "https://allpremial.ru/catalog/butylochnitsy-premial/62559/",
-    "checkedAt": "2026-11-19T14:00:05.848662+00:00",
+    "sitePrice": 8301,
+    "checkedAt": "2026-11-19T15:16:34.096198+00:00",
     "inStock": false,
     "availability": "Нет в наличии"
   },
   {
     "article": "060501",
     "name": "Бутылочница двухуровневая на напр. скр. монтажа Premial АЛЛЕГРО в базу 150мм, хром, правая",
-    "sitePrice": 4358,
     "url": "https://allpremial.ru/catalog/butylochnitsy-premial/59618/",
-    "checkedAt": "2026-11-19T14:00:06.474626+00:00",
+    "sitePrice": 4358,
+    "checkedAt": "2026-11-19T15:16:28.957100+00:00",
     "inStock": true,
     "availability": "В наличии"
   },
   {
     "article": "060502",
     "name": "Бутылочница двухуровневая на напр. скр. монтажа Premial АЛЛЕГРО в базу 200мм, хром, левая",
-    "sitePrice": 4958,
     "url": "https://allpremial.ru/catalog/butylochnitsy-premial/59691/",
-    "checkedAt": "2026-11-19T14:00:07.048115+00:00",
+    "sitePrice": 4958,
+    "checkedAt": "2026-11-19T15:16:35.923854+00:00",
     "inStock": false,
     "availability": "Нет в наличии"
   },
   {
     "article": "060503",
     "name": "Бутылочница двухуровневая на напр. скр. монтажа Premial АЛЛЕГРО в базу 200мм, хром, правая",
-    "sitePrice": 4958,
     "url": "https://allpremial.ru/catalog/butylochnitsy-premial/59692/",
-    "checkedAt": "2026-11-19T14:00:07.607378+00:00",
+    "sitePrice": 4958,
+    "checkedAt": "2026-11-19T15:16:35.624730+00:00",
     "inStock": false,
     "availability": "Нет в наличии"
   },
@@ -1029,9 +1029,9 @@ export const premialCatalog:PremialItem[]=[
   {
     "article": "060900",
     "name": "Посудосушитель с доводчиком в нижнюю базу 600 мм, Premial ЛАРГО, хром, направляющие скрытого монтажа",
-    "sitePrice": 10897,
     "url": "https://allpremial.ru/catalog/posudosushiteli-premial/59995/",
-    "checkedAt": "2026-11-19T14:01:25.417508+00:00",
+    "sitePrice": 10897,
+    "checkedAt": "2026-11-19T15:16:42.041281+00:00",
     "inStock": false,
     "availability": "Нет в наличии"
   },
@@ -4092,6 +4092,195 @@ export const premialCatalog:PremialItem[]=[
     "sitePrice": 3817,
     "url": "https://allpremial.ru/catalog/universalnyy-profil-combi-dlya-kolonn-vydvizhnykh-penalov-v-nizhnyuyu-bazu/57601/",
     "checkedAt": "2026-11-19T14:07:08.722013+00:00",
+    "inStock": false,
+    "availability": "Нет в наличии"
+  },
+  {
+    "article": "090511",
+    "name": "Волшебный уголок PTJ017HB5 ALBA (860-960)х480х560мм правый с доводчиком",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/60149/",
+    "sitePrice": 20259.6,
+    "checkedAt": "2026-11-19T15:16:28.942484+00:00",
+    "inStock": true,
+    "availability": "В наличии"
+  },
+  {
+    "article": "060278",
+    "name": "Выдвижная корзина-карго 200 FOCUS крепл.боковое/правое, графит PRIME by AKS",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/59524/",
+    "sitePrice": 6634,
+    "checkedAt": "2026-11-19T15:16:30.381936+00:00",
+    "inStock": true,
+    "availability": "В наличии"
+  },
+  {
+    "article": "060268",
+    "name": "Выдвижная корзина-карго 200 FOCUS крепл.боковое/левое, графит PRIME by AKS",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/59523/",
+    "sitePrice": 7428,
+    "checkedAt": "2026-11-19T15:16:30.798050+00:00",
+    "inStock": true,
+    "availability": "В наличии"
+  },
+  {
+    "article": "060267",
+    "name": "Выдвижная корзина-карго 150 FOCUS крепл.боковое/правое, графит PRIME by AKS",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/59522/",
+    "sitePrice": 6124,
+    "checkedAt": "2026-11-19T15:16:30.783666+00:00",
+    "inStock": true,
+    "availability": "В наличии"
+  },
+  {
+    "article": "090537",
+    "name": "Выдвижная корзина 800 FOCUS, графит PRIME by AKS",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/59521/",
+    "sitePrice": 6381.9,
+    "checkedAt": "2026-11-19T15:16:31.916435+00:00",
+    "inStock": true,
+    "availability": "В наличии"
+  },
+  {
+    "article": "060264",
+    "name": "Выдвижная корзина-карго 150 FOCUS крепл.боковое/левое, графит PRIME by AKS",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/59507/",
+    "sitePrice": 6858,
+    "checkedAt": "2026-11-19T15:16:32.417667+00:00",
+    "inStock": true,
+    "availability": "В наличии"
+  },
+  {
+    "article": "090144",
+    "name": "Механизм выкатной 3-х ярусный Lotti 450 мм  донное крепление 435х450х405 с доводчиком",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/58751/",
+    "sitePrice": 6490.2,
+    "checkedAt": "2026-11-19T15:16:32.157007+00:00",
+    "inStock": true,
+    "availability": "В наличии"
+  },
+  {
+    "article": "060301",
+    "name": "Корзина для моющих средств (под саморезы), AKS",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/57925/",
+    "sitePrice": 571.1,
+    "checkedAt": "2026-11-19T15:16:33.516613+00:00",
+    "inStock": true,
+    "availability": "В наличии"
+  },
+  {
+    "article": "090538",
+    "name": "Выдвижная корзина 600 ICON без крепл. к фасаду, графит PRIME by AKS",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/60153/",
+    "sitePrice": 6823.2,
+    "checkedAt": "2026-11-19T15:16:33.886971+00:00",
+    "inStock": false,
+    "availability": "Нет в наличии"
+  },
+  {
+    "article": "090510",
+    "name": "Волшебный уголок PTJ017GB5 ALBA (860-960)х480х560мм правый с доводчиком",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/60148/",
+    "sitePrice": 18692.8,
+    "checkedAt": "2026-11-19T15:16:35.058199+00:00",
+    "inStock": false,
+    "availability": "Нет в наличии"
+  },
+  {
+    "article": "060093",
+    "name": "Бутылочница 150мм 2-уровневая 95x262x340 в верхнюю базу, без направляющих",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/59597/",
+    "sitePrice": 750.3,
+    "checkedAt": "2026-11-19T15:16:36.508848+00:00",
+    "inStock": false,
+    "availability": "Нет в наличии"
+  },
+  {
+    "article": "060201",
+    "name": "Корзина 300мм 2-уровневая 240х452х422мм с доводчиком, ALBA",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/59596/",
+    "sitePrice": 5547,
+    "checkedAt": "2026-11-19T15:16:36.965675+00:00",
+    "inStock": false,
+    "availability": "Нет в наличии"
+  },
+  {
+    "article": "060088",
+    "name": "Бутылочница 300мм 3-уровневая 230х451х520 мм с доводчиком, ALBA",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/59595/",
+    "sitePrice": 5400,
+    "checkedAt": "2026-11-19T15:16:37.394559+00:00",
+    "inStock": false,
+    "availability": "Нет в наличии"
+  },
+  {
+    "article": "060265",
+    "name": "Выдвижная корзина-карго 300 FOCUS крепл.нижнее, графит PRIME by AKS",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/59508/",
+    "sitePrice": 7330,
+    "checkedAt": "2026-11-19T15:16:38.084034+00:00",
+    "inStock": false,
+    "availability": "Нет в наличии"
+  },
+  {
+    "article": "090535",
+    "name": "Выдвижная корзина 600 FOCUS, графит PRIME by AKS",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/59506/",
+    "sitePrice": 5939,
+    "checkedAt": "2026-11-19T15:16:38.283874+00:00",
+    "inStock": false,
+    "availability": "Нет в наличии"
+  },
+  {
+    "article": "090158",
+    "name": "Механизм выкатной 3-х ярусный  Lotti, 300 мм донное крепление, на направляющих скрытого монтажа с доводчиком",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/58754/",
+    "sitePrice": 6645,
+    "checkedAt": "2026-11-19T15:16:39.001362+00:00",
+    "inStock": false,
+    "availability": "Нет в наличии"
+  },
+  {
+    "article": "090146",
+    "name": "Механизм выкатной 2-х ярусный  Lotti, 300 мм донное крепление, на направляющих скрытого монтажа",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/58753/",
+    "sitePrice": 5276,
+    "checkedAt": "2026-11-19T15:16:39.258880+00:00",
+    "inStock": false,
+    "availability": "Нет в наличии"
+  },
+  {
+    "article": "090145",
+    "name": "Механизм выкатной 2-х ярусный Lotti  400 мм  донное крепление",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/58752/",
+    "sitePrice": 4122.8,
+    "checkedAt": "2026-11-19T15:16:39.779871+00:00",
+    "inStock": false,
+    "availability": "Нет в наличии"
+  },
+  {
+    "article": "060008",
+    "name": "Механизм выкатной 2-х ярусный 200 мм боковое крепление левое",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/58020/",
+    "sitePrice": 1266.8,
+    "checkedAt": "2026-11-19T15:16:40.539525+00:00",
+    "inStock": false,
+    "availability": "Нет в наличии"
+  },
+  {
+    "article": "060006",
+    "name": "150 мм Бутылочница 2-ур. бок. креп. хром (470х100х444)",
+    "url": "https://allpremial.ru/catalog/drugie-brendy/58019/",
+    "sitePrice": 1105,
+    "checkedAt": "2026-11-19T15:16:40.759365+00:00",
+    "inStock": false,
+    "availability": "Нет в наличии"
+  },
+  {
+    "article": "060260",
+    "name": "Карго боковая  20/2, правая, на направляющих скр.монт. с доводчиком, графит, AKS",
+    "url": "https://allpremial.ru/catalog/butylochnitsy-vykatnye-mekhanizmy/57927/",
+    "sitePrice": 5631.8,
+    "checkedAt": "2026-11-19T15:16:41.132064+00:00",
     "inStock": false,
     "availability": "Нет в наличии"
   }

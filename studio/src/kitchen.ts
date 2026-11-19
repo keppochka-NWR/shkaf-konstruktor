@@ -1,3 +1,4 @@
+import {basketErrors,type KitchenBasket} from './kitchenBasket';
 import {maestroLayout} from './maestroDrawer';
 import {worktopDecors} from './worktopCatalog';
 import {compactDecor,DEFAULT_COMPACT_DECOR} from './compactCatalog';
@@ -28,6 +29,7 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   underLight?: true;
   oven?: OvenSpec;
   premialPullout?: PremialPullout;
+  basket?: KitchenBasket;
   /** Цоколь модуля: высота (Базис 95, на 5 мм ниже дна) и есть ли он у этого модуля (сплошной цоколь ряда — у крайнего). */
   plinth?: { height: number; off?: boolean; clips?: boolean;
     /** Корпус без опор (цоколь — деталь самого модуля): отступ цоколя от переда корпуса, если не RULES.plinthInset 2 (Базис k20 m09: 16). */
@@ -1226,7 +1228,7 @@ export function faceOverOk(over: number, width: number): boolean {
 }
 
 export function kitchenErrors(m: Module): string[] {
-  const e: string[] = [...allegroErrors(m),...ovenErrors(m),...columnErrors(m)];
+  const e: string[] = [...basketErrors(m),...allegroErrors(m),...ovenErrors(m),...columnErrors(m)];
   if (m.worktop) {
     const w = m.worktop;
     if (!["postforming", "ldsp", "stone", "compact", "acrylic", "quartz"].includes(w.material)) e.push("Столешница: материал из списка.");
@@ -1351,6 +1353,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
   return { role: String(k.role) as KitchenSpec["role"],
     // духовка и выдвижная система Premial (Codex, room-document-p1) — разбор как в их ветке
     ...(k.oven ? { oven: { visible: k.oven.visible !== false, drawer: k.oven.drawer === true, nicheHeight: num(k.oven.nicheHeight) } } : {}),
+    ...(k.basket!==undefined?{basket:{article:String((k.basket as KitchenBasket)?.article??'').slice(0,30)}}:{}),
     ...(k.premialPullout !== undefined ? { premialPullout: parsePremialPullout(k.premialPullout) } : {}),
     ...(k.appliance ? { appliance: String(k.appliance) as NonNullable<KitchenSpec["appliance"]> } : {}),
     ...(k.plinth ? { plinth: { height: num(k.plinth.height), ...(k.plinth.off ? { off: true } : {}), ...(k.plinth.clips === false ? { clips: false } : {}), ...(k.plinth.inset !== undefined && fin(k.plinth.inset) ? { inset: num(k.plinth.inset) } : {}) } } : {}),

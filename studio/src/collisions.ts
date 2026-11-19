@@ -211,6 +211,8 @@ export function partCollisions(ps: Part[], m?: Module, tol = 0.1): Collision[] {
   const rad = boxes.map((b, i) => Math.max(Math.hypot(...b.h), ...(ps[i].collide ?? []).map((c) => Math.hypot(c.position[0] - b.c[0], c.position[1] - b.c[1], c.position[2] - b.c[2]) + Math.hypot(...c.size) / 2)));
   for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) {
     const A = boxes[i], B = boxes[j];
+    // Welded basket/frame components touch within one purchased kit; contacts with cabinet parts still checked.
+    if(ps[i].id.startsWith('kitchen-basket:')&&ps[j].id.startsWith('kitchen-basket:')&&ps[i].id.split(':')[1]===ps[j].id.split(':')[1])continue;
     if(canonical&&kupeSeat(ps[i],ps[j])&&canonicalPart(ps[i])&&canonicalPart(ps[j]))continue;
     if (Math.hypot(B.c[0] - A.c[0], B.c[1] - A.c[1], B.c[2] - A.c[2]) > rad[i] + rad[j]) continue;
     const depth = m?.corner && (ps[i].planContour || ps[j].planContour) ? contourPenetration(ps[i], ps[j]) : ps[i].collide || ps[j].collide || ps[i].planHoles || ps[j].planHoles ? partPenetration(ps[i], ps[j]) : penetration(A, B);

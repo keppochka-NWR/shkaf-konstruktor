@@ -1,3 +1,6 @@
+import {FOCUS_BASKETS,FOCUS_SOURCE,basketErrors} from './kitchenBasket';
+import {premialCatalog} from './premialCatalog';
+import {premialArticleQuote} from './premialPricing';
 import {KitchenLegIcon} from './KitchenLegIcon';
 import {isMaestro,maestroFits} from './maestroDrawer';
 import {textureContentStyle} from './textureContent';
@@ -367,6 +370,8 @@ function CabinetPanel(props: KitchenPanelProps) {
     </Group>}
 
     {role === "base" && <Group icon={<Rows3 size={15}/>} title="Ящики и бутылочницы" open={stage === 'filling' || stage === 'facades'}>
+      {!k.appliance&&<label className="hardware-field">Выкатная корзина<select aria-label="Выкатная корзина" value={k.basket?.article??''} onChange={e=>modify(n=>{if(e.target.value)n.kitchen!.basket={article:e.target.value};else delete n.kitchen!.basket;})}><option value="">Без корзины</option>{FOCUS_BASKETS.map(b=>{const issues=basketErrors({...m,kitchen:{...k,basket:{article:b.article}}}),item=premialCatalog.find(x=>x.article===b.article);return <option key={b.article} value={b.article} disabled={!!issues.length} title={issues.join(' ')}>FOCUS {b.base} · PRIME by AKS · {premialArticleQuote(b.article).price?.toLocaleString('ru-RU')??'Цена уточняется'} ₽ · {item?.availability??'Наличие не подтверждено'}{issues.length?' · '+issues[0]:''}</option>;})}</select></label>}
+      {k.basket&&<p>Направляющие, крепления фасада и крепёж включены в комплект. Установка: свободная глубина от 465 мм, высота от 170 мм. Показана закрытая корзина; пруток и борта схематичны. <a href={FOCUS_SOURCE} target="_blank" rel="noreferrer">Схема установки</a></p>}
       {!k.appliance && <label className="hardware-field">Бутылочница Premial<select aria-label="Бутылочница Premial" value={k.premialPullout?.article ?? ''} onChange={e => modify(n => { if (e.target.value) n.kitchen!.premialPullout = { article: e.target.value }; else delete n.kitchen!.premialPullout; })}>
         <option value="">Без бутылочницы</option>
         {ALLEGRO.map(item => { const issues = allegroErrors({ ...m, kitchen: { ...k, premialPullout: { article: item.article } } }); return allegroVisible(!!issues.length, k.premialPullout?.article === item.article, manager) && <option key={item.article} value={item.article} disabled={!!issues.length}>{allegroLabel(item, !!issues.length, manager)}</option>; })}
@@ -415,7 +420,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       })()}
     </Group>
 
-    {m.doors && !k.premialPullout && <Group icon={<Link2 size={15} />} title="Петли" open={stage === "facades"} note={k.hinges === false ? "нет, как в Базисе" : hingeCount + " шт."}>
+    {m.doors && !k.premialPullout && !k.basket && <Group icon={<Link2 size={15} />} title="Петли" open={stage === "facades"} note={k.hinges === false ? "нет, как в Базисе" : hingeCount + " шт."}>
       {/* флаг модуля из Базиса: действует и на двери, добавленные потом в студии, — поэтому виден и снимается здесь */}
       {k.hinges === false && <p className="field-note">Как в проекте Базиса: фасады без петель — петель нет ни в 3D, ни в присадке, ни в смете. Добавили или заменили дверь — <button className="text-action" onClick={() => modify((n) => { delete n.kitchen!.hinges; })}>Поставить петли</button></p>}
       {m.alu?<p className="field-note"><strong>Premial ПРЕСТО АЛЮМ</strong> · специальные петли для алюминиевых фасадов. Артикул, количество и цена — в смете; обычные петли не учитываются.</p>:<>      <label className="hardware-field">Бренд петель<select aria-label="Бренд петель кухонного модуля" value={m.hingeBrand ?? "gtv"} onChange={(e) => modify((n) => { const v = e.target.value as HingeBrand; if (v === "gtv") delete n.hingeBrand; else n.hingeBrand = v; })}>

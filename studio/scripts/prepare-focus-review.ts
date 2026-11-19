@@ -1,0 +1,1 @@
+import {writeFileSync} from 'node:fs';import {initialModule} from '../src/model';import {kitchenBase} from '../src/kitchen';import {newProject} from '../src/project';const m=kitchenBase(initialModule(),600);m.sections.forEach(s=>{s.shelves=[];s.drawers=0;s.rod=false;s.doorLeaves=1;});writeFileSync('reports/focus-review.json',JSON.stringify(newProject(m)));

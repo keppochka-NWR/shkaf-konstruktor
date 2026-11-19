@@ -366,6 +366,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   function addLegs(names:Record<string,number>){for(const [name,n] of Object.entries(names)){if(/^опора кухонная регулируемая/i.test(name))add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',n,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');else add('kitchen-leg:'+name,name,n,'шт',null,BZ);}}
   for(const a of p.modules){
     if(a.module.metalFrame){const m=a.module,f=m.metalFrame!;add(metalFramePriceKey(m),`${FRAME_LABEL[f.kind]} ${m.width} × ${m.height} × ${m.depth}, профиль ${f.tubeWidth} × ${f.tubeDepth}${f.tubeWall!==undefined?` × ${f.tubeWall} мм`:' (стенка не задана)'}`,1,'шт',null,'Готовый металлокаркас с окраской: цена клиенту по согласованию с изготовителем',true);continue;}
+    if(a.module.kitchen?.basket){const art=a.module.kitchen.basket.article,item=premialCatalog.find(d=>d.article===art);add('kitchen-basket:'+art,item?.name??('Корзина '+art),1,'компл',premialClientPrice(item?.sitePrice??null),item?item.url+'; '+item.checkedAt+'; цена сайта ×1,3; направляющие и крепления включены':'Цена не подтверждена',true);}
     if(a.module.kitchen?.premialPullout) {
       const art=a.module.kitchen.premialPullout.article;
       const item=premialCatalog.find(d=>d.article===art);add('premial-allegro:'+art,item?.name??('Бутылочница Premial АЛЛЕГРО '+art),1,'компл',premialClientPrice(item?.sitePrice??null),item?item.url+'; '+item.checkedAt+'; цена сайта ×1,3; крепёж и направляющие в комплекте':'Цена конкретного артикула не подтверждена',true);
