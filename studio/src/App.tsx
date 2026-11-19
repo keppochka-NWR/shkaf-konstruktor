@@ -1139,7 +1139,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     // K8 (критик 22.10): клик по секции в «Наполнении» выбирает задник — у такой детали нет ни плашки, ни своей подсветки, и первое Esc
     // «ничего не делало». Невидимое выделение детали снимается вместе с выделением модуля — сразу «Ничего не выбрано», как в других режимах.
     if(selectedPart&&!canRemove&&!drawerPreview&&!selectedOpening&&!selectedObstacle&&!selectedFixture){e.preventDefault();setSelectedPart(null);setDrawerIndex(null);setGroupIds([]);setDeselected(true);return;}
-    if(selectedPart||drawerPreview||selectedOpening||selectedObstacle||selectedFixture){e.preventDefault();setSelectedPart(null);setDrawerIndex(null);setDrawerPreview(false);setSelectedOpening(undefined);setSelectedObstacle(undefined);setSelectedFixture(undefined);return;}
+    if(selectedPart||drawerPreview||selectedOpening||selectedObstacle||selectedFixture){e.preventDefault();setSelectedPart(null);setDrawerIndex(null);setDrawerPreview(false);setSelectedOpening(undefined);setSelectedObstacle(undefined);setSelectedFixture(undefined);setGroupIds([]);setDeselected(true);return;}
     if(!deselected||liveGroupIds.length){e.preventDefault();setGroupIds([]);setDeselected(true);}
   }
   useEffect(() => {
@@ -1726,6 +1726,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             onContextMenu={(mid,sid,x,y,info)=>{if(mid!==placed.id)selectModule(mid);setCtxMenu({mid,sid,x,y,...info});}}
             onDrawerStack={(sid)=>{const sec=m.sections.find(s=>s.id===sid),bb=boxes(m).find(x=>x.id===sid);if(!sec||!bb)return;editDimension('От дна пенала до верха полки над ящиками',Math.round(drawerCapTop(m,sec)-bb.bottom),v=>{try{const configs=distributeDrawers(m,sec,bb.bottom+v);return modify(n=>{const target=n.sections.find(s=>s.id===sid);if(target)target.drawerConfigs=configs;});}catch(e){setError((e as Error).message);return false;}});}}
             selectedPart={!presentation&&selectedPart?.mid===placed.id?selectedPart.pid:undefined}
+            selectionVisible={!nothingSelected}
             selected={presentation||deselected?'':selectedId}
             onSelect={chooseSection}
             texture={texture(m.decor)}

@@ -206,6 +206,7 @@ type Props = {
   onPartSelect: (sid: string, pid: string, mid?: string) => void;
   selected: string;
   selectedPart?:string;
+  selectionVisible?:boolean;
   onSelect: (id: string) => void;
   texture?: string;
   facadeTexture?: string;
@@ -842,8 +843,8 @@ export function Scene(p: Props) {
             const pivot=doorPivots.get(part.id.replace(/:(hingecup|hingearm):/,':door:').replace(/:\d+$/,''))!;mesh.position.sub(pivot.position).applyAxisAngle(new THREE.Vector3(0,1,0),-(pivot.userData.rotY as number));pivot.add(mesh);
           } else moduleGroup.add(mesh);
           // Selection is independent of the active editing section: detail -> whole module -> group.
-          const picked=!state.presentation&&active&&state.selectedPart===part.id;
-          const modulePicked=!state.presentation&&!state.selectedPart&&
+          const picked=state.selectionVisible!==false&&!state.presentation&&active&&state.selectedPart===part.id;
+          const modulePicked=state.selectionVisible!==false&&!state.presentation&&!state.selectedPart&&
             (state.groupIds?.length?state.groupIds.includes(placed.id):active);
           const highlighted=picked||modulePicked;
           if (!isMetal || highlighted) {
@@ -2055,6 +2056,7 @@ export function Scene(p: Props) {
       p.hiddenModuleIds?.join(','),p.isolatedPart?.mid,p.isolatedPart?.pid,
       p.selected,
       p.selectedPart,
+      p.selectionVisible,
       p.texture,
       p.facadeTexture,
       p.openDoors,
