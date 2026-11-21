@@ -1,8 +1,8 @@
 (function(root,factory){
-  const api=factory();
+  const api=factory(typeof module==='object'&&module.exports?require('./studio-milling.js'):root.StudioMilling);
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.FacadeVisuals=api;
-})(typeof globalThis!=='undefined'?globalThis:this,function(){
+})(typeof globalThis!=='undefined'?globalThis:this,function(M){
   'use strict';
   let serial=0;
   const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -38,7 +38,7 @@
   }
   function note(p,catalog={},legacy={}){
     const s=selection(p,catalog,legacy);
-    if(p.family==='MDF')return 'Фото — образец фрезеровки из паспорта; его пропорции и цвет не повторяют заказ. Рядом — габарит полотна в выбранном экранном цвете. Точный контур фрезеровки не перенесён.';
+    if(p.family==='MDF'){const model=M?.drawing(String(p.millingId),p.w,p.h,p.t,p.variant||'solid');return model?'Рисунок построен по той же геометрии, что в Ё Конструкторе. Рамка и отступы сохраняются в миллиметрах при изменении размеров. '+model.notes.join(' '):'Выберите фрезеровку, чтобы показать рисунок на фасаде.';}
     if(p.family==='PAINT')return 'Параметрический эскиз: шаг фрезеровки взят из старого каталога. Цвет RAL на экране условный; сечение инструмента не моделируется.'+(p.variant==='glass'?' Проём витрины условный, требуется подтверждение.':'');
     if(p.family==='ALU')return 'Условный вид профиля и заполнения. Ширина и сечение рамки в источнике не заданы; проём не является размерным. Цвет профиля введён вручную.';
     return (s.panel?.image?'Фактура показана по образцу каталога без масштаба рисунка. ':'')+'Экранный цвет условный. Синим отмечены выбранные стороны кромки.';
@@ -52,7 +52,7 @@
   }
   function render(p,catalog={},legacy={},side='front',options={}){
     const dims=options.dimensions!==false,back=side==='back',s=selection(p,catalog,legacy);
-    const sample=!back&&!dims&&p.family==='MDF';
+    const sample=false;
     const uid=String(options.idPrefix||('facade_'+p.id+'_'+(++serial))).replace(/[^\w-]/g,'_');
     const width=sample?760:640,height=500;
     const area=back?[72,82,320,312]:sample?[80,78,280,310]:[118,78,370,320];
@@ -71,6 +71,10 @@
       if(p.family==='MDF'||!['PAINT','ALU'].includes(p.family)){
         const img=asset(p.family==='MDF'?s.film?.image:s.panel?.image,options);
         if(img)svg+='<image href="'+esc(img)+'" x="'+num(x)+'" y="'+num(y)+'" width="'+num(rw)+'" height="'+num(rh)+'" preserveAspectRatio="xMidYMid slice" clip-path="url(#'+uid+'_clip)"/>';
+      }
+      if(p.family==='MDF'){
+        const model=M?.drawing(String(p.millingId),p.w,p.h,p.t,p.variant||'solid');
+        if(model)svg+='<g clip-path="url(#'+uid+'_clip)"><g data-milling="'+esc(p.millingId)+'" data-source="studio" data-width-mm="'+p.w+'" data-height-mm="'+p.h+'" data-frame-mm="'+(model.frame??'')+'" transform="translate('+num(x)+' '+num(y)+') scale('+scale+')">'+model.markup+'</g></g>';
       }
       if(p.family==='PAINT'&&s.paintMilling?.specs?.step>0){
         // Retains the source patterns and real millimetre pitch; no invented tool geometry.
@@ -135,14 +139,14 @@
       svg+=txt(555,410,'Образец из паспорта'+(s.milling?' № '+s.milling.id:''),12,'middle');
       svg+=txt(220,422,'Габарит выбранного фасада',12,'middle');
       svg+=txt(width/2,465,'Фото не перекрашено. Контур образца не является чертежом заказной детали.',11,'middle');
-    }else svg+=txt(width/2,477,p.family==='ALU'?'Условная геометрия рамки. Размеры проёма не заданы.':p.family==='MDF'?'Точный контур — по паспорту выбранной фрезеровки.':'Цвет на экране условный. Размеры указаны в мм.',11,'middle');
+    }else svg+=txt(width/2,477,p.family==='ALU'?'Условная геометрия рамки. Размеры проёма не заданы.':p.family==='MDF'?'Параметрическая визуализация. Размеры в мм; цвет на экране условный.':'Цвет на экране условный. Размеры указаны в мм.',11,'middle');
     return svg+'</svg>';
   }
   const front=(p,c,l,o={})=>render(p,c,l,'front',o);
   const back=(p,c,l,o={})=>render(p,c,l,'back',o);
   function imagesFor(project,catalog={},legacy={}){
     const paths=new Set();
-    project.parts.forEach(p=>{const s=selection(p,catalog,legacy);for(const item of p.family==='MDF'?[s.milling,s.film]:!['PAINT','ALU'].includes(p.family)?[s.panel]:[])if(item?.image)paths.add(item.image);});
+    project.parts.forEach(p=>{const s=selection(p,catalog,legacy);for(const item of p.family==='MDF'?[s.film]:!['PAINT','ALU'].includes(p.family)?[s.panel]:[])if(item?.image)paths.add(item.image);});
     return [...paths];
   }
   return {front,back,render,describe,note,drillingRows,imagesFor,selection};
