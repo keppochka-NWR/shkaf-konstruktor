@@ -1,0 +1,822 @@
+[
+  {
+    "file": "index.html",
+    "sha256": "51622D9EB1FA7ECA97315CB72D5D815DA2B9F5EF61807E00561129FE887BE8B9",
+    "length": 22362
+  },
+  {
+    "file": "README.md",
+    "sha256": "7860FF983EDCC877CC176C0CFA7484F21B291961985B5B4A765068F2B5BC8961",
+    "length": 6593
+  },
+  {
+    "file": "TODO.md",
+    "sha256": "B85876B5910FB1A37F72571E14148FCEF7401074A0F4802AE3001499482E899B",
+    "length": 5758
+  },
+  {
+    "file": "assets/sections/ekonom-c.jpg",
+    "sha256": "5B981C645071E95A7EFF790D70A609A02289BA5BBE95599E8A97A6F28005DEC5",
+    "length": 22129
+  },
+  {
+    "file": "assets/sections/ekonom-flat.jpg",
+    "sha256": "097EE954B9CA402D32723414FDCD22EF5B725A39D26BA3C8ACD9E0C0AE6B7AC6",
+    "length": 22972
+  },
+  {
+    "file": "assets/sections/ekonom-h.jpg",
+    "sha256": "ADB6D6FAD4F054B49C35B142B12E41396C920A1F51660C65FACEB5E4A9099D67",
+    "length": 26577
+  },
+  {
+    "file": "assets/sections/ekonom-o.jpg",
+    "sha256": "D0C94D05B28FD9BDB4EFB83F7C885A05225D54F60B77B77B65F02DEB08BF4E57",
+    "length": 22128
+  },
+  {
+    "file": "assets/sections/grace.jpg",
+    "sha256": "25D02DF71167280A80625182B1A6F40D211C596F3FB100BB27AE1CBF5BFA180B",
+    "length": 25327
+  },
+  {
+    "file": "assets/sections/nova.jpg",
+    "sha256": "48587062A9949A394DE09E61395C2F640AC80A16DA6441E8CF888B0C2CC2B1B0",
+    "length": 19614
+  },
+  {
+    "file": "assets/sections/slim-dekor.jpg",
+    "sha256": "4E1F4E7124A3A2D957E87B4F004F396F6A8D141FAC304D4305A8CC54A59417A6",
+    "length": 58066
+  },
+  {
+    "file": "assets/sections/slim-fine.jpg",
+    "sha256": "4E1F4E7124A3A2D957E87B4F004F396F6A8D141FAC304D4305A8CC54A59417A6",
+    "length": 58066
+  },
+  {
+    "file": "assets/sections/slim-max.jpg",
+    "sha256": "D7CEB47886B5C3AAD8A41B58C54E85BAB519B4CD185938F32A8C53A4FC6613D9",
+    "length": 45190
+  },
+  {
+    "file": "assets/sections/slim.jpg",
+    "sha256": "4E1F4E7124A3A2D957E87B4F004F396F6A8D141FAC304D4305A8CC54A59417A6",
+    "length": 58066
+  },
+  {
+    "file": "assets/sections/standart-avers.jpg",
+    "sha256": "DA50BC6045140B767810AF4F408676987CD229593D820FF945C887099A9D0CEE",
+    "length": 45473
+  },
+  {
+    "file": "assets/sections/standart-c.jpg",
+    "sha256": "5B981C645071E95A7EFF790D70A609A02289BA5BBE95599E8A97A6F28005DEC5",
+    "length": 22129
+  },
+  {
+    "file": "assets/sections/standart-flat.jpg",
+    "sha256": "097EE954B9CA402D32723414FDCD22EF5B725A39D26BA3C8ACD9E0C0AE6B7AC6",
+    "length": 22972
+  },
+  {
+    "file": "assets/sections/standart-fusion.jpg",
+    "sha256": "D9EC94746A4CC09615073C6070F2D4C34688D68C7FCB921965503E9D17C1582D",
+    "length": 23986
+  },
+  {
+    "file": "assets/sections/standart-i.jpg",
+    "sha256": "163CC918EE970086E80DC04956A22DE17E02E28D9C824104E4C6C1F99C212C57",
+    "length": 19775
+  },
+  {
+    "file": "assets/sections/standart-smart.jpg",
+    "sha256": "4C1207A16065A0B7E0CB8331246DACB1C45109EFAC26FBC0CD1E7C1E9CE37022",
+    "length": 27316
+  },
+  {
+    "file": "assets/sections/standart-twelve.jpg",
+    "sha256": "4F8D96FF872BDB35C2E34D0ECA081510E504037955AD2247F613134A06087DA3",
+    "length": 25825
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Алюминий.jpg",
+    "sha256": "CE9D2F4F4BD0673ED1FEFD86DBE19B826EBC041943D6F32BDDE04573554FC51A",
+    "length": 2447
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Арабика.jpg",
+    "sha256": "AFB3CE977022E0DE78B257B9836A4C53EE2995BD50CC729131F6CF0C75CE5DDA",
+    "length": 1862
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Белоснежный.jpg",
+    "sha256": "15F3495C7E3F25092988F0A6DA782FA25BE64E5261C8D827CE6697B69B88CE4C",
+    "length": 959
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Белый Кристалл.jpg",
+    "sha256": "3D47750AAAC5F4B4D9A9B13FFF54A0A6F2B04A1FA99EE8FECE17FE91BD2E8874",
+    "length": 960
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Белый.jpg",
+    "sha256": "3DBE789D6D77C2100C65DB20F26FDFE7D038013ECFDA38C71796E65A82CDBC5A",
+    "length": 961
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Бохо.jpg",
+    "sha256": "62379B72271AD77D333046D97F8372AEB2F1E43D642DDDD9C79B8845FFEBE208",
+    "length": 1146
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Вулканический Серый.jpg",
+    "sha256": "59AF0F315F023E428C551A8CFF8BFCA33BE1FBBF292A4848DC045C9DD78E0AD9",
+    "length": 1903
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Графит.jpg",
+    "sha256": "0EB4320CB438877BAF0102B19A70D57B87C9811E86DBECD6232D841EE788E5F1",
+    "length": 1200
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Имбирь.jpg",
+    "sha256": "7AD3C3617F6C963C5D3479A7572E7FE52AC2A645FD57875F7D1BF461DD8F0FAE",
+    "length": 1313
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Клауд.jpg",
+    "sha256": "0438A9B513361AB2A21BF8438C587623BF1CABAE954AAA297D14642FAD000C21",
+    "length": 1172
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Кремовый.jpg",
+    "sha256": "364E7A772B8314C42BB4968FADD7D9A694C4BB85C8D6BC64ED9662181EF8BFBB",
+    "length": 978
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Лило.jpg",
+    "sha256": "AED6664EF46A904514343047B1ACE55E5AB084C5367DCE90524381A258B59DAB",
+    "length": 1321
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Маренго.jpg",
+    "sha256": "47565B608ECCBABF5012AD81D983EA0B4E247FFDCD9493AA8027E2C67FBF935C",
+    "length": 1260
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/МАРЦИПАН.jpg",
+    "sha256": "BC89CA6247BD31EDEF151719599EDD875D007ACD2AF8AD09F62C2EAACBF1525B",
+    "length": 1053
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Муза.jpg",
+    "sha256": "C39DDAEF9C4199BA4957B29EB4C669A47E5E8D3F52C86D230C6581E2B2053A05",
+    "length": 1373
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Муссон.jpg",
+    "sha256": "0267BADABF5DD94A70B3880E452F185F7E7706A0CD75A6538AEA5FD58C642946",
+    "length": 1596
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Орегано.jpg",
+    "sha256": "D47A456939E60DDD07298004A5ADA0C0C23D3D1C7030033F59AF86FD18E5C0C5",
+    "length": 1115
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Рейн.jpg",
+    "sha256": "13AAA7CA32A88584C213A64B67D34C23AFE114EA047E4051AC3E999EF8A07B2D",
+    "length": 1249
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Розовый Жемчуг.jpg",
+    "sha256": "0FCF259262A1AAEE5EE5AC015C0B1BF081083CBD8507D88F76130447F49FF457",
+    "length": 1673
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Розовый Кварц.jpg",
+    "sha256": "6D14B7FE284DC4320F596309C82F7083F7686FA70DA3FC596FEC7FF28623A663",
+    "length": 1097
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Серый 7810.jpg",
+    "sha256": "4F73C68CE167C60E79BD1207D683AABB2C1D830C07BEB3743048356DA2D2A668",
+    "length": 960
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Серый Камень.jpg",
+    "sha256": "DB4F6A23B49EE477DE388DB73C9D962BE5612895D83B35050F8743BD96B40352",
+    "length": 1624
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Скала.jpg",
+    "sha256": "01BC9A5947329CD74EEE3537D60F8547F93F3BBC503C47844935ABAB1C9D3699",
+    "length": 1689
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Титан.jpg",
+    "sha256": "973CBD0AB79BF9446FD6902B695D7F50AF6EAE64037087862267CABE938FC74F",
+    "length": 5949
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Тэффи.jpg",
+    "sha256": "7ED28E7A582BB2A92B793DB9C8CC491660BB628A3C47A048B5CE088405976A02",
+    "length": 973
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Фантом.jpg",
+    "sha256": "FF3A2E99C804B5822A4149D68FE12A43DCB489027920FEC40E4D263CEA02A662",
+    "length": 1146
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Флай.jpg",
+    "sha256": "A25AA898E8980C17BF2FF3FD115F8D5C597FFE87B4FCDB7C58C023D2D04078B4",
+    "length": 1592
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Флекс.jpg",
+    "sha256": "6227CA2F84F2F4E789A0777536AB4077B3C0E05A7669F300154BCB5D4FF1CEE3",
+    "length": 1183
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Фрост.jpg",
+    "sha256": "207789E6E5970DFE3936CB0E38044AAE1AC750CA5B35A04AF864F628712D356B",
+    "length": 1252
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Хаки.jpg",
+    "sha256": "81E1AF12E29F59E7789E40240751B9E773CAB6497C7D21F681844F9AEEEEE1D5",
+    "length": 1173
+  },
+  {
+    "file": "assets/textures/lamarty/Базовые однотонные декоры/Черный.jpg",
+    "sha256": "F609F0862F342FCC64BFD923DD48AD11C8E05BC9C75B8E08E5F69AE75EF7CD2E",
+    "length": 1969
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Аврора.jpg",
+    "sha256": "8C29C5AD1BC0B56253F80E1CFC65C5E1606C73627EF81DDE06B713E269661B45",
+    "length": 7170
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Айконик.jpg",
+    "sha256": "D1301FA5CF881A3879EA6BCA450337111734092B350135D602E450717A2EDD07",
+    "length": 12175
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Аликанте.jpg",
+    "sha256": "6674AD21D18D320B687AFA5F152DF49DCD3AB821C2A1B554553B1493C767DD23",
+    "length": 8535
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Альберо.jpg",
+    "sha256": "782629F583E7463E13B95E59EC65AFC1F04F8273555CC17A6DDF5A958B019E6A",
+    "length": 13038
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Береза Мраморная.jpg",
+    "sha256": "9FDC77EC9C92785B4756EAA64455725410C54E2DE2CAA9024D746E42C9CAB75F",
+    "length": 13446
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Береза Нордик.jpg",
+    "sha256": "06CA19C71E2F1738DD0BA23C7CB493B75E2E58611DAAA4760D1C2EBC0A2157F6",
+    "length": 8223
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Бетон Пайн Белый.jpg",
+    "sha256": "33CD165D46CE24D9936E670D523D201840569D3344A8D37B125D0E33A72C9F8D",
+    "length": 16312
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Бук Бавария Светлый.jpg",
+    "sha256": "B62B595E9A13CE2F98771D87134BA8B1AE52E31A2BC80A881B2D84635AF9545C",
+    "length": 8242
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Бук Натур.jpg",
+    "sha256": "D3CCD74674A79BD4B0894689C1EBCFA7E7C1F761C97D2CBDAD26BC8DE5A742B8",
+    "length": 7591
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Винтаж.jpg",
+    "sha256": "F9B1A47DE817B4749E4A6E7CEFC637ACF5E2A71902387D35CAC74AC6CAFB85A6",
+    "length": 21297
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Вишня Гамильтон.jpg",
+    "sha256": "99C982D816B5D3F95D2C398876B44372A346D19C5B90217503CF714192BE6B1C",
+    "length": 13322
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Выбеленное Дерево.jpg",
+    "sha256": "DD887246F6C21229A05560BF5804092F93978E8C2306EFAAA9CF6A0F55D73888",
+    "length": 4648
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Гамбия.jpg",
+    "sha256": "83AB76F6E009208276785005F0EE55369AFAA0AF0B1808140597AABD13F3CCA7",
+    "length": 20053
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Дельмар.jpg",
+    "sha256": "831FD072330A8AF1ADC72FFC53E0826BB36F30C1D714D712E7896D0813FCE2FF",
+    "length": 16491
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Дуб Вотан.jpg",
+    "sha256": "156B859ED7CBA5819A60AA7A3E724D0AEE8B0D43835B31D8B3FD751109006D23",
+    "length": 16966
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Дуб Дымчатый.jpg",
+    "sha256": "B74371AD0E151E1D25A68D369BD92E410CB6CA88827143363EAD071A8EA14CDC",
+    "length": 9081
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Дуб Молочный.jpg",
+    "sha256": "1F1A6EEE64B079507A49C2D62927A478EDA37F0E5A78B076B51F1AC822ED00D2",
+    "length": 7487
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Дуб Сонома.jpg",
+    "sha256": "93F4ECB2602AE3067DA21A0F75B2604EA56C0FFCB2535AAA4509057AB40B1629",
+    "length": 17175
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Дуб Сэнди.jpg",
+    "sha256": "AA9E4D4808499E8A68A029E3500BD86CB4E1A3649F77151C23B44A1A0027550D",
+    "length": 11530
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Калипсо.jpg",
+    "sha256": "500274C71DD6433B476427A5660BE2E2BEEBBD628C9B046E59AD315E589F8DE3",
+    "length": 13301
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Каньон Ледяной.jpg",
+    "sha256": "CD59C8C4A1EF70E17DDA0313AA4012CDAFCEA1719B7184B2943D20E5B703CD10",
+    "length": 8276
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Каньон Песчаный.jpg",
+    "sha256": "138A1D4AAD18D7A8CA367F45F78462BE5D7B112E73468F38A6C7C52AB7C2E45F",
+    "length": 16678
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Крафт.jpg",
+    "sha256": "B3015B63DAB68820D43E3797B9D63C1722A0A19884CFF3B49A096BC6B20873BC",
+    "length": 15965
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Либерти.jpg",
+    "sha256": "9FF6212FDD6D06387279C7A05DB91FEB81E3C047B1C2B1E0C61DDB9CB35A6A97",
+    "length": 12540
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Медея.jpg",
+    "sha256": "F5FC375FD967A23968C9F6AB7B3F85DA698AFBEE4576DE36308D2A07338D8E1E",
+    "length": 19563
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Небула.jpg",
+    "sha256": "4980C1B5A68FE1058B1CDF87802AEF00A0F175C938BFF08410B5BBF7DA576A48",
+    "length": 13558
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Орех Неаполь.jpg",
+    "sha256": "8E6960C8FD46C10D21F45921BCB26EC035069C404A16E3223C85614AFC3E465D",
+    "length": 13103
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Ориноко.jpg",
+    "sha256": "670C2E4605861B8EA2E1168A1DE54C49EDB7D7A8064116FD24AF4F7C89558858",
+    "length": 13001
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Пальмира.jpg",
+    "sha256": "8579878FB1621DE9F2DF55A0925808AF6B0D3E31AB971C44EE4FC2907C4182B6",
+    "length": 14991
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Парма.jpg",
+    "sha256": "3EF1FE106FFA0F1738A581E74D098A8CAD03FF858C8C2DAB8717A9A6949E0EC0",
+    "length": 9064
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Плэйн.jpg",
+    "sha256": "352C103DBA49294DDB07189B6317C4B4DABE3BEC3421A66C985D8CA01A43F7FE",
+    "length": 11464
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Сканди.jpg",
+    "sha256": "A5C4AD9D7FDE2D0967CA780EF436153D8FACD14EC25A923EF844C5B3E5779811",
+    "length": 8591
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Соната.jpg",
+    "sha256": "CDCA75A7941DEEC3D0EA3DF2A63C86CB321B672DBDB9A879C4492896368FBD8A",
+    "length": 14075
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Соул.jpg",
+    "sha256": "41CEB9BC4B036C9877D569DBDFDFA115648AD4736CA44919C513C5F78D6E5AE6",
+    "length": 15901
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Феникс.jpg",
+    "sha256": "8F3F6749166523B846E6D78E746A358CC82FA12219F07FFBEE81703E4AA74D18",
+    "length": 10547
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Фламинго.jpg",
+    "sha256": "1A74BFA670336021EF33821E127C632FEDC8D22CCAE1BA47D34835908FB17D3D",
+    "length": 13816
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Эльбрус.jpg",
+    "sha256": "EDE3095E9BFE69BE22CD2F7A0E3BA57809A12707D1F3F33A66122A2E477A1F8D",
+    "length": 13298
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Эра.jpg",
+    "sha256": "AD91B852C2075F1FDD91C11635CE1642D8499977722A91CA9AAA46BCEB0F2455",
+    "length": 17846
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Ясень Борнхольм.jpg",
+    "sha256": "56ED3F58A1E895C509F63E148661533237F3BB64CC4D62C4ABD6F66EA0F525A4",
+    "length": 13592
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Ясень Светлый.jpg",
+    "sha256": "1B7340FC12CCEF1DDABC795C9C51D8769A99F113398B6D448175D95C41F3C977",
+    "length": 13160
+  },
+  {
+    "file": "assets/textures/lamarty/Светлые древесные декоры/Ясень.jpg",
+    "sha256": "5DAB6DC852A30773400870C115ACD2D5D5D5CCD74E7C60775790C5AE53B600D0",
+    "length": 9680
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Айронвуд.jpg",
+    "sha256": "1116FC1A50CF4E9FA3804BD827731E992F2995338BD9B83BD15F9466E4E54D95",
+    "length": 18565
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Бамбук.jpg",
+    "sha256": "8E349098BA61E177D3A626C8D938340A386AAC71BE6514555B84C81D1B948FB1",
+    "length": 14103
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Бетон Пайн Экзотик.jpg",
+    "sha256": "0DBB9EFDAB1B61882986A3850BDA439750A7107CD5C83A47FE2EF3DF67F90CE1",
+    "length": 28546
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Блэквуд.jpg",
+    "sha256": "CDF3E615A10E7BB7EE520A4337F71C58B0E2E980ACF2D348F146705272E5A692",
+    "length": 11798
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Венге Соренто.jpg",
+    "sha256": "49ACB40793E8F5138C393C933A0B30A155BDB16461979A1C29761316AB1EE7C0",
+    "length": 5506
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Венге Темный.jpg",
+    "sha256": "4F8C35FB7BD9851333347FD4395D402FD4A24ABA50EF520C1FDDC248233476E5",
+    "length": 9155
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Вишня Оксфорд.jpg",
+    "sha256": "A10B349350E5A7314553A4262D999EC74F580D49E5CF7A9640DC64C677C1A5F6",
+    "length": 11807
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Вяз Швейцарский.jpg",
+    "sha256": "3C4738C0BBD2301DDDECBAA4E498753596E501593ADA7486463B9AC1CFAE64D6",
+    "length": 13655
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Дуб Галиано.jpg",
+    "sha256": "D329C148857ADFF18B05BFC2BF49DA76419A98674D87BD656BA991303091BBBA",
+    "length": 8858
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Дуб Дарго.jpg",
+    "sha256": "832DA3ED161C0391DE6EE7AAE718748A719089389D8CC77238061E44F126342B",
+    "length": 16115
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Дуб Кальяри.jpg",
+    "sha256": "D727DC613D1747E69C414AFD36CF307596497ECA572946C978A184F28DC6E770",
+    "length": 10734
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Дуб Марсала.jpg",
+    "sha256": "A345C5B9D11C2198480324096B6F4C1DC8517BDF2A931F748E179E4B5F2A3D18",
+    "length": 28778
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Дуб Солсбери.jpg",
+    "sha256": "7860819F9EE5B8AD2024D55E08518215CA43C3A6C6FDD25BB04F82BFD1B278E9",
+    "length": 14489
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Интра.jpg",
+    "sha256": "FF31893A1C91CAAD3FC849AFF000D45A38AE8EB807A384893074E7FB3BBD95B5",
+    "length": 15050
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Капучино.jpg",
+    "sha256": "380120394B3D8FA9540D708B96C0E54A27D88AE9405D1507BD55B9130753F58B",
+    "length": 12976
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Кейптаун.jpg",
+    "sha256": "D8FAD501B87F497F7D0464B445F59E0B953BED4A3E13B7811A10E20770EAE6BE",
+    "length": 20884
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Клио.jpg",
+    "sha256": "5DDF5DD8CABF4EABF482ED4737137BEFA593C50F7A4D4B5F25644DEABB5F65CF",
+    "length": 14635
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Намибия.jpg",
+    "sha256": "AE95F2B98A58F169E6BE066FF5D0D621A463342DB570BDE1A766AD434A308DD7",
+    "length": 23272
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Ноче Гварнери.jpg",
+    "sha256": "CD50558020A9932D6FA67C5066BFED4F8F9409BF2B083C3BFD1886809140A1A1",
+    "length": 11722
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Ноче Мария Луиза.jpg",
+    "sha256": "BF227AC3015E1457FC2609071BEFB59721AD0FED6073F46C5765ECC428C4CA86",
+    "length": 8957
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Ноче Экко.jpg",
+    "sha256": "467AFFE16057D0813D82EBAC97CF800D866B09F1C9ACF945CA8BB8A086207A9F",
+    "length": 9370
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Одиссея.jpg",
+    "sha256": "12C24C000FB8CEFE2400F20EBB45FAB7EE13D08A139F495756EA3466B9C86E72",
+    "length": 17910
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Ольха Светлая.jpg",
+    "sha256": "835FF1548D86F80F3B9EEA1EE4559821C2E537800DD7EB7352803189FEF9686E",
+    "length": 10971
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Орех Кария.jpg",
+    "sha256": "BFC523F57A5E8BD688DFE9B6DE49DF4B27C922868BB130418F9AAB5B23BB30F7",
+    "length": 12316
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Руанда.jpg",
+    "sha256": "5FCA0D3AD4A67136D52C0C86C144D6CC41E6E49575CED615C1E4B4271208C7BC",
+    "length": 22115
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Сосна Санторини.jpg",
+    "sha256": "A95EABB1DE854081339520D4F8136248B73CA138957839D41A9C3FDC36FA438A",
+    "length": 17976
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Трансильвания.jpg",
+    "sha256": "D2B2E9BCB65AD104550D28933529024005AA1E76005ACDDCAE458E26BB920DAC",
+    "length": 17442
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Хронос.jpg",
+    "sha256": "702ECE28A4CB414772BF7785EBAF719DBC5FE384562B30EFB08388B2CAC2C0A0",
+    "length": 19737
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Элит Баттл Рок.jpg",
+    "sha256": "669C262AFDE9007B6B35DF2D748B5DA21424CB6EEB85C2604D66CE28D5678948",
+    "length": 14653
+  },
+  {
+    "file": "assets/textures/lamarty/Темные древесные декоры/Ясень Темный.jpg",
+    "sha256": "C5D009812BEFC411AEA37047C79CAFC9F6F7F4574375A27246C6138A227016DC",
+    "length": 14457
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Аура.jpg",
+    "sha256": "D0AE49FF1328A0EA3B49D6A0FFFE85D6A4A894BA5883EC948E7C703E4594DB34",
+    "length": 5068
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Графика.jpg",
+    "sha256": "F9B5871D2D6532BA985564CCA51DC44417CA88E8F739B13542CC098416C7EB5B",
+    "length": 32108
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Гринери.jpg",
+    "sha256": "C2CA14087FD4F48F5A0D0572D9157107F684AAE5B828B38531108ECC45959F0C",
+    "length": 1572
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Дуо.jpg",
+    "sha256": "47A3482226A3B4F364058AD5AED8E1F379DBB6D7B39F6F11AFAE18452DC6E3EE",
+    "length": 9068
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Ирис.jpg",
+    "sha256": "EB570DE5D881F941C658C676721B32B3587AF1D7D85EC7FFE705092DA03B0942",
+    "length": 1777
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Калима.jpg",
+    "sha256": "D546FDB83F8231A913D9125A582146ADF1437D6C7798E2DB26CBEB5F7FB8B9F7",
+    "length": 18492
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Карум.jpg",
+    "sha256": "E5BD388DA2DD7DB09F1AE5B7D61AA20825A319411A13CCB6EB03797B9AE932E3",
+    "length": 15302
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Кэнди.jpg",
+    "sha256": "1280C7C61EECEEC266B6A59668FEA3035B580B884F94A57C5AA67225AC912973",
+    "length": 25223
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Магма.jpg",
+    "sha256": "ACD8A81117E44F2B725203B5533E256CAA6E04704B8EBC9D3E6937D9A81C2D40",
+    "length": 15106
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Малави.jpg",
+    "sha256": "D805C46AED293226EA1E7589660EE837DBAE93652D0AA9712EFD6E4299E72DC9",
+    "length": 11812
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Манго.jpg",
+    "sha256": "F5365B72A9FD6A79D93C0F7B71A9180B61B77CA12EDDE4CA35881FBE285C0B89",
+    "length": 1774
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Нейро.jpg",
+    "sha256": "546C36E9AE354436F8DF51C02A07EEC0ABCEEF2013D4EDB979BE1DD2526DDE68",
+    "length": 23407
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Орион.jpg",
+    "sha256": "16D84DDC2DDF738586102E1EE34F459502991E419A8123936AF005B31B47D78B",
+    "length": 15175
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Помпеи.jpg",
+    "sha256": "B51CA07FC9BE6809A92A8ED2D48130290937D80B77C7C54851B0DE16D01AD90D",
+    "length": 37256
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Рамбла.jpg",
+    "sha256": "22F6996E8F67C06D135552BCA5A684ED4AF2E372D671936514FA9BAA5831B7DD",
+    "length": 22426
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Рускеала.jpg",
+    "sha256": "875D6D5E46A24644B363CC7E23B83187C4E8BFB0771E8E8F93A2E146A24F3E97",
+    "length": 23562
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Серенити.jpg",
+    "sha256": "D317F489CA7ABBBB390A5E810E3108A8A1B7F3B55C5563D7064271FA561E32D1",
+    "length": 1422
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Слэйт.jpg",
+    "sha256": "06A626667156FD322B1D4ADABBD87FDFFD3170E1B0DDDFEC74A0047576D29D51",
+    "length": 13219
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Солнечный.jpg",
+    "sha256": "8EA9EF9EC7DA0CD98E385229F53D31DF78E944F4B35A1ACDB071C21F654FB0E8",
+    "length": 1341
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Софт.jpg",
+    "sha256": "99D9956C35ADBCED7067AA98B28912381B8EB5DC6C1CA6DAD76D8AA7D21789A5",
+    "length": 5309
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Терра.jpg",
+    "sha256": "570D04627562FF82FDBF3AF288D24FE0310DBE4C36ADDAF08F5E4358CDDB1321",
+    "length": 14037
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Терраццо.jpg",
+    "sha256": "E9B52D442B4283154BE37900C59ECAB9DE6C1F7F55D1A4CD39062F7AB175B6B4",
+    "length": 18964
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Фреска.jpg",
+    "sha256": "93461A3D105CE14C8382586479D080A40F0D19B61C89D532B6F858D350289560",
+    "length": 13294
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Хюгге.jpg",
+    "sha256": "980D620CC0EF729F69FE86C93E527A99EDBDA5F8241AA5D289020C9384541052",
+    "length": 4024
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Цемент.jpg",
+    "sha256": "0036CB5147800118DEF71AD5F9CCFF766DD9CF21DF060EC92ABDA2A36F4D9ED7",
+    "length": 18481
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Чили.jpg",
+    "sha256": "D37F7F89E18BF0920116B44BDD45CED1199044DBEEEF1DDD25DDF2F52876D336",
+    "length": 1040
+  },
+  {
+    "file": "assets/textures/lamarty/Фантазийные декоры/Этно.jpg",
+    "sha256": "00E748DDAEC43898EF49C1EDA6303FF719371B9E71E6306C1D5E25D74146E72F",
+    "length": 25966
+  },
+  {
+    "file": "css/main.css",
+    "sha256": "AA5071CDD4C906395A69BE99B6434CFA885DC052D352BE95DB909B7078BD70A5",
+    "length": 49430
+  },
+  {
+    "file": "data/fillings.js",
+    "sha256": "438AB4CD488B096640316573365BF76476AC9CE742DA4FED4C68FC183C6444E7",
+    "length": 9331
+  },
+  {
+    "file": "data/lamarty.js",
+    "sha256": "00CB692BD022F0F57C63A92FCCE059B0C8A6277582EEA59FF555E5D9A8706729",
+    "length": 30403
+  },
+  {
+    "file": "data/profile-sections.js",
+    "sha256": "A9B78726704BCBBD6F51ACAEAF0DA9AA6036A3510323E8F8317F98621F19091B",
+    "length": 9971
+  },
+  {
+    "file": "data/profiles.js",
+    "sha256": "622530E36460A09AB5B8511C287712451109DD9EA1EC6A1CD9D499F3A56FA468",
+    "length": 42770
+  },
+  {
+    "file": "js/kupe.js",
+    "sha256": "8B2549AE9113F6812E34C647DCFA2FAF65D4A84D3ECC40BDF7353D38D15D3589",
+    "length": 152350
+  },
+  {
+    "file": "js/router.js",
+    "sha256": "EC0D5595C9192B8A29127B6BBE8D2BEE9D7C81692B7C30F55D981FE668637AD1",
+    "length": 2827
+  },
+  {
+    "file": "js/shared-kp.js",
+    "sha256": "28C82E70E74A2A693235D403136626949FA8BDFD8CF227EB2152C0E256A04181",
+    "length": 1902
+  },
+  {
+    "file": "js/store.js",
+    "sha256": "0BE72CC924A941D41EC0B501D862689AD62E47B91547FB108AFE8CD59832CC8B",
+    "length": 1865
+  },
+  {
+    "file": "js/utils.js",
+    "sha256": "B0F734DCA3340EFB1D066060674AD0EB668B10F4050FFB1F1E3117A7C6417852",
+    "length": 2234
+  },
+  {
+    "file": "tests/auto-2026-05-13.md",
+    "sha256": "C04F65FA79F414557551ABEAC4354C6196A2B1CDF46CD4E0D50B77499A511EEF",
+    "length": 6796
+  },
+  {
+    "file": "tests/auto-2026-05-14.md",
+    "sha256": "DCC5AFF378AFFE2DBAA79E6C2044A5F4E227D1C4580C8F80EED0BB0C9D81B7EB",
+    "length": 5201
+  },
+  {
+    "file": "tests/dimension-sums.test.cjs",
+    "sha256": "0679980C10BA5AB8112088340AC0013FF24DB4969F43F0419EE4462C3F1F0A27",
+    "length": 1376
+  },
+  {
+    "file": "tests/manual.md",
+    "sha256": "B694C155AB341CF96943A6AFF735654836F0275CDFE24A310C286CD0072B0656",
+    "length": 14186
+  },
+  {
+    "file": "tests/release-2026-09-28.md",
+    "sha256": "9A871BC56BE4EFAC7892C3DC7EA4C18E7C8E0F01AB5B9AB5B311E8BD62F3044C",
+    "length": 2625
+  }
+]

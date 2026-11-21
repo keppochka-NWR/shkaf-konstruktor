@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="220" viewBox="0 0 360 220" fill="none">
+  <title>Ё Конструктор</title>
+  <desc>Объёмный шкаф с закрытой створкой и открытым наполнением. Полка выделена как редактируемая деталь.</desc>
+  <g stroke="#647282" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M97 58 130 36H279V168L246 190H97Z" fill="#ECE7DF"/>
+    <path d="M246 58 279 36V168L246 190Z" fill="#C8B79F"/>
+    <path d="M97 58 130 36H279L246 58Z" fill="#F7F4EE"/>
+    <path d="M97 58H246V190H97Z" fill="#E9DDCD"/>
+    <path d="M105 66H238V181H105Z" fill="#C6B79F"/>
+    <path d="M176 67H237V180H176Z" fill="#E6D9C6" stroke="#B2A38D"/>
+    <path d="M176 67 188 59H246L237 67Z" fill="#FBF7EF"/>
+    <path d="M176 67 188 59V172L176 180Z" fill="#C8B89F"/>
+    <path d="M177 91 188 84H237V91Z" fill="#F6F0E7"/>
+    <path d="M177 91H237V95H177Z" fill="#D5C5AF"/>
+    <path d="M177 151 188 144H237V151Z" fill="#F6F0E7"/>
+    <path d="M177 151H237V155H177Z" fill="#D5C5AF"/>
+    <path d="M177 181 188 174H237V181Z" fill="#F6F0E7"/>
+    <path d="M103 64H169V183H103Z" fill="#F7F6F1"/>
+    <path d="M108 69H164V178H108Z" stroke="#D9DCD9"/>
+    <path d="M159 112V140" stroke="#536478" stroke-width="2.4"/>
+    <path d="M97 184H246" stroke="#8D908D"/>
+  </g>
+  <g stroke="#3157DB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M176 121 188 113H238V121Z" fill="#E4EBFF"/>
+    <path d="M176 121H238V125H176Z" fill="#CCD9FF"/>
+    <path d="M78 58V190M73 58H83M73 190H83"/>
+    <circle cx="238" cy="123" r="3" fill="#FFFFFF"/>
+  </g>
+  <path d="M65 197H291" stroke="#D5DCE3" stroke-width="1.4" stroke-linecap="round"/>
+</svg>

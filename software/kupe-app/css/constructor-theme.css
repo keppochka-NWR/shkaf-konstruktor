@@ -1,0 +1,230 @@
+/* Local presentation-only layer, 21.11.2026. Original calculation, data and print CSS stay unchanged. */
+@media screen {
+  :root {
+    --font: "Segoe UI", Arial, sans-serif;
+    --color-bg: #f3f5fa;
+    --color-surface: #fff;
+    --color-surface-2: #f7f9fc;
+    --color-surface-offset: #f4f7fb;
+    --color-surface-dynamic: #eef3fc;
+    --color-divider: #e7ebf2;
+    --color-border: #d6deeb;
+    --color-text: #202d40;
+    --color-text-muted: #5d6c82;
+    --color-text-faint: #69788d;
+    --color-primary: #3157db;
+    --color-primary-hover: #2445bd;
+    --color-primary-active: #1c3699;
+    --color-primary-highlight: #edf1ff;
+    --color-blue: #3157db;
+    --color-blue-highlight: #edf1ff;
+    --color-warning: #936019;
+    --color-warning-highlight: #fff4df;
+    --color-error: #b52c34;
+    --shadow-sm: 0 1px 3px rgb(24 46 78 / 4%);
+    --shadow-md: 0 5px 18px rgb(24 46 78 / 8%);
+    --shadow-lg: 0 15px 50px rgb(24 46 78 / 15%);
+    --trans: 120ms ease;
+  }
+  html {scroll-behavior: auto}
+  body.yo-kupe-preview {font-size: 14px;background: var(--color-bg);color: var(--color-text)}
+  button, input, select, summary, a {outline-offset: 3px}
+  button:focus-visible, a:focus-visible, summary:focus-visible {outline: 2px solid #3157db}
+  .hdr {background:#fff;box-shadow:none;border-bottom:1px solid #dfe5ee}
+  .hdr-top {padding:0 26px;min-height:64px;gap:18px}
+  .logo {gap:10px}
+  .yo-brand-mark {width:35px;height:36px;background:#3157db;color:#fff;display:grid;place-items:center;border-radius:8px;font-size:25px;font-weight:750;line-height:1}
+  .hdr .logo-name {font-size:18px;font-weight:700;line-height:1.15;letter-spacing:-.02em}
+  .hdr .logo-tag {font-size:11px;color:#637287;margin-top:3px}
+  .hdr-actions {display:flex;align-items:center;gap:18px;min-width:0}
+  .yo-local-badge {font-size:11px;color:#78613c;background:#fff6e7;padding:6px 9px;border-radius:5px;white-space:nowrap}
+  .yo-home-link {font-size:12px;font-weight:600;color:#4b5d77;text-decoration:none}
+  .yo-home-link:hover {color:#3157db;text-decoration:underline}
+  /* There is one working module; the old one-item route tab is redundant. DOM hook is retained. */
+  .nav-tabs {display:none}
+  .kupe-topbar {min-height:71px;padding:15px 26px;gap:16px;background:var(--color-bg);border:0}
+  .kupe-bc {gap:9px;flex-wrap:wrap;font-size:13px}
+  .kupe-bc-muted {color:#69788d;font-size:12px}
+  .kupe-bc-sep {color:#abb6c6}
+  .kupe-bc-current {color:#202d40;font-size:20px;letter-spacing:-.025em;font-weight:650}
+  .kupe-bc-version {color:#69788d;font-size:10px;letter-spacing:0;margin-left:12px}
+  .kupe-topbar-actions {gap:8px;flex-shrink:0}
+  .kupe-btn-out,.kupe-btn-fill {height:38px;padding:0 15px;border-radius:7px;font-size:12px;font-weight:600;letter-spacing:0}
+  .kupe-btn-out {background:#fff;border:1px solid #ccd7e7;color:#34465f}
+  .kupe-btn-out:hover {background:#eef3fc;color:#2445bd;border-color:#a6b8d4}
+  .kupe-btn-fill {background:#3157db;border:1px solid #3157db;color:#fff}
+  .kupe-btn-fill:hover {background:#2445bd;opacity:1}
+  .kupe-btn-fill:disabled {background:#e4e9f2;border-color:#dfe5ef;color:#8390a3;opacity:1}
+  .kupe-btn-fill:disabled:hover {opacity:1}
+  .kupe-3col {grid-template-columns:310px minmax(340px,1fr) 300px;gap:16px;padding:0 22px 22px;background:transparent;min-height:calc(100dvh - 135px);align-items:start}
+  .kupe-col {border:1px solid #dfe5ef;border-radius:12px;min-width:0;padding:20px;background:#fff;gap:17px;max-height:calc(100dvh - 157px);scrollbar-width:thin;scrollbar-color:#b9c6da transparent;overscroll-behavior:contain}
+  .kupe-col-left,.kupe-col-right {background:#fff}
+  .kupe-col-center {align-self:stretch;min-height:calc(100dvh - 157px);padding:22px 20px;background:#f8faff;position:relative}
+  .kupe-col-head {font-size:16px;font-weight:650;letter-spacing:-.015em;text-transform:none;color:#22314a;padding-bottom:15px;border-color:#e5ebf3;margin-bottom:0}
+  .kupe-form-list {gap:20px}
+  .kupe-sec {gap:8px}
+  .kupe-sec-lbl {font-size:12px;font-weight:650;letter-spacing:0;text-transform:none;color:#33465e;margin:0}
+  .yo-field {display:flex;flex-direction:column;gap:6px;min-width:0}
+  .yo-field span,.yo-field-label {font-size:11px;font-weight:500;color:#647389;line-height:1.35}
+  .yo-field-label {margin-top:2px}
+  .kupe-inp,.kupe-sel,.inp,.sel {height:40px;border-color:#cbd6e6;border-radius:7px;color:#23344d;font-size:13px;background-color:#fff;box-shadow:none}
+  .kupe-inp:focus,.kupe-sel:focus,.inp:focus,.sel:focus {border-color:#6581e6;box-shadow:0 0 0 3px rgb(49 87 219 / 9%)}
+  .kupe-inp[aria-invalid=true] {border-color:#b52c34;box-shadow:0 0 0 2px rgb(181 44 52 / 8%)}
+  .kupe-dimension-error {font-size:11px}
+  .kupe-chips {gap:5px;flex-wrap:nowrap}
+  .kupe-chip {width:auto;min-width:29px;flex:1;height:36px;border-radius:6px;font-size:13px;color:#526279;border:1px solid #d3ddeb;background:#fff}
+  .kupe-chip:hover {color:#3157db;border-color:#a5b7e8;background:#f5f7ff}
+  .kupe-chip-active {color:#fff;background:#3157db;border-color:#3157db}
+  .kupe-chip-active:hover {color:#fff;background:#2445bd;border-color:#2445bd}
+  .profile-sec-btn {width:40px;height:40px;border-radius:7px;border-color:#cbd6e6;color:#53688d;background:#fff}
+  .profile-sec-btn:hover {background:#edf1ff;color:#3157db;border-color:#a6b7e5}
+  .kupe-hint {font-size:11px;color:#647389;padding:2px 0;line-height:1.55}
+  .tog-row {padding:12px;background:#f5f7fb;border:1px solid #e5eaf2;border-radius:8px}
+  .tog-lbl {font-size:12px;font-weight:600;color:#33465e}
+  .tog-desc {font-size:11px;color:#647389;margin-top:3px}
+  .toggle input:focus-visible+.t-slider {outline:2px solid #3157db;outline-offset:3px}
+  .sect-btn {border-radius:7px;min-height:57px;border-width:1px;font-size:10.5px;background:#fff;color:#5d6c82}
+  .sect-btn.active {background:#edf1ff;border-color:#3157db;color:#3157db;box-shadow:inset 0 0 0 1px #3157db}
+  .sect-btn:hover {border-color:#3157db;color:#3157db}
+  .bulk-details {padding:12px;border:1px solid #e1e7f1;background:#fafbfe;border-radius:8px}
+  .bulk-details summary::before {border-left-color:#647389}
+  .bulk-row-copy,.bulk-lbl,.bulk-arrow {color:#62738a}
+  .bulk-btn {height:auto;min-height:35px;padding:7px 10px;line-height:1.4;font-size:11px}
+  .btn-secondary {background:#fff;color:#455a78;border-color:#d4ddec;font-size:12px;border-radius:7px}
+  .btn-secondary:hover {background:#edf1ff;border-color:#aebee8;color:#3157db}
+  .bulk-btn-danger {color:#a14e53;border-color:#e5d6d8}
+  .bulk-btn-danger:hover {background:#fff5f5;border-color:#d4a1a5;color:#96343c}
+  .kupe-fills-list {border-color:#dfe6f0;border-radius:8px;background:#fff;padding:5px;max-height:240px}
+  .kupe-fill-row {border-radius:5px;padding:9px 7px;gap:8px}
+  .kupe-fill-row:hover {background:#f0f4ff}
+  .kupe-fill-name {font-size:12px;color:#34455f}
+  .kupe-fill-num {color:#697991;background:#f0f3f8;font-size:9px;padding:3px 5px;border-radius:4px}
+  .kupe-fill-swatch {border-color:#d8e1ef}
+  .kupe-viz-stage {background:transparent;min-height:440px;border:0;flex:1;display:flex;justify-content:center}
+  .kupe-empty {padding:50px 20px;color:#8b9bb0;gap:14px}
+  .kupe-empty h3 {color:#33465f;font-weight:600;font-size:17px}
+  .kupe-empty p {color:#6c7c92;font-size:12px;line-height:1.65}
+  .kupe-empty svg {color:#8fa4c8}
+  .kupe-proj-badge {border-color:#dce4ef;border-radius:7px;padding:11px 15px;box-shadow:0 2px 7px rgb(20 42 80 / 4%);background:#fff}
+  .kupe-proj-num {color:#34465f;font-size:10px;letter-spacing:.06em}
+  .kupe-proj-meta {color:#6a7b92;font-size:11px;margin-top:4px}
+  .kupe-hero-lbl {font-size:11px;font-weight:600;letter-spacing:.04em;color:#62738a}
+  .kupe-hero-price {font-size:36px;line-height:1.22;letter-spacing:-.04em;color:#243e7c;font-weight:700}
+  .kupe-hero-meta {font-size:11px;line-height:1.5;color:#647389;border-color:#e3e9f2;margin-bottom:15px;padding-bottom:15px}
+  .kupe-spec-list {gap:0}
+  .kupe-spec-row {padding-block:12px;border-bottom:1px solid #e8edf5;font-size:12px;gap:9px}
+  .kupe-spec-name {color:#33465f;line-height:1.4}
+  .kupe-spec-qty {font-size:10.5px;color:#6e7d91}
+  .kupe-spec-price {font-size:12px;color:#223958;min-width:64px}
+  .kupe-btn-calc,.kupe-btn-order {height:43px;background:#3157db;color:#fff;border:1px solid #3157db;border-radius:8px;font-size:12px;font-weight:600;letter-spacing:0}
+  .kupe-btn-calc:hover,.kupe-btn-order:hover {background:#2445bd;border-color:#2445bd;opacity:1}
+  .kupe-btn-link {color:#697991;font-size:11px;height:35px}
+  .kupe-btn-link:hover {color:#3157db}
+  .card {border-color:#dfe6f0;border-radius:9px;box-shadow:none}
+  .card-head {background:#f5f7fc;border-color:#e2e8f2}
+  .sec-back-btn {background:#edf1ff;border-color:#d8e0fc;color:#3157db;border-radius:7px;font-size:12px;letter-spacing:0}
+  .sec-back-btn:hover {background:#dfe7ff;color:#2445bd;border-color:#b9c9fc}
+  .door-edit-tabs {background:#f1f4fa;border-radius:7px;padding:5px;gap:4px}
+  .door-edit-tab {border-color:#d8e1ef;border-radius:5px;color:#5d6e85;font-size:10px;min-width:49px;height:32px}
+  .door-edit-tab.active {background:#3157db;color:#fff;border-color:#3157db}
+  .door-edit-tab:hover {border-color:#8fa6e9}
+  .door-edit-tab:not(.active) .det-badge {background:#eef2f8;color:#6d7d93}
+  .dso-current {background:#f5f7fc;border-color:#e2e8f2;color:#63748b;font-size:11px;border-radius:6px}
+  .dso-current strong,.dso-title {color:#32465f}
+  .kupe-mat-search {border-color:#d6e0ed;border-radius:7px;background-color:#fff;font-size:12px}
+  .mat-btn {font-size:12px;border-radius:6px}
+  .mat-btn:hover {border-color:#a5b7e8;background:#f3f6ff}
+  .mat-btn.active {border-color:#3157db;color:#3157db;background:#edf1ff}
+  .mat-btn-label {font-size:11px}
+  .sec-actions-sticky {background:rgb(255 255 255 / 96%);border-color:#dfe6f0;box-shadow:0 -6px 14px rgb(30 50 90 / 5%)}
+  .sec-apply-btn {font-size:11px}
+  .div-handle:hover {background:rgb(49 87 219 / 14%)!important}
+  .psec-modal-backdrop {background:rgb(29 41 63 / 45%);backdrop-filter:blur(2px)}
+  .psec-modal-panel {border-radius:12px;box-shadow:0 20px 70px rgb(19 37 70 / 25%);border:1px solid #e0e6f0}
+  .psec-modal-bar {background:#f6f8fc;border-color:#dfe6f1;padding:15px 18px}
+  .psec-modal-title {color:#263a57;font-size:15px}
+  .psec-modal-close {color:#5e708a;border-radius:6px;height:32px;width:32px}
+  .psec-modal-close:hover {background:#e8eef9;color:#3157db;border-color:#ced9eb}
+  .psec-modal-img-wrap {background:#fafbfe;border-color:#e2e8f1;border-radius:8px}
+  .psec-modal-meta,.psec-modal-desc,.psec-modal-meta strong {color:#344a68}
+  .psec-modal-placeholder,.psec-modal-placeholder-hint {color:#6a7d98}
+  .kupe-drafts-pop {border-color:#d8e1ef;border-radius:9px;box-shadow:var(--shadow-lg);max-width:calc(100vw - 24px)}
+  .kupe-drafts-row {border-color:#e6ecf5;padding:12px 14px}
+  .kupe-drafts-row:hover {background:#f1f5ff}
+  .kupe-drafts-row-num {color:#30476a}
+  .kupe-drafts-row-meta,.kupe-drafts-empty {color:#6a7d98}
+  .order-lead,.order-phone-row {color:#344a68}
+  .order-phone {color:#3157db}
+  .order-summary {border-color:#dce5f2;background:#f7f9fd;color:#344a68;border-radius:8px}
+  .order-hint {color:#6a7d98}
+  .kupe-mobile-bar {background:#fff;color:#263d63;border-top:1px solid #d9e3f2;box-shadow:0 -5px 20px rgb(20 40 85 / 9%)}
+  .kupe-mbar-lbl {color:#63738c;opacity:1;letter-spacing:0;font-size:10px}
+  .kupe-mbar-price {color:#243e7c;font-size:23px;letter-spacing:-.025em}
+  .kupe-mbar-calc {background:#3157db;color:#fff;border-radius:8px;font-size:13px}
+}
+@media screen and (min-width:1600px) {
+  .kupe-3col {grid-template-columns:340px minmax(480px,1fr) 330px;max-width:2100px;margin:auto;gap:20px}
+  .kupe-col {padding:24px}
+  .kupe-chip {height:39px}
+  .kupe-hero-price {font-size:40px}
+}
+@media screen and (max-width:1100px) and (min-width:741px) {
+  .kupe-3col {grid-template-columns:300px minmax(0,1fr);grid-template-rows:auto auto;gap:15px;height:auto;min-height:0;padding:0 18px 22px}
+  .kupe-col {max-height:none;overflow:visible}
+  .kupe-col-left {grid-column:1;grid-row:1 / 3}
+  .kupe-col-center {grid-column:2;grid-row:1;order:0;min-height:450px;padding:20px}
+  .kupe-col-right {grid-column:2;grid-row:2}
+  .kupe-viz-stage {min-height:390px}
+  .kupe-bc-version {display:none}
+  .hdr-top,.kupe-topbar {padding-inline:20px}
+  .kupe-bc-muted,.kupe-bc-sep {display:none}
+  .kupe-mobile-bar {display:none}
+}
+@media screen and (max-width:740px) {
+  .hdr-top {min-height:60px;padding:0 15px;gap:9px}
+  .hdr-actions {gap:9px}
+  .yo-local-badge {font-size:10px;padding:5px 7px;white-space:normal;max-width:135px;line-height:1.3;text-align:right}
+  .yo-home-link {display:none}
+  .hdr .logo-name {font-size:17px}
+  .hdr .logo-tag {font-size:10px}
+  .kupe-topbar {padding:16px 15px;gap:12px;flex-wrap:wrap}
+  .kupe-bc {font-size:13px;gap:7px}
+  .kupe-bc-current {font-size:21px}
+  .kupe-bc-muted,.kupe-bc-sep,.kupe-bc-version {display:none}
+  .kupe-topbar-actions {width:100%;gap:7px}
+  .kupe-topbar-actions button {flex:1;height:40px;padding:0 7px;font-size:12px}
+  .kupe-3col {display:grid;grid-template-columns:minmax(0,1fr);gap:15px;padding:0 12px 95px;height:auto;min-height:0}
+  .kupe-col {max-height:none;overflow:visible;padding:17px;border-radius:10px}
+  .kupe-col-left {border:1px solid #dfe5ef}
+  .kupe-col-center {order:0;min-height:355px;padding:18px 12px}
+  .kupe-col-right {border:1px solid #dfe5ef}
+  .kupe-col-head {font-size:16px;padding-bottom:13px}
+  .kupe-form-list {gap:21px}
+  .kupe-inp,.kupe-sel,.inp,.sel {font-size:16px;height:44px}
+  .kupe-chip {height:42px;font-size:15px;min-width:30px}
+  .kupe-row-2 {gap:10px}
+  .yo-field span,.yo-field-label {font-size:12px}
+  .kupe-sec-lbl {font-size:13px}
+  .kupe-hint {font-size:11px}
+  .profile-sec-btn {height:44px;width:44px}
+  .bulk-btn {min-height:39px;font-size:12px}
+  .bulk-inline-sel {font-size:14px;height:36px}
+  .tog-lbl {font-size:13px}
+  .tog-desc {font-size:12px}
+  .kupe-viz-stage {min-height:320px}
+  .kupe-empty {padding:35px 20px}
+  .kupe-mat-search {height:43px;font-size:16px}
+  .mat-btn {min-height:42px}
+  .sect-btn {height:62px;font-size:11px}
+  .kupe-hero-price {font-size:37px}
+  .kupe-spec-name,.kupe-spec-price {font-size:13px}
+  .kupe-spec-qty {font-size:11px}
+  .kupe-btn-calc,.kupe-btn-order {height:45px;font-size:13px}
+  .kupe-mobile-bar {display:flex;padding:10px 16px max(10px,env(safe-area-inset-bottom));min-height:70px}
+  .kupe-mbar-calc {height:43px;min-width:140px}
+  .sec-back-btn {min-height:42px}
+  .sec-actions-sticky {bottom:70px}
+}
+@media screen and (prefers-reduced-motion:reduce) {
+  *,*::before,*::after {transition:none!important;animation:none!important;scroll-behavior:auto!important}
+}

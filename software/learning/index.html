@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Обучение - Ё Софт</title>
+  <link rel="stylesheet" href="learning.css?v=20261121">
+  <script src="learning.js?v=20261121" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#lessonContent">Перейти к уроку</a>
+  <div class="course-shell">
+    <aside class="sidebar" aria-label="Содержание обучения">
+      <a class="brand" href="../"><span class="brand-mark" aria-hidden="true">Ё</span><span><b>Рабочее место</b><small>Обучение</small></span></a>
+      <label class="search-label" for="lessonSearch">Найти в обучении</label>
+      <input id="lessonSearch" class="search-input" type="search" placeholder="Например, сохранить проект" autocomplete="off" data-testid="lesson-search">
+      <nav id="courseNav" aria-label="Уроки по программам"></nav>
+      <p class="sidebar-foot">Рамка на изображении показывает нужный элемент. Номер связывает его с пояснением.</p>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left"><button id="openContents" class="button mobile-contents" type="button" aria-haspopup="dialog" data-testid="open-contents">Уроки</button><a class="home-link" href="../">Главная</a><span class="breadcrumb-separator" aria-hidden="true">/</span><span>Обучение</span></div>
+        <div class="header-actions"><a id="reviewLink" class="text-link" href="review.html">Вопросы по интерфейсу</a><button id="printCourse" class="button" type="button" disabled data-testid="print-course">Версия для печати</button></div>
+      </header>
+      <div class="page-meta"><span id="versionLabel"></span><span id="updatedLabel"></span></div>
+      <div id="loadState" class="load-state" role="status"><h1>Загружаю обучение</h1><p>Открываю инструкции и изображения.</p></div>
+      <article id="lessonContent" class="lesson-content" tabindex="-1" hidden></article>
+      <nav id="lessonPager" class="lesson-pager" aria-label="Переход между уроками" hidden></nav>
+      <footer class="page-footer"><a href="../">Вернуться на главный экран</a><span>Мебель, двери и фасады</span></footer>
+    </main>
+  </div>
+  <dialog id="imageDialog" class="image-dialog" aria-labelledby="imageDialogTitle">
+    <header class="image-dialog-head"><div><h2 id="imageDialogTitle">Изображение к уроку</h2><p>Увеличьте изображение, чтобы прочитать подписи. Выделения остаются на месте.</p></div><div class="image-dialog-actions"><button id="toggleImageSize" class="button" type="button" data-testid="image-size">Исходный размер</button><button id="closeImage" class="button" type="button" aria-label="Закрыть изображение" data-testid="close-image">Закрыть</button></div></header>
+    <div id="imageDialogViewport" class="image-dialog-viewport"><div id="imageDialogBody"></div></div>
+  </dialog>
+  <dialog id="contentsDialog" class="contents-dialog" aria-labelledby="contentsTitle">
+    <header><h2 id="contentsTitle">Уроки</h2><button id="closeContents" class="button" type="button" aria-label="Закрыть содержание">Закрыть</button></header>
+    <label class="search-label" for="mobileSearch">Найти в обучении</label>
+    <input id="mobileSearch" class="search-input" type="search" placeholder="Название или действие" autocomplete="off">
+    <nav id="mobileNav" aria-label="Все уроки"></nav>
+  </dialog>
+  <div id="printRoot" class="print-root"></div>
+  <noscript><div class="no-script">Для показа уроков и выделений включите JavaScript в браузере.</div></noscript>
+</body>
+</html>
