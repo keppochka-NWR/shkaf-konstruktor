@@ -1,0 +1,6 @@
+{
+  h: { x: 567.109375, y: 610.171875, width: 30, height: 30 },
+  left: { x: 470.1875, y: 610.171875, width: 30, height: 30 },
+  expectWidth: 294.6396904723521
+}
+PASS numeric shrink, mouse drag, neighbor unchanged in downloaded project, undo/redo, reload

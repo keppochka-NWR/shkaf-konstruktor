@@ -1,0 +1,3 @@
+import fs from'node:fs';import{createHash}from'node:crypto';const base='https://desktop-8aqbtbm.tailddcb43.ts.net/studio/';const manifest=JSON.parse(fs.readFileSync('reports/release-2111-manifest.json','utf8'));
+for(const [name,expected]of Object.entries(manifest)){console.log("Verifying",name);const r=await fetch(base+name,{signal:AbortSignal.timeout(60000)});if(!r.ok)throw Error(name+': HTTP '+r.status);const hash=createHash('sha256').update(Buffer.from(await r.arrayBuffer())).digest('hex');if(hash!==expected)throw Error('Hash mismatch '+name);}
+console.log('PASS deployed HTML, JS, CSS and version match the tested package (SHA-256)');

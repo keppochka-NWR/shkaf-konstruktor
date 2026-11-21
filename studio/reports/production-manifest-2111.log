@@ -1,0 +1,6 @@
+Verifying index.html
+Verifying version.json
+Verifying assets/fflate.module--MMbrmMY.js
+Verifying assets/index-C-xmk93X.js
+Verifying assets/index-z8nOHNj8.css
+PASS deployed HTML, JS, CSS and version match the tested package (SHA-256)

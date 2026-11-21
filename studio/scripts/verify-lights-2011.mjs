@@ -9,7 +9,7 @@ try {
   const p = await b.newPage({ viewport: { width: 1600, height: 1000 } }), errors = [];
   p.on('pageerror', e => errors.push(e.message));
   await p.route('**/local-projects/lights-2011.json', r => r.fulfill({ body: JSON.stringify(fixture), contentType: 'application/json' }));
-  await p.goto((process.env.TEST_BASE??'http://127.0.0.1:5197/')+'?project=lights-2011');
+  await p.goto((process.env.TEST_BASE??'http://127.0.0.1:5197/')+'?project=lights-2011',{waitUntil:'domcontentloaded',timeout:60000});
   const open = async () => { await p.getByRole('button', { name: 'Построение мебели', exact: true }).click(); await p.getByRole('button', { name: 'Подсветка: стороны и отступы…', exact: true }).click(); };
   await open();
   const modal = p.getByRole('dialog', { name: 'Подсветка', exact: true });
