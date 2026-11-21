@@ -14,9 +14,9 @@ import { slotOf } from './lights';
 const rub = (v: number) => Math.round(v).toLocaleString("ru-RU") + " ₽";
 const m2 = (v: number) => v.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
 const ORIENTS: { id: LightOrient; label: string; hint: string }[] = [
-  { id: "vertical", label: "Вертикаль", hint: "Клик ставит/снимает LED в стойке: боковина, перегородка (обе грани)" },
-  { id: "horizontal", label: "Горизонталь", hint: "Клик ставит/снимает LED в полке или под крышей" },
-  { id: "both", label: "Обе", hint: "По детали: стойка — вертикаль, полка и крыша — горизонталь" },
+  { id: "vertical", label: "Вертикаль", hint: "Вертикальная линия на той пласти, по которой нажали" },
+  { id: "horizontal", label: "Горизонталь", hint: "Горизонтальная линия на той пласти, по которой нажали" },
+  { id: "both", label: "По детали", hint: "Стойка — вертикаль, дно и крыша — горизонталь; сторона по месту клика" },
 ];
 const toneDot = (t: LightTone) => <i className="tone-dot" style={{ background: "#" + TONE_INFO[t].glow.toString(16).padStart(6, "0") }} aria-hidden="true" />;
 
@@ -25,7 +25,7 @@ export function LightModeBar(p: { module: Module; orient: LightOrient; note: str
   const s = lightSummary(p.module), tone = p.module.lightTone;
   return <div className="light-mode-bar light-mode-bar2" role="status" aria-label="Режим подсветки">
     <div className="lmb-row">
-      <span><b>Подсветка</b>: кликайте детали, чтобы добавить/убрать подсветку, Esc — выйти
+      <span><b>Подсветка</b>: нажмите на нужную пласть: сверху, снизу или сбоку. Повторный клик убирает линию. Esc — выйти
         <small>Стойки: {s.vertical.count} шт., {m2(s.vertical.meters)} пог. м · Полки и крыша: {s.horizontal.count} шт., {m2(s.horizontal.meters)} пог. м</small>
         {p.note && <small className="warn">{p.note}</small>}</span>
       <button className="primary" onClick={p.onDone}>Готово</button>

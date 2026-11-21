@@ -181,7 +181,8 @@ import { slidePrice } from "./pricing";
 import { RadialMenu, type RadialItem } from "./RadialMenu";
 import {addMenuItem,worktopMaterialItem} from './addMenu';
 import {quickItems,quickMenuApplies,lightUnavailable,upperItem,menuDropY,doorQuickItems,cornerItems,drawerQuickItems,kitchenFillerItems,type QuickMenuOps} from './quickMenu';
-import {allStandsLit,applyToAll,pickTargets,setAllStands,toggleGroup,type LightOrient} from './lights';
+import {allStandsLit,applyToAll,setAllStands,type LightOrient} from './lights';
+import {pickSurfaceLight} from './surfaceLightPick';
 import {LightModeBar,LightPanel} from './LightPanel';
 import {composeContextMenu,menuArea} from './contextMenu';
 import { Palette, DoorClosed, RotateCw, ArrowUpToLine, Trash, GripHorizontal, Lock, LockOpen, ArrowUp, ArrowDown, Hand, MousePointerClick, Link2, Spline, SlidersHorizontal, ArrowRightToLine, ArrowLeftToLine, ChevronsRight, ChevronsLeft } from "lucide-react";
@@ -873,13 +874,12 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // Esc при открытом круговом меню закрывает только меню, режим остаётся
   useEffect(()=>{if(!lightMode||ctxMenu)return;const esc=(e:KeyboardEvent)=>{if(e.key==='Escape'){setLightMode(null);setLightNote('');}};window.addEventListener('keydown',esc);return()=>window.removeEventListener('keydown',esc);},[lightMode,ctxMenu]);
   useEffect(()=>{if(lightMode&&!project.modules.some(x=>x.id===lightMode))setLightMode(null);},[project,lightMode]);
-  function pickLight(mid:string,pid:string,alts:string[]=[]){
+  function pickLight(mid:string,pid:string,normal:readonly number[]){
     const a=project.modules.find(x=>x.id===mid);if(!a)return;
-    if(!quickMenuApplies(a.module)){setLightNote(lightUnavailable(a.module));return;}
-    const keys=pickTargets(a.module,[pid,...alts],lightOrient)?.keys??[];
-    if(!keys.length){setLightNote(lightOrient==='vertical'?'Ставится вертикаль — кликните стойку или перегородку (полки — «Горизонталь»)':lightOrient==='horizontal'?'Ставится горизонталь — кликните полку или крышу (стойки — «Вертикаль»)':'В эту деталь подсветка не ставится — кликните стойку, полку, перегородку или крышу');return;}
+    const candidate=structuredClone(a.module), result=pickSurfaceLight(candidate,parts(a.module),pid,normal,lightOrient,crypto.randomUUID());
+    if(!result.changed){setLightNote(result.note);return;}
     if(mid!==lightMode){selectModule(mid);setLightMode(mid);}
-    if(modifyAt(mid,n=>{toggleGroup(n,keys);}))setLightNote('');
+    if(modifyAt(mid,n=>{n.surfaceLights=candidate.surfaceLights;}))setLightNote(result.note);
   }
   // Одноразовая подсказка про круговое меню: исчезает после первого правого клика или по кнопке «Понятно».
   const [rmbTip,setRmbTip]=useState(()=>{try{return !localStorage.getItem('studio-tip-rmb');}catch{return false;}});

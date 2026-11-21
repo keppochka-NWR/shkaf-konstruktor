@@ -227,7 +227,7 @@ type Props = {
   /** Режим «Подсветка» (20.10.2026): левый клик по детали корпуса не выбирает и не тянет её, а переключает подсветку (onLightPick). */
   lightMode?:boolean;
   /** alts — остальные детали этого корпуса под курсором по лучу (задача 14: «вертикаль» пропускает полку перед стойкой). */
-  onLightPick?:(mid:string,pid:string,alts?:string[])=>void;
+  onLightPick?:(mid:string,pid:string,normal:readonly number[])=>void;
   /** Зазоры выбранного модуля по оси ширины (запрос Макса 20.10.2026): плашки слева и справа в режимах «Двигать корпуса» и «Выбрать». */
   rowGaps?:{left:GapSide;right:GapSide}|null;
   onGapClick?:(side:'left'|'right',x:number,y:number)=>void;
@@ -1394,7 +1394,7 @@ export function Scene(p: Props) {
       if(isMarkClick(e)&&current.current.onToggleModule&&current.current.mode!=='fill'){const picked=hitAt(e.clientX,e.clientY,true);if(picked){e.preventDefault();
         const s=current.current;if(s.mode==='move'&&!s.lightMode&&picked.object.userData.role!=='handle'){markPress={mid:picked.object.userData.moduleId,x:e.clientX,y:e.clientY,pointerId:e.pointerId};controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);}
         else s.onToggleModule!(picked.object.userData.moduleId);}return;}
-      if(current.current.lightMode&&current.current.onLightPick){const picked=hitAt(e.clientX,e.clientY,true);if(picked?.object.userData.partId){e.preventDefault();const mid=picked.object.userData.moduleId,alts=[...new Set(ray.intersectObjects(modelGroup.children,true).filter(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId===mid&&h.object.userData.partId).map(h=>h.object.userData.partId as string))].filter(x=>x!==picked.object.userData.partId);current.current.onLightPick(mid,picked.object.userData.partId,alts);}return;}
+      if(current.current.lightMode&&current.current.onLightPick){const picked=hitAt(e.clientX,e.clientY,true);if(picked?.object.userData.partId&&picked.face){e.preventDefault();current.current.onLightPick(picked.object.userData.moduleId,picked.object.userData.partId,picked.face.normal.toArray());}return;}
       if(current.current.mode==='orbit')return;
       cast(e.clientX,e.clientY);const first=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId));
       // окно/дверь (Макс 31.10): тянется вдоль своей стены, окно на видах спереди/сбоку — и по высоте подоконника (openingDrag.ts)
