@@ -1,8 +1,8 @@
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module === 'object' && module.exports ? require('./retail-film.js') : root.facadeFilmRetail);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FacadeCore = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (retail) {
   'use strict';
   const families = ['MDF', 'PAINT', 'ALU', 'Eterno', 'AGT', 'LDSP'];
   const familyNames = {MDF:'МДФ в плёнке', PAINT:'МДФ в краске', ALU:'Алюминиевые фасады', Eterno:'Eterno', AGT:'AGT', LDSP:'ЛДСП / Lamarty'};
@@ -80,17 +80,25 @@
   function edgeLength(p) { return (p.w*(Number(p.edges.top)+Number(p.edges.bottom))+p.h*(Number(p.edges.left)+Number(p.edges.right)))*p.qty/1000; }
   function calculatePart(p) {
     const a=area(p), e=hasEdging(p)?edgeLength(p):0;
-    const lines=[{key:'material',label:'Материал и изготовление полотна',amount:a,unit:'м²',rate:p.rates.material},
-      {key:'work',label:'Дополнительная обработка',amount:p.qty,unit:'шт.',rate:p.rates.work}];
+    const film = p.family==='MDF';
+    const tableRate = film ? retail.rates[[retail.series[p.millingId],retail.categories[p.filmId],p.t,p.variant==='glass'?'glass':'solid'].join('/')] : null;
+    const automatic = film && p.rates.material===null && tableRate!=null;
+    const amount = automatic ? Math.round(Math.max(retail.minimum,p.w*p.h/1e6)*10000)/10000*p.qty : a;
+    const lines=[{key:'material',label:automatic?'Полотно в плёнке · по прайсу Конструктора':'Материал и изготовление полотна',amount,unit:'м²',rate:automatic?tableRate:p.rates.material}];
+    if(automatic && p.drilling.enabled && p.drilling.ys.length) lines.push({key:'boring',label:'Присадка чашек петель',amount:p.qty*p.drilling.ys.length,unit:'шт.',rate:retail.boring});
+    if(!automatic || p.rates.work!==null) lines.push({key:'work',label:'Дополнительная обработка',amount:p.qty,unit:'шт.',rate:p.rates.work});
     if(e>0) lines.splice(1,0,{key:'edge',label:'Кромление выбранных сторон',amount:e,unit:'м',rate:p.rates.edge});
     for (const l of lines) l.total=l.rate===null?null:money(l.amount*l.rate);
     const missing=lines.filter(l=>l.total===null).map(l=>l.label);
-    return {area:a,edge:e,lines,known:money(lines.reduce((v,l)=>v+(l.total??0),0)),complete:missing.length===0,missing};
+    const priceGroup=lines.reduce((sum,l)=>sum+((automatic&&l.key==='material'||l.key==='boring')?l.amount*l.rate:0),0);
+    return {priceGroup,area:a,edge:e,lines,known:money(lines.reduce((v,l)=>v+(l.total??0),0)),complete:missing.length===0,missing};
   }
   function estimate(project) {
     const rows=project.parts.map(calculatePart);
-    return {rows,area:rows.reduce((a,x)=>a+x.area,0),qty:project.parts.reduce((a,x)=>a+x.qty,0),
-      known:money(rows.reduce((a,x)=>a+x.known,0)),missing:rows.reduce((a,x)=>a+x.missing.length,0)};
+    const group=rows.reduce((sum,row)=>sum+row.priceGroup,0);
+    const rounding=money(Math.round(group/100)*100-rows.reduce((sum,row)=>sum+money(row.priceGroup),0));
+    return {rows,rounding,area:rows.reduce((a,x)=>a+x.area,0),qty:project.parts.reduce((a,x)=>a+x.qty,0),
+      known:money(rounding+rows.reduce((a,x)=>a+x.known,0)),missing:rows.reduce((a,x)=>a+x.missing.length,0)};
   }
   function warnings(p,catalog) {
     const list=[];

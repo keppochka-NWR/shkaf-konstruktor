@@ -111,6 +111,14 @@
       svg+=line(x-5,y,dimX-6,y)+line(x-5,y2,dimX-6,y2)+line(dimX,y,dimX,y2,'#72849c',arrows);
       svg+='<text transform="translate('+num(dimX-12)+' '+num(y+rh/2)+') rotate(-90)" text-anchor="middle" fill="#31465d" font-size="13">H '+fmt(p.h)+'</text>';
     }
+    if(!back && options.projectDrilling){
+      const holes=drillingRows(p).filter(r=>r.x!=null && r.diameter!=null);
+      for(const r of holes){
+        const cx=x+(p.w-r.x)*scale,cy=y+r.y*scale;
+        svg+='<circle data-projected-hole="'+r.n+'" cx="'+num(cx)+'" cy="'+num(cy)+'" r="'+num(r.diameter*scale/2)+'" fill="none" stroke="#1766bd" stroke-width="2" stroke-dasharray="3 2"/>';
+      }
+      if(holes.length) svg+=txt(width/2,445,'Пунктир — присадка с обратной стороны',12,'middle');
+    }
     if(back){
       svg+=txt(x,y-12,'0; 0',11)+line(x,y,x+28,y,'#536b83')+line(x,y,x,y+28,'#536b83')+txt(x+32,y+4,'X →',10)+txt(x-7,y+42,'Y ↓',10);
       const rows=drillingRows(p),d=p.drilling||{};
