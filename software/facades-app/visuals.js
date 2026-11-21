@@ -31,8 +31,8 @@
   }
   function describe(p,catalog={},legacy={}){
     const s=selection(p,catalog,legacy);
-    if(p.family==='MDF')return 'МДФ / Вернисаж · '+(s.milling?'№ '+s.milling.id+' · '+s.milling.series:'фрезеровка не выбрана')+' · '+(s.film?.name||'плёнка не выбрана');
-    if(p.family==='PAINT')return 'Крашеный МДФ · '+(s.paintMilling?.name||'фрезеровка не выбрана')+' · '+(s.paintColor?'RAL '+s.paintColor.code+' '+s.paintColor.name:'цвет не выбран')+' · '+(s.paintFinish?.name||'покрытие не выбрано');
+    if(p.family==='MDF')return 'МДФ в плёнке · '+(s.milling?'№ '+s.milling.id+' · '+s.milling.series:'фрезеровка не выбрана')+' · '+(s.film?.name||'плёнка не выбрана');
+    if(p.family==='PAINT')return 'МДФ в краске · '+(s.paintMilling?.name||'фрезеровка не выбрана')+' · '+(s.paintColor?'RAL '+s.paintColor.code+' '+s.paintColor.name:'цвет не выбран')+' · '+(s.paintFinish?.name||'покрытие не выбрано');
     if(p.family==='ALU')return 'ALU · '+(s.aluProfile?.name||'профиль не выбран')+' · '+(p.aluColorName||'цвет профиля не указан')+' · '+(s.aluFill?.name||'заполнение не выбрано');
     return p.family+' · '+(s.panel?.name||'декор не выбран');
   }

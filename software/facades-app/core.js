@@ -5,7 +5,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
   const families = ['MDF', 'PAINT', 'ALU', 'Eterno', 'AGT', 'LDSP'];
-  const familyNames = {MDF:'МДФ / Вернисаж', PAINT:'Крашеный МДФ', ALU:'Алюминиевые фасады', Eterno:'Eterno', AGT:'AGT', LDSP:'ЛДСП / Lamarty'};
+  const familyNames = {MDF:'МДФ в плёнке', PAINT:'МДФ в краске', ALU:'Алюминиевые фасады', Eterno:'Eterno', AGT:'AGT', LDSP:'ЛДСП / Lamarty'};
   const hasEdging = p => ['Eterno','AGT','LDSP'].includes(p.family);
   const clone = x => JSON.parse(JSON.stringify(x));
   const money = x => Math.round((x + Number.EPSILON) * 100) / 100;
@@ -113,9 +113,9 @@
       }
     } else if(p.family==='PAINT') {
       const m=(catalog.paintMillings||[]).find(m=>m.id===p.paintMillingId);
-      if(!m) list.push('Выберите фрезеровку крашеного МДФ; гладкий фасад выбирается отдельно.');
+      if(!m) list.push('Выберите фрезеровку МДФ в краске; гладкий фасад выбирается отдельно.');
       if(!p.paintColorId) list.push('Цвет RAL не выбран.');
-      if(!p.paintFinish) list.push('Покрытие крашеного МДФ не выбрано.');
+      if(!p.paintFinish) list.push('Покрытие МДФ в краске не выбрано.');
       if(m) {
         if(m.thicknesses?.length&&!m.thicknesses.includes(p.t)) list.push('Толщина не входит в исходную спецификацию фрезеровки: '+m.thicknesses.join(' / ')+' мм.');
         const lim=m.limits?.[p.variant];
@@ -123,7 +123,7 @@
         else if(p.h<lim[0]||(lim[1]!==null&&p.h>lim[1])||p.w<lim[2]||(lim[3]!==null&&p.w>lim[3])) list.push('Размер вне диапазона исходного каталога: H '+lim[0]+'-'+lim[1]+', W '+lim[2]+'-'+lim[3]+' мм.');
         if(p.variant==='glass') list.push('Витрина: наполнение, штапик и монтажные зазоры требуют отдельного согласования.');
       }
-      list.push('Параметры крашеного МДФ перенесены из прежнего калькулятора; актуальность у поставщика не подтверждена.');
+      list.push('Параметры МДФ в краске перенесены из прежнего калькулятора; актуальность у поставщика не подтверждена.');
     } else if(p.family==='ALU') {
       if(!p.aluProfileId) list.push('Профиль алюминиевого фасада не выбран.');
       if(!p.aluFillId) list.push('Наполнение алюминиевого фасада не выбрано.');

@@ -44,7 +44,7 @@ window.FACADE_CATALOG = {
         "grille": true,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/15.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/15.pdf, стр. 1",
       "image": "assets/millings/15.jpg",
       "notes": [
         "ширина рамочного профиля 60 мм"
@@ -94,7 +94,7 @@ window.FACADE_CATALOG = {
         "grille": true,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/3.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/3.pdf, стр. 1",
       "image": "assets/millings/3.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -140,7 +140,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/6.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/6.pdf, стр. 1",
       "image": "assets/millings/6.jpg",
       "notes": [
         "ширина рамочного профиля 75 мм"
@@ -185,7 +185,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/18.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/18.pdf, стр. 1",
       "image": "assets/millings/18.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -231,7 +231,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/20.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/20.pdf, стр. 1",
       "image": "assets/millings/20.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -282,7 +282,7 @@ window.FACADE_CATALOG = {
         "grille": true,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/25.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/25.pdf, стр. 1",
       "image": "assets/millings/25.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -328,7 +328,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/41.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/41.pdf, стр. 1",
       "image": "assets/millings/41.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -374,7 +374,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/45-BIG.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/45-BIG.pdf, стр. 1",
       "image": "assets/millings/45.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -431,7 +431,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/46.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/46.pdf, стр. 1",
       "image": "assets/millings/46.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -483,7 +483,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/74.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/74.pdf, стр. 1",
       "image": "assets/millings/74.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -524,7 +524,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/89.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/89.pdf, стр. 1",
       "image": "assets/millings/89.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки"
@@ -574,7 +574,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/W2.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/W2.pdf, стр. 1",
       "image": "assets/millings/W2.jpg",
       "notes": [
         "ширина рамочного профиля 61 мм"
@@ -624,7 +624,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/94.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/94.pdf, стр. 1",
       "image": "assets/millings/94.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки"
@@ -674,7 +674,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/95.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/95.pdf, стр. 1",
       "image": "assets/millings/95.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки"
@@ -723,7 +723,7 @@ window.FACADE_CATALOG = {
         "grille": true,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/96.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/96.pdf, стр. 1",
       "image": "assets/millings/96.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -776,7 +776,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/113.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/113.pdf, стр. 1",
       "image": "assets/millings/113.jpg",
       "notes": [
         "глубина фрезеровки 6 мм",
@@ -823,7 +823,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/43.pdf, стр. 1 (стр. 29 каталога)",
+      "source": "PDF «Техническая информация»: pdf/43.pdf, стр. 1 (стр. 29 каталога)",
       "image": "assets/millings/43.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -875,7 +875,7 @@ window.FACADE_CATALOG = {
         "grille": true,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/44.pdf, стр. 1 (стр. 30 каталога)",
+      "source": "PDF «Техническая информация»: pdf/44.pdf, стр. 1 (стр. 30 каталога)",
       "image": "assets/millings/44.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -921,7 +921,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/47.pdf, стр. 1 (стр. 31 каталога)",
+      "source": "PDF «Техническая информация»: pdf/47.pdf, стр. 1 (стр. 31 каталога)",
       "image": "assets/millings/47.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -972,7 +972,7 @@ window.FACADE_CATALOG = {
         "grille": true,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/48.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/48.pdf, стр. 1",
       "image": "assets/millings/48.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1018,7 +1018,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/53.pdf, стр. 1 (стр. 11 каталога)",
+      "source": "PDF «Техническая информация»: pdf/53.pdf, стр. 1 (стр. 11 каталога)",
       "image": "assets/millings/53.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1068,7 +1068,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/59.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/59.pdf, стр. 1",
       "image": "assets/millings/59.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1115,7 +1115,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/66.pdf, стр. 1 (стр. 15 каталога)",
+      "source": "PDF «Техническая информация»: pdf/66.pdf, стр. 1 (стр. 15 каталога)",
       "image": "assets/millings/66.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1167,7 +1167,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/67.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/67.pdf, стр. 1",
       "image": "assets/millings/67.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1217,7 +1217,7 @@ window.FACADE_CATALOG = {
         "grille": true,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/76.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/76.pdf, стр. 1",
       "image": "assets/millings/76.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1270,7 +1270,7 @@ window.FACADE_CATALOG = {
         "grille": true,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/77.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/77.pdf, стр. 1",
       "image": "assets/millings/77.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1313,7 +1313,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/78.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/78.pdf, стр. 1",
       "image": "assets/millings/78.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1357,7 +1357,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/79.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/79.pdf, стр. 1",
       "image": "assets/millings/79.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1401,7 +1401,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/80.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/80.pdf, стр. 1",
       "image": "assets/millings/80.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1456,7 +1456,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/73.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/73.pdf, стр. 1",
       "image": "assets/millings/73.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1497,7 +1497,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/83.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/83.pdf, стр. 1",
       "image": "assets/millings/83.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1539,7 +1539,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/84.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/84.pdf, стр. 1",
       "image": "assets/millings/84.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1581,7 +1581,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/85.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/85.pdf, стр. 1",
       "image": "assets/millings/85.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1624,7 +1624,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/88.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/88.pdf, стр. 1",
       "image": "assets/millings/88.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки"
@@ -1663,7 +1663,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/98.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/98.pdf, стр. 1",
       "image": "assets/millings/98.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1706,7 +1706,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/99.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/99.pdf, стр. 1",
       "image": "assets/millings/99.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1747,7 +1747,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/100.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/100.pdf, стр. 1",
       "image": "assets/millings/100.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1798,7 +1798,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/W1.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/W1.pdf, стр. 1",
       "image": "assets/millings/W1.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1850,7 +1850,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/W3.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/W3.pdf, стр. 1",
       "image": "assets/millings/W3.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1899,7 +1899,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/W4.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/W4.pdf, стр. 1",
       "image": "assets/millings/W4.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -1951,7 +1951,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/W5.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/W5.pdf, стр. 1",
       "image": "assets/millings/W5.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -2003,7 +2003,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/W6.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/W6.pdf, стр. 1",
       "image": "assets/millings/W6.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -2055,7 +2055,7 @@ window.FACADE_CATALOG = {
         "grille": true,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/W7.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/W7.pdf, стр. 1",
       "image": "assets/millings/W7.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -2098,7 +2098,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/109.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/109.pdf, стр. 1",
       "image": "assets/millings/109.jpg",
       "notes": [
         "Шаг рисунка - размер ромба 63х34",
@@ -2139,7 +2139,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/110.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/110.pdf, стр. 1",
       "image": "assets/millings/110.jpg",
       "notes": [
         "Шаг рисунка - размер ромба 63х34",
@@ -2180,7 +2180,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/111.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/111.pdf, стр. 1",
       "image": "assets/millings/111.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -2219,7 +2219,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/114.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/114.pdf, стр. 1",
       "image": "assets/millings/114.jpg",
       "notes": [
         "глубина фрезеровки 16 + 6 мм",
@@ -2269,7 +2269,7 @@ window.FACADE_CATALOG = {
         "grille": true,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/75.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/75.pdf, стр. 1",
       "image": "assets/millings/75.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -2324,7 +2324,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/90.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/90.pdf, стр. 1",
       "image": "assets/millings/90.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -2378,7 +2378,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/91.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/91.pdf, стр. 1",
       "image": "assets/millings/91.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -2430,7 +2430,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/92.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/92.pdf, стр. 1",
       "image": "assets/millings/92.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -2472,7 +2472,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/112.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/112.pdf, стр. 1",
       "image": "assets/millings/112.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -2520,7 +2520,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": true
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/62.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/62.pdf, стр. 1",
       "image": "assets/millings/62.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -2562,7 +2562,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/78_1.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/78_1.pdf, стр. 1",
       "image": "assets/millings/78-1.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
@@ -2606,7 +2606,7 @@ window.FACADE_CATALOG = {
         "grille": false,
         "drawer": false
       },
-      "source": "PDF «Техническая информация» Вернисаж: pdf/79_1.pdf, стр. 1",
+      "source": "PDF «Техническая информация»: pdf/79_1.pdf, стр. 1",
       "image": "assets/millings/79-1.jpg",
       "notes": [
         "Ящик < Min размера изготавливается без фрезеровки",
