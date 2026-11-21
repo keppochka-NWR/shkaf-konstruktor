@@ -1,3 +1,4 @@
+import {validateServices,type OrderServices} from './orderServices';
 import { isEditableDesignIssue } from './editableDesignIssues';
 import { kitchenRowZ } from "./kitchenAlignment";
 import {parseSurvey,type Survey} from './roomSurvey';
@@ -33,7 +34,7 @@ export type PlanDimension={id:string;from:[number,number];to:[number,number]};
 export type CuttingEngine='classic'|'guillotine';
 /** kind 'kitchen' — проект вкладки «Кухня» (кухонная палитра и панель модуля); без поля — обычный проект мебели.
  *  source 'bazis' — кухня импортирована из Базиса (scripts/kitchen/import.ts): состав и расстановка как в Базисе. */
-export type Project={version:3;premialExtras?:{article:string;quantity:number}[];kind?:'kitchen';source?:'bazis';dimensions?:PlanDimension[];/** вспомогательные линии видов (Q, guides.ts) — только построение */guides?:Guide[];measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;sheetPrice?:number;vernissageMarkup?:number;baseMarkup?:number;baseVernissageMarkup?:number;cuttingEngine?:CuttingEngine;
+export type Project={version:3;services?:OrderServices;premialExtras?:{article:string;quantity:number}[];kind?:'kitchen';source?:'bazis';dimensions?:PlanDimension[];/** вспомогательные линии видов (Q, guides.ts) — только построение */guides?:Guide[];measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;sheetPrice?:number;vernissageMarkup?:number;baseMarkup?:number;baseVernissageMarkup?:number;cuttingEngine?:CuttingEngine;
   /** @deprecated устаревшие «Модель цены» и «по большей модели»: цена — только по листам (решение Макса 30.10.2026); расчёт их не читает,
    *  parseProject отбрасывает (поля оставлены в типе только для старых скриптов заказов) */
   model?:'markup'|'sheet';/** @deprecated см. model */maxModel?:boolean};offer?:{customer:string;price:string;notes:string;/** менеджер явно отметил: цена КП уже включает позиции «после финального расчёта» (ревью R6) */pendingIncluded?:boolean;/** КП и «Кратко для клиента»: цена по каждому изделию (по умолчанию да; false — только итог), менеджеры 22.10.2026 */itemPrices?:boolean}};
@@ -237,6 +238,7 @@ export function modulesOverlap(a:PlacedModule,b:PlacedModule){
 export function maxModules(p:{source?:unknown}){return p.source==='bazis'?200:40;}
 export function projectErrors(p:Project,allowEmpty=false):string[]{
   const errors:string[]=[];
+  if(p.services){const error=validateServices(p.services);if(error)return [error];}
   if(p.premialExtras&&(!Array.isArray(p.premialExtras)||p.premialExtras.length>500||p.premialExtras.some(v=>typeof v?.article!=='string'||!/^[-\w.]{1,60}$/.test(v.article)||!Number.isInteger(v.quantity)||v.quantity<1||v.quantity>10000)||new Set(p.premialExtras.map(v=>v.article)).size!==p.premialExtras.length))return ['Некорректная дополнительная фурнитура Premial'];
   if(p.room.survey){try{parseSurvey(p.room.survey);}catch(e){return [(e as Error).message];}}
   if(p.kind!==undefined&&p.kind!=='kitchen')return ['Неизвестный тип проекта.'];
@@ -333,6 +335,7 @@ export function parseProject(data:unknown,allowEmpty=false,allowDesignIssues=fal
   if(x.cloud)p.cloud={id:x.cloud.id,revision:x.cloud.revision,owner:x.cloud.owner,...(x.cloud.name===undefined?{}:{name:x.cloud.name})};
   // цена — только по листам (решение Макса 30.10.2026): model ('markup'|'sheet') и maxModel/priceMax старых файлов и документов заказа
   // не читаются — такие проекты открываются без ошибки и считаются по листам
+  if(x.services!==undefined){const error=validateServices(x.services);if(error)throw Error(error);p.services=structuredClone(x.services);}
   if(x.calculation)p.calculation={markup:x.calculation.markup,overrides:x.calculation.overrides,...(x.calculation.sheetPrice===undefined?{}:{sheetPrice:x.calculation.sheetPrice}),...(x.calculation.vernissageMarkup===undefined?{}:{vernissageMarkup:x.calculation.vernissageMarkup}),...(x.calculation.baseMarkup===undefined?{}:{baseMarkup:x.calculation.baseMarkup}),...(x.calculation.baseVernissageMarkup===undefined?{}:{baseVernissageMarkup:x.calculation.baseVernissageMarkup}),...(x.calculation.cuttingEngine===undefined?{}:{cuttingEngine:x.calculation.cuttingEngine}),/* edgeGlue (кромка PUR) не читается — PUR не делаем, решение Макса 26.10.2026 */};
   if(x.offer)p.offer={customer:x.offer.customer,price:x.offer.price,notes:x.offer.notes,...(x.offer.pendingIncluded===undefined?{}:{pendingIncluded:x.offer.pendingIncluded}),...(x.offer.itemPrices===undefined?{}:{itemPrices:x.offer.itemPrices})};const e=projectErrors(p,allowEmpty).filter(e=>!allowDesignIssues||!isEditableDesignIssue(e));if(e.length)throw Error(e[0]);return p;
 }

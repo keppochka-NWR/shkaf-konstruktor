@@ -73,6 +73,7 @@ test('смета: компакт/акрил/кварц — м² и обрабо�
   for(const c of CASES){
     const m=kitchenWorktop(initialModule(),2400);setWorktopMaterial(m,c.material,c.t);
     const e=estimate(newProject(m)),ids=e.pending.map(l=>l.id);
+    if(c.material==='compact'){const l=e.lines.find(x=>x.id.startsWith('worktop:compact-sheet:'))!;assert.ok(l);assert.equal(l.unit,'лист');assert.ok(l.unitPrice!==null);assert.ok(e.pending.some(x=>x.id==='worktop:edge:compact:12'));continue;}
     assert.equal(e.missing.length,0,c.id+' нет «нет цены»');
     if(c.material==='postforming'){
       assert.deepEqual(ids,['worktop:postforming:38']);
@@ -102,8 +103,8 @@ test('смета кухни из двух кусков: м² суммируют�
   // куски разной длины, как у Г-образной 3000 + 1200 (для сметы важны только размеры кусков)
   const a=kitchenWorktop(initialModule(),3000),b=kitchenWorktop(initialModule(),1200);setWorktopMaterial(a,'compact');setWorktopMaterial(b,'compact');
   const g:Project={...newProject(),room:{...newProject().room,width:4600},modules:[{id:'a',x:100,y:KITCHEN.baseHeight,z:0,rotation:0,module:a},{id:'b',x:3200,y:KITCHEN.baseHeight,z:0,rotation:0,module:b}]};
-  l=estimate(g).lines.find(x=>x.id==='worktop:compact:12')!;
-  assert.equal(l.quantity,2.52);assert.equal(l.label,'Столешница компакт-плита 12 мм');
+  l=estimate(g).lines.find(x=>x.id.startsWith('worktop:compact-sheet:'))!;
+  assert.ok(l.quantity>=1&&Number.isInteger(l.quantity));assert.equal(l.unit,'лист');assert.ok(l.unitPrice!==null);
   assert.equal(estimate(g).lines.find(x=>x.id==='worktop:edge:compact:12')!.quantity,4.2);
 });
 

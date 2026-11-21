@@ -1,3 +1,4 @@
+import { surfaceLightParts, parseSurfaceLights, type SurfaceLight } from './surfaceLights';
 import {applyBasketParts} from './kitchenBasket';
 import { isEditableDesignIssue } from './editableDesignIssues';
 import {legatoParts,legatoErrors,legatoCollisionErrors,parseShoeShelves,type ShoeShelf} from './legato';
@@ -284,7 +285,7 @@ export type Section = {
 /** Подсветка (задача 14, 22.10.2026): тон, К, и тип установки. Цены по типам пока одинаковые (решение 20.10 — по ориентации). */
 export type LightTone = 3000 | 4000 | 6000;
 export type LightType = "inset" | "surface" | "tape";
-export type LightSpec = { tone?: LightTone; type?: LightType };
+export type LightSpec = { tone?: LightTone; type?: LightType; frontOffset?: number };
 export const LIGHT_TONES: LightTone[] = [3000, 4000, 6000];
 export const LIGHT_TYPES: LightType[] = ["inset", "surface", "tape"];
 export type Module = {
@@ -312,6 +313,7 @@ export type Module = {
   /** Подсветка врезная в стойках полного свечения: LED-профиль на внутренних гранях боковин и перегородок, на всю высоту проёма. Розница 3000 ₽/пог.м поверх коэффициента (прайс цеха). */
   standLight?: boolean;
   /** Тон подсветки модуля, К (задача 14, 22.10.2026): 3000 тёплый, 4000 нейтральный, 6000 холодный. Нет — не выбран (в 3D как 4000, в смете/КП без описания). */
+  surfaceLights?: SurfaceLight[];
   lightTone?: LightTone;
   /** Тип подсветки модуля: врезной профиль (как было), накладной профиль, лента без профиля. Нет — не выбран (геометрия врезного, смета без описания). */
   lightType?: LightType;
@@ -1214,6 +1216,7 @@ export function parts(m: Module): Part[] {
 function partsUncached(m: Module): Part[] {
   const out = shapeBaseParts(m);
   if (m.cutouts?.length) applyCutouts(m, out);
+  out.push(...surfaceLightParts(m, out).parts);
   return out;
 }
 /** Детали без вырезов (проверка вырезов и окно «Вырезы» строят контур от них). */
@@ -1524,7 +1527,7 @@ function partsCore(m: Module): Part[] {
           `${s.id}:light:${side}`,
           "Подсветка LED в стойке",
           [lt, lh, lw],
-          [side === "left" ? b.x + lt / 2 : b.x + b.width - lt / 2, b.bottom + ledFrom + lh / 2, d - RULES.lightFrontOffset - lw / 2],
+          [side === "left" ? b.x + lt / 2 : b.x + b.width - lt / 2, b.bottom + ledFrom + lh / 2, d - (s.lightSpec?.[side]?.frontOffset ?? RULES.lightFrontOffset) - lw / 2],
           lh,
           lw,
           lt,
@@ -1560,12 +1563,12 @@ function partsCore(m: Module): Part[] {
         out.push({...up,id:`${s.id}:shelf:${j}:glue`,name:'Посадочное место 32 · нижняя плита 16 (склейка до 32)',position:[up.position[0],up.position[1]-t,up.position[2]],size:[...up.size] as Part['size'],edge:[0,0,0,0],...(up.taperZ?{taperZ:[...up.taperZ] as [number,number]}:{})});}
       // Подсветка в полках: LED-профиль снизу у передней кромки полки (отступ 20 мм), по длине полки минус 20 с краёв. Только при флаге секции.
       if(s.shelfLight||s.shelfLights?.includes(j)){const len=sw-40,front=rear+(own?.rear??m.shelfRear??0)+shelfDepth,[lw,lt]=ledSize(m,s,'shelf:'+j);
-        add(`${s.id}:shelf-light:${j}`,'Подсветка LED в полке',[len,lt,lw],[sx0+sw/2,b.bottom+f*h-st/2-lt/2,front-20-lw/2],len,lw,lt,'light',s.id,'metal');}
+        add(`${s.id}:shelf-light:${j}`,'Подсветка LED в полке',[len,lt,lw],[sx0+sw/2,b.bottom+f*h-st/2-lt/2,front-(s.lightSpec?.["shelf:"+j]?.frontOffset??20)-lw/2],len,lw,lt,'light',s.id,'metal');}
     });
     // Подсветка под крышей секции (20.10.2026): горизонталь как у полки — по ширине проёма минус 20 с краёв, 20 мм от переда крыши.
     // id «…:light:roof» — та же строка сметы «Подсветка в крыше» (4000 ₽/пог.м), что у Вотан.
     if(s.topLight){const len=b.width-40,[lw,lt]=ledSize(m,s,'top');
-      add(`${s.id}:light:roof`,'Подсветка LED под крышей',[len,lt,lw],[b.x+b.width/2,b.top-lt/2,d-20-lw/2],len,lw,lt,'light',s.id,'metal');}
+      add(`${s.id}:light:roof`,'Подсветка LED под крышей',[len,lt,lw],[b.x+b.width/2,b.top-lt/2,d-(s.lightSpec?.top?.frontOffset??20)-lw/2],len,lw,lt,'light',s.id,'metal');}
     const f=fillerSides(m,s),filler=f.left+f.right;
     const glue=glueOff?{}:falshZones(m);
     for(const side of ['left','right'] as const)if(f[side]&&glue[s.id+':'+side]){
@@ -3501,6 +3504,7 @@ export function parseModule(input: unknown, allowDesignIssues = false): Module {
   if(m.corner)normalizeCorner(m);
   migrateLights(m);
   parseLightSpec(x, m);
+  if(x.surfaceLights!==undefined)m.surfaceLights = parseSurfaceLights(x.surfaceLights);
   migrateSketchFields(x, m);
   // вырезы файлов до 29.10 (host — номер полки/ящика) → постоянные ссылки (partIds.ts): деталь та же, что была при сохранении
   bindCutouts(m);
@@ -3528,7 +3532,8 @@ const lightSpecOk = (v: unknown): LightSpec | undefined => {
   const o = v as Record<string, unknown>, out: LightSpec = {};
   if (LIGHT_TONES.includes(Number(o.tone) as LightTone)) out.tone = Number(o.tone) as LightTone;
   if (LIGHT_TYPES.includes(o.type as LightType)) out.type = o.type as LightType;
-  return out.tone !== undefined || out.type !== undefined ? out : undefined;
+  if (typeof o.frontOffset === "number" && Number.isFinite(o.frontOffset) && o.frontOffset >= 0) out.frontOffset = o.frontOffset;
+  return out.tone !== undefined || out.type !== undefined || out.frontOffset !== undefined ? out : undefined;
 };
 /** Разбор тона/типа из файла: мусор отсекается, места без подсветки и несуществующие полки — тоже. */
 function parseLightSpec(x: Record<string, unknown>, m: Module) {

@@ -1,3 +1,4 @@
+import {serviceTerms} from './orderServices';
 import {panelSheetSize} from './facadePanels';
 import { holes } from "./drilling";
 import {roomWarnings} from './roomWarnings';
@@ -324,7 +325,7 @@ export function nestingHTML(p: Project) {
   );
 }
 /** Часть сметы, нужная КП для разбивки цены (estimate() из pricing.ts; передаётся снаружи, чтобы не было цикла импортов). */
-export type QuoteCost = { retail: number | null; model: "markup" | "sheet"; split: { material: number; hardware: number; kupe?: number }; pending?: readonly unknown[]; notice?: string | null };
+export type QuoteCost = { lines?: readonly {id:string;label:string;quantity:number;unitPrice:number|null}[]; retail: number | null; model: "markup" | "sheet"; split: { material: number; hardware: number; kupe?: number }; pending?: readonly unknown[]; notice?: string | null };
 export type QuoteSplit = { material: number; hardware: number; kupe: number };
 /** Разбивка цены КП «материалы / фурнитура / двери купе» (решения Макса 06.10 и 16.10.2026): только когда цена КП = расчётной цене модели
  *  «себестоимость × коэффициент». Округление итога до 100 ₽ относится к материалам: материалы = итог − фурнитура − двери купе,
@@ -406,13 +407,16 @@ export function quoteHTML(
   opts: { seller?: SellerInfo; cost?: QuoteCost | null; /** цены изделий (itemPrices.modulePrices), сумма = цене КП */ items?: number[] | null; /** K3: у изделия есть позиции после финального расчёта (itemPrices.moduleQuote) */ pending?: boolean[] | null; swatches?: QuoteSwatches } = {},
 ) {
   const n = Number(price), priced = price.trim() !== "" && Number.isFinite(n) && n >= 0, rub = (v: number) => v.toLocaleString("ru-RU") + " ₽";
+  const serviceLines=opts.cost?.lines?.filter(l=>l.id.startsWith("service:"))??[];
+  const servicesSum=serviceLines.reduce((s,l)=>s+(l.unitPrice??0)*l.quantity,0);
+  const servicesHTML=serviceLines.length?`<h2>Услуги</h2><table><tbody>${serviceLines.map(l=>`<tr><td>${esc(l.label)}</td><td>${l.quantity}</td><td>${l.unitPrice===null?"Уточнить цену":rub(Math.round(l.quantity*l.unitPrice*100)/100)}</td></tr>`).join("")}</tbody></table>`:"";
   const split = priced ? quoteBreakdown(price, opts.cost) : null;
   // m8 (критик целостности 22.10): под заголовком «Стоимость» — без второго «Стоимость:»
   const sum = !priced ? `<p class="sum">Цена после согласования</p>` : split
     ? `<table class="split"><tbody>${splitRows(split).map(([k, v]) => `<tr><td>${k}</td><td>${rub(v)}</td></tr>`).join("")}<tr><td>Итого</td><td>${rub(n)}</td></tr></tbody></table>`
     : `<p class="sum">${rub(n)}</p>`;
   // цена по каждому изделию (переключатель offer.itemPrices, по умолчанию да): только когда доли сходятся с ценой КП до рубля
-  const items = priced && p.offer?.itemPrices !== false && opts.items && opts.items.length === p.modules.length && opts.items.reduce((s, v) => s + v, 0) === n ? opts.items : null;
+  const items = priced && p.offer?.itemPrices !== false && opts.items && opts.items.length === p.modules.length && Math.abs(opts.items.reduce((s, v) => s + v, 0) + servicesSum - n) < 1 ? opts.items : null;
   const sw = opts.swatches ?? {};
   // общее для всех изделий (КП Макса 26.10.2026: «петли GTV с доводчиком…» повторялось в каждой карточке) — один раз над карточками
   // одинаковые фразы о петлях собираются в общий блок с номерами изделий; в карточках их нет
@@ -431,10 +435,10 @@ export function quoteHTML(
   const noticeNote = opts.cost?.notice ? `<p class="note">${esc(opts.cost.notice)}</p>` : "";
   // «входит / не входит» — по текущим текстам КП и сметы («без доставки и монтажа», «неописанный крепёж не включён»), без цен
   const included = ["изготовление изделий по размерам и комплектации из этого предложения", "материалы корпуса и фасадов, кромка, фурнитура и наполнение, перечисленные выше", ...(kupe ? ["двери купе с профилем и наполнением"] : [])];
-  const excluded = ["доставка", "монтаж (сборка и установка)", "крепёж и материалы, не описанные в предложении", ...(pendingN && !p.offer?.pendingIncluded ? [pendingTotalLabel(pendingN).replace(/^П/, "п")] : [])];
+  const excluded = [...(p.services?.delivery!==undefined&&p.services.delivery!==null?[]:["доставка"]), ...(serviceLines.some(l=>l.id==="service:installation"&&l.unitPrice!==null)?[]:["монтаж (сборка и установка)"]), "крепёж и материалы, не описанные в предложении", ...(pendingN && !p.offer?.pendingIncluded ? [pendingTotalLabel(pendingN).replace(/^П/, "п")] : [])];
   return htmlDocument(
     "Коммерческое предложение",
-    `${clientStyle}${quoteStyle}${sellerBlock(opts.seller)}<header class="q-head"><h1>Коммерческое предложение</h1><p>${esc(customer.trim() || "Проект мебели")} · ${new Date().toLocaleDateString("ru-RU")}</p></header>${image ? `<figure class="q-hero"><img src="${image}" alt="Вид проекта"/></figure>` : ""}<h2>Состав заказа</h2><p class="q-legend">Размеры изделий: ширина × высота × глубина, мм.${items ? " Цена изделия — его доля в общей стоимости заказа." : ""}</p>${commonHTML}${p.modules.map((a, i) => { const g = clientModuleName(a.module.name).group, prev = i ? clientModuleName(p.modules[i - 1].module.name).group : null; return (g && g !== prev ? `<h3 class="q-group">${esc(g)}</h3>` : "") + quoteItemHTML(a, i, items ? items[i] : null, sw, !!opts.pending?.[i], !!common); }).join("")}<h2>Стоимость</h2>${sum}${pendingNote}${noticeNote}${notes.trim() ? `<p class="note">${esc(notes)}</p>` : ""}<section class="q-terms"><div><h3>Входит в стоимость</h3><ul>${included.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div><div><h3>Не входит</h3><ul>${excluded.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div></section><p><small>Эскиз и комплектация для согласования. Цена предварительная, без доставки и монтажа. Размеры уточняются после замера.</small></p>`,
+    `${clientStyle}${quoteStyle}${sellerBlock(opts.seller)}<header class="q-head"><h1>Коммерческое предложение</h1><p>${esc(customer.trim() || "Проект мебели")} · ${new Date().toLocaleDateString("ru-RU")}</p></header>${image ? `<figure class="q-hero"><img src="${image}" alt="Вид проекта"/></figure>` : ""}<h2>Состав заказа</h2><p class="q-legend">Размеры изделий: ширина × высота × глубина, мм.${items ? " Цена изделия — стоимость мебели; услуги перечислены отдельно." : ""}</p>${commonHTML}${p.modules.map((a, i) => { const g = clientModuleName(a.module.name).group, prev = i ? clientModuleName(p.modules[i - 1].module.name).group : null; return (g && g !== prev ? `<h3 class="q-group">${esc(g)}</h3>` : "") + quoteItemHTML(a, i, items ? items[i] : null, sw, !!opts.pending?.[i], !!common); }).join("")}<h2>Стоимость</h2>${sum}${servicesHTML}${pendingNote}${noticeNote}<p>${esc(serviceTerms(p.services))}</p>${notes.trim() ? `<p class="note">${esc(notes)}</p>` : ""}<section class="q-terms"><div><h3>Входит в стоимость</h3><ul>${included.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div><div><h3>Не входит</h3><ul>${excluded.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div></section><p><small>Эскиз и комплектация для согласования. Цена предварительная. Размеры уточняются после замера.</small></p>`,
   );
 }
 /** Спецификация для клиента: те же изделия и материалы, что в КП, без цены, координат и производственных данных. */

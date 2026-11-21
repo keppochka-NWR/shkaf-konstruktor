@@ -129,7 +129,9 @@ test("мансарда в ряду: сосед вплотную, ширина п
   const man = withMansard(wardrobe({ width: 800, height: 2400, depth: 600 }), 1800), next = wardrobe({ width: 600, height: 2400, depth: 600 });
   const p = project(man, next); p.modules[1].x = 30 + 800;
   assert.deepEqual(projectErrors(p), []);
-  const wider = placeInRow(p, "m0", { ...man, width: 900 });
+  assert.throws(()=>placeInRow(p, "m0", { ...man, width: 900 }), /свободно 0/);
+  const wider = placeInRow(p, "m0", { ...man, width: 750 });
+  assert.deepEqual(wider.modules[1],p.modules[1]);
   assert.deepEqual(projectErrors(wider), []);
   const a = wider.modules.find((x) => x.id === "m0")!, b = wider.modules.find((x) => x.id === "m1")!;
   assert.ok(a.x + a.module.width <= b.x + 0.5, "сосед не перекрыт после расширения мансарды");

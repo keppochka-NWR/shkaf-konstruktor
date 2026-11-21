@@ -4,6 +4,7 @@
 // «Кратко для клиента» — изделия, цена по изделиям и итог, БЕЗ закупочных цен и коэффициентов.
 // Публичная сборка: estimate() уже отдаёт клиентские строки (clientPrices.ts) — в «Смете» только розница, без себестоимости,
 // коэффициентов и источников закупки; страж цен (price-guard.ts) смотрит собранный JS — новых закупочных чисел здесь нет.
+import { serviceTerms } from './orderServices';
 import { estimate, engineNote, lineGroup, isKupeLine, type PriceLine } from "./pricing";
 import { details, detailGrooves, orderNumber, quoteBreakdown, splitRows } from "./exports";
 import { describeModule, clientModuleName } from "./quoteDescribe";
@@ -16,18 +17,20 @@ import type { Project } from "./project";
 import { XS, str, num, fml, empty, ref, workbookFiles, workbookZip, type XCell, type XSheet, type XStyle } from "./xlsx";
 
 type Estimate = ReturnType<typeof estimate>;
-export type XGroup = "material" | "work" | "hardware" | "kupe" | "pending";
+export type XGroup = "material" | "work" | "hardware" | "kupe" | "services" | "pending";
 export const XGROUPS: { id: XGroup; label: string }[] = [
   { id: "material", label: "Материалы" },
   { id: "work", label: "Работа цеха" },
   { id: "hardware", label: "Фурнитура" },
   { id: "kupe", label: "Двери купе" },
+  { id: "services", label: "Доставка, монтаж и услуги" },
   { id: "pending", label: "После финального расчёта конструктором" },
 ];
 /** Группа строки для Excel: «после финального расчёта» и двери купе — свои группы; работа цеха (листы, узкие детали, склейка) —
  *  отдельно от материалов; остальное — как в разбивке сметы (lineGroup). */
 export function xlsxGroup(l: Pick<PriceLine, "id" | "pending">): XGroup {
   if (l.pending) return "pending";
+  if (l.id.startsWith("service:")) return "services";
   if (isKupeLine(l.id)) return "kupe";
   if (/^(work$|work-hdf$|small$|falsh-glue$|worktop-glue$)/.test(l.id)) return "work";
   if (l.id.startsWith("client:")) return "material";
@@ -49,7 +52,7 @@ export function roundingPlan(e: Estimate): { byGroup: Partial<Record<XGroup, num
   const live = e.lines.filter((l) => l.unitPrice !== null && !l.pending);
   const sumG = (ids: XGroup[]) => live.filter((l) => ids.includes(xlsxGroup(l))).reduce((s, l) => s + l.quantity * l.unitPrice!, 0);
   const has = (ids: XGroup[]) => live.some((l) => ids.includes(xlsxGroup(l)));
-  const all = sumG(["material", "work", "hardware", "kupe"]), clean = (v: number) => Math.round(v * 1e4) / 1e4;
+  const all = sumG(["material", "work", "hardware", "kupe", "services"]), clean = (v: number) => Math.round(v * 1e4) / 1e4;
   if (Math.abs(e.retail - all) < 0.005) return null;
   const note = e.retail % 100 === 0 ? "итог сметы округлён до 100 ₽" : "копейки в ценах строк и округление итога сметы";
   const split = quoteBreakdown(String(e.retail), e);
@@ -118,7 +121,7 @@ export function estimateSheet(p: Project, e: Estimate, manager = !PUBLIC_BUILD, 
     plain(`Цена по листам: ${e.ldspSheets} × ${e.sheetPrice.toLocaleString("ru-RU")} ₽${e.offSheet ? " + вне листа (стекло, зеркало, столешница…) " + e.offSheet.toLocaleString("ru-RU") + " ₽" : ""}`, num(e.bySheet, XS.subMoney), "листы + позиции вне листа");
   } else plain("Итого по позициям", sumCells(buy, fit ? e.retail! : e.knownCost));
   const rounded = !!fit && e.retail !== null && e.retail % 100 === 0;
-  total("Расчётная цена", e.retail === null ? str(e.notice ?? (e.unplaced ? "Смета не завершена: не помещается в лист" : "Стоимость уточнит менеджер"), XS.totalLabel) : num(e.retail, XS.totalMoney), e.retail === null ? "" : (rounded ? "итог округлён до 100 ₽; " : "") + "предварительно, без доставки и монтажа");
+  total("Расчётная цена", e.retail === null ? str(e.notice ?? (e.unplaced ? "Смета не завершена: не помещается в лист" : "Стоимость уточнит менеджер"), XS.totalLabel) : num(e.retail, XS.totalMoney), e.retail === null ? "" : (rounded ? "итог округлён до 100 ₽; " : "") + "предварительно. " + serviceTerms(p.services));
   const split = e.retail === null ? null : quoteBreakdown(String(e.retail), e);
   // клиентская смета: графы разбивки — суммы подытогов групп (формулой), значения = разбивке КП и экрана
   const splitCell = (k: string, v: number): XCell => {
@@ -173,14 +176,15 @@ export function clientSheet(p: Project, e: Estimate, created = new Date()): XShe
     heights[rows.length] = Math.max(15, 13 * Math.max(linesIn(kind, 28), linesIn(mats, items ? 42 : 44), linesIn(fill, items ? 28 : 32)) + 4);
     rows.push([num(i + 1, XS.numCenter), str(kind), str(size), str(mats), str(fill), ...(items ? [items[i] === 0 && iq!.pending[i] ? str(PENDING_ITEM_PRICE, XS.note) : num(items[i], XS.money)] : [])]);
   });
+  for(const l of e.lines.filter(l=>l.id.startsWith("service:")))rows.push([empty(XS.text),str(l.label),str(String(l.quantity)),empty(XS.text),...(items?[empty(XS.text)]:[]),l.unitPrice===null?str("Уточнить цену",XS.note):num(Math.round(l.quantity*l.unitPrice*100)/100,XS.money)]);
   const last = rows.length;
   const split = e.retail === null ? null : quoteBreakdown(String(e.retail), e);
   const line = (label: string, cell: XCell, style: XStyle = XS.subLabel) => rows.push(row([empty(XS.text), str(label, style), ...Array.from({ length: W - 3 }, () => empty(style)), cell], W, XS.text));
   if (split) for (const [k, v] of splitRows(split)) line(k, num(v, XS.subMoney));
   if (e.retail === null) line("Итого", str("Стоимость уточнит менеджер", XS.totalLabel), XS.totalLabel);
-  else line("Итого", items ? fml(`SUM(F${first + 1}:F${last})`, items.reduce((s, v) => s + v, 0), XS.totalMoney) : num(e.retail, XS.totalMoney), XS.totalLabel);
+  else line("Итого", items ? fml(`SUM(F${first + 1}:F${last})`, e.retail, XS.totalMoney) : num(e.retail, XS.totalMoney), XS.totalLabel);
   rows.push([]);
-  const notes = [e.pending.length ? pendingTotalLabel(e.pending.length) + " — в итог не входят." : "", items ? "Цена изделия — его доля в общей стоимости: листы материала раскраиваются на весь заказ." : "", "Предварительная стоимость без доставки и монтажа. Размеры уточняются после замера."].filter(Boolean);
+  const notes = [e.pending.length ? pendingTotalLabel(e.pending.length) + " — в итог не входят." : "", items ? "Цена изделия — стоимость мебели. Услуги указаны отдельно; листы материала раскраиваются на весь заказ." : "", "Предварительная стоимость. " + serviceTerms(p.services) + " Размеры уточняются после замера."].filter(Boolean);
   for (const t of notes) rows.push([empty(XS.text), str(t, XS.note)]);
   const merges = [`A1:${ref(W - 1, 0)}`, `A2:${ref(W - 1, 1)}`, ...notes.map((_, k) => `B${rows.length - notes.length + k + 1}:${ref(W - 1, rows.length - notes.length + k)}`)];
   return { name: "Кратко для клиента", rows, merges, freeze: 4, heights, cols: items ? [5, 30, 18, 44, 30, 14] : [5, 30, 18, 46, 34] };

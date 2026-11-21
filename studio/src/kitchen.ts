@@ -27,6 +27,7 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   facadeSides?: FacadeSides;
   /** Подсветка рабочей зоны под навесным (LED снизу дна у переднего края, kitchenUnderLight.ts): только role 'wall'. */
   underLight?: true;
+  underLightOffset?: number;
   oven?: OvenSpec;
   premialPullout?: PremialPullout;
   basket?: KitchenBasket;
@@ -1251,6 +1252,7 @@ export function kitchenErrors(m: Module): string[] {
     const k = m.kitchen;
     e.push(...facadeSideErrors(m));
     if (!["base", "wall", "tall", "antresol"].includes(k.role)) e.push("Кухня: тип корпуса — нижний, навесной, пенал или антресоль.");
+    if (k.underLightOffset !== undefined && (!Number.isFinite(k.underLightOffset) || k.underLightOffset < 0 || k.underLightOffset > m.depth - 40)) e.push("Отступ подсветки выходит за глубину дна.");
     if (k.underLight && k.role !== "wall") e.push("Подсветка рабочей зоны — только у навесного модуля.");
     if (k.appliance && !(k.appliance in APPLIANCES)) e.push("Кухня: неизвестная техника.");
     // без опор — у кухни из Базиса (noLegs) или при явном низе (plinthHeight): в Базисе мойки и корпуса без опор бывают
@@ -1397,6 +1399,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(k.backGaps ? { backGaps: { bottom: num(k.backGaps.bottom), top: num(k.backGaps.top) } } : {}),
     ...(k.faceBottom !== undefined ? { faceBottom: num(k.faceBottom) } : {}),
     ...(k.underLight === true ? { underLight: true as const } : {}),
+    ...(k.underLightOffset !== undefined ? { underLightOffset: num(k.underLightOffset) } : {}),
     ...(k.facadeSides && typeof k.facadeSides === "object" ? {facadeSides:{left:k.facadeSides.left===true,right:k.facadeSides.right===true,...(k.facadeSides.toFloor===false?{toFloor:false}:{})}} : {}),
     ...(k.sideDown && (k.sideDown.side === "left" || k.sideDown.side === "right") ? { sideDown: { side: k.sideDown.side, y0: num(k.sideDown.y0) } } : {}),
     ...(Array.isArray(k.sideScrews) && k.sideScrews.length && k.sideScrews.every(fin) ? { sideScrews: k.sideScrews.map(Number) } : {}),

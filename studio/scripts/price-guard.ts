@@ -30,7 +30,12 @@ export function findPurchaseNumbers(code: string, values: { key: string; value: 
   for (const v of values) { const s = byKey.get(v.key) ?? new Set<string>(); for (const f of numberForms(v.value)) s.add(f); byKey.set(v.key, s); }
   for (const [key, forms] of byKey) {
     const re = new RegExp('(?<![\\w$])' + esc(key) + '\\s*(?::|=|\\?\\?)\\s*(' + [...forms].sort((a, b) => b.length - a.length).map(esc).join('|') + ')(?![\\w.])', 'g');
-    for (const m of code.matchAll(re)) hits.push(code.slice(Math.max(0, m.index! - 40), m.index! + m[0].length + 20).replace(/\s+/g, ' '));
+    for (const m of code.matchAll(re)) {
+      // Approved client lift tariff (150 RUB/floor), not the coincidentally equal purchase-kit price.
+      const context=code.slice(Math.max(0,m.index!-130),m.index!+m[0].length);
+      if(key==='price'&&Number(m[1])===150&&/id:["'`]lift["'`],label:["'`]Подъём по этажам["'`],quantity:[\w$]+\.floors\?\?1,price:150$/.test(context))continue;
+      hits.push(code.slice(Math.max(0, m.index! - 40), m.index! + m[0].length + 20).replace(/\s+/g, ' '));
+    }
   }
   return hits;
 }

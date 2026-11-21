@@ -6,6 +6,7 @@ import type { BazisItem, Module, Part } from "./model";
 import { RAW_SEAT_GAP } from "./collisions";
 import { edgeDirs } from "./edges";
 import { vernissageSizeCheck } from "./facadesVernissage";
+import { aluProfile, aluColor, aluFill, aluLabel } from "./alu";
 
 /** Кромка Базиса сырой детали ([толщина, длина] без стороны) → Part.edge по четырём торцам (edges.ts: 0/1 — торцы по ширине,
  *  2/3 — по длине), чтобы деталировка и бирки показывали её (аудит 11.10.2026: k04 — бирки 35,1 м против 87,8 м в смете, сырые детали
@@ -296,7 +297,7 @@ export function rawParts(m: Module): Part[] {
   r.panels.forEach((p, i) => {
     const [x0, y0, z0, x1, y1, z1] = p.box, size = rawSize(p);
     const dims = rawDims(p), thin = size.indexOf(Math.min(...size));
-    const material: Part["material"] = p.kind === "hdf" ? "hdf" : p.kind === "glass" || p.kind === "mirror" ? "glass" : "board";
+    const material: Part["material"] = p.kind === "alu" ? "alu" : p.kind === "hdf" ? "hdf" : p.kind === "glass" || p.kind === "mirror" ? "glass" : "board";
     // Столешница — по имени/материалу Базиса (у старых файлов кухни без материала — толщина ≥ 26): стороннее изделие, не раскрой ЛДСП;
     // деталь больше рабочего поля листа — на сращивание, вне карт.
     // Фасадный материал (fm) — изделие поставщика фасадов, не раскрой ЛДСП; декор — фасадов. Стеновая панель «Ряда» кухни (wall) —
@@ -312,7 +313,7 @@ export function rawParts(m: Module): Part[] {
       // декор фасадов — у фасадного материала; ЛДСП корпуса спереди (фальшпанель ящика, планка) остаётся в декоре корпуса
       // плита МДФ Базиса — своим материалом и в сыром шкафу (092, 135, 177–180, 224: «Плита Evogloss 18мм», «МДФ 19мм Эмаль…»), а не лист
       // Lamarty «Белый» декора корпуса/фасадов студии (n4-wardrobes)
-      role: p.facade ? "door" : "body", material, decor: p.decor ?? (p.kind === "mdf" && p.mat ? p.mat : p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
+      role: p.facade || p.kind === "alu" ? "door" : "body", material, decor: p.kind === "alu" && m.alu ? aluLabel(m.alu) : p.decor ?? (p.kind === "mdf" && p.mat ? p.mat : p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
       grainAxis: (size.indexOf(Math.max(...size)) === thin ? 1 : size.indexOf(Math.max(...size))) as 0 | 1 | 2, edge: [0, 0, 0, 0] });
     // кромка Базиса (raw.panels[].edges) — на торцы детали для деталировки и бирок; у тех же деталей, что и в смете
     if (p.edges?.length && rawEdgeCounted(p, r, worktop)) rawEdgeSlots(out[out.length - 1], p.edges);
@@ -333,7 +334,7 @@ export function rawParts(m: Module): Part[] {
   // угловых модулей, дверь холодильника) — стороны нет, сцена открывает как раньше.
   const rawHinges = r.hardware.filter((h) => h.category === "петля");
   r.panels.forEach((p, i) => {
-    if (!p.facade) return;
+    if (!p.facade && p.kind !== "alu") return;
     const [x0, y0, z0, x1, y1, z1] = p.box, zc = (z0 + z1) / 2, votes = { left: 0, right: 0, top: 0, bottom: 0 };
     for (const h of rawHinges) {
       const [x, y, z] = h.pos;
@@ -389,6 +390,7 @@ export function rawErrors(m: Module): string[] {
   const r = m.raw;
   if (!r || !Array.isArray(r.panels) || !Array.isArray(r.hardware)) return ["Сырой модуль: нет списка деталей."];
   if (r.panels.length > 600) return ["Сырой модуль: больше 600 панелей."];
+  if (r.panels.some(p => p.kind === "alu") && (!m.alu || !aluProfile(m.alu.profile) || !aluColor(m.alu.profile,m.alu.color) || !aluFill(m.alu.insert))) return ["Рамочные фасады импорта: выберите профиль, цвет и наполнение."];
   for (const p of r.panels) if (!Array.isArray(p.box) || p.box.length !== 6 || p.box.some((v) => !Number.isFinite(v)) || p.box[3] < p.box[0] || p.box[4] < p.box[1] || p.box[5] < p.box[2]) return [`Сырой модуль: неверная деталь «${p.name}».`];
   // свободная панель МДФ «Вернисаж»: размеры по паспорту фрезеровки (как у фасадов, model.ts validate); ширина × высота лица панели
   if (isVernissagePanel(m)) for (const p of r.panels) if (p.fm) { const [w, h] = rawFaceSize(p);

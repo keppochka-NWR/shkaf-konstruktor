@@ -49,6 +49,7 @@ const RULES: [RegExp, string][] = [
 ];
 /** Позиция без цены, которую конструктор считает в финальном расчёте (а не «нет цены»). */
 export function pendingPrice(id: string): PendingPrice | null {
+  if(id.startsWith('worktop:compact-sheet:'))return null;
   const r = RULES.find(([re]) => re.test(id));
   return r ? { source: r[1] } : null;
 }

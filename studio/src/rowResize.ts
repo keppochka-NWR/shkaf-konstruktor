@@ -1,17 +1,6 @@
-// Ширина модуля в ряду (правило Макса 09.10.2026, уточнение 20.10.2026): расширяешь модуль — сужается рядом стоящий.
-//  • Есть модуль справа вплотную — меняется правый (его левый край сдвигается).
-//  • Справа свободно (сосед не вплотную или его нет) — модуль меняется вправо: растёт в свободное место до ближайшего
-//    препятствия справа (модуль любого уровня, объект замера, стена), соседи не меняются; места мало — понятная ошибка
-//    «справа свободно N мм» с подсказкой «Дотянуть». Левый сосед меняется, только если справа стена или бок (у правой стены).
-//    Кухня: на свободном правом краю кончается столешница (цоколь ряда Базиса) — это бок, как раньше меняется левый сосед.
-//  • Модуль у стены (бок на стене помещения или на боку модуля, стоящего под 90°) — меняется строго в сторону от стены.
-//  • Сужение — то же самое: сосед с той стороны расширяется на ту же величину.
-//  «Справа/слева» — как смотрит человек на фасад: +u локальной оси ширины (localToRoom), для поворота 0 это +x.
-//  «Ряд» — модули с тем же поворотом, перекрытые по высоте и по глубине, стоящие вплотную (±2 мм).
-//  Нижние и навесные не путаются: стык, к которому примыкают модули разных уровней (пенал рядом с нижним и навесным),
-//  или стык, где кончается столешница (цоколь «Ряда» Базиса), считается боком — как стена, модуль меняется от него.
-//  Столешница и объекты ряда Базиса (raw.row: цоколи, стеновые панели) соседями не считаются.
-//  Сосед из Базиса (сырой raw), угловой и купе не меняются — ошибка, правка не применяется.
+// Изменение ширины по умолчанию затрагивает только выбранный модуль.
+// Соседи сохраняют размеры и положение; пересечение ограничивает расширение.
+// resizeJointInRow сохраняет прежний режим совместного изменения для явного вызова.
 import { applyAutoFillers, bounds, localToRoom, obstacleBounds, type PlacedModule, type Project } from "./project";
 import { validate, RULES, type Module } from "./model";
 import { KITCHEN, APPLIANCES } from "./kitchen";
@@ -132,7 +121,7 @@ function rowObjectEnd(p: Project, mods: PlacedModule[], c: { lo: number; hi: num
   return undefined;
 }
 
-/** Столешница над нижним модулем и цоколь ряда Базиса вдоль него не должны начать висеть или торчать, когда меняется внешний край ряда. */
+/** Свес столешницы разрешён при уменьшении любого корпуса; выход корпуса из-под столешницы и размер отдельного цоколя проверяются. */
 function rowObjectsCheck(p: Project, a: PlacedModule, ctx: ReturnType<typeof rowContext>, side: Side, delta: number) {
   const top = (a.y ?? 0) + a.module.height;
   for (const o of p.modules) {
@@ -148,7 +137,7 @@ function rowObjectsCheck(p: Project, a: PlacedModule, ctx: ReturnType<typeof row
     const inside = (v: number) => (side === "right" ? v <= end + TOUCH : v >= end - TOUCH);
     if (delta > 0 && inside(edge) && !inside(moved))
       throw Error(`${quote(a.module)} выйдет за край ${what}${worktop ? "ы" : "я"} ${quote(o.module)} на ${r1(Math.abs(moved - end))} мм (${worktop ? "выйдет из-под столешницы" : "цоколь Базиса не удлиняется"}). Сначала удлините ${worktop ? "столешницу" : "цоколь"} или поставьте модуль вплотную к соседу.`);
-    if (delta < 0 && Math.abs(edge - end) <= TOUCH)
+    if (!worktop && delta < 0 && Math.abs(edge - end) <= TOUCH)
       throw Error(`${worktop ? "Столешница" : "Цоколь"} ${quote(o.module)} будет торчать за ${quote(a.module)} на ${r1(-delta)} мм. Сначала укоротите ${worktop ? "столешницу" : "цоколь"}.`);
   }
 }
@@ -158,6 +147,17 @@ function rowObjectsCheck(p: Project, a: PlacedModule, ctx: ReturnType<typeof row
  * (ничего не применяется). Угловые, купе, сырые модули Базиса и объекты ряда меняются по-старому — только сам модуль.
  */
 export function resizeInRow(p: Project, placedId: string, width: number): Project {
+  const a=p.modules.find(x=>x.id===placedId);
+  if(!a)throw Error('Модуль не найден.');
+  if(!Number.isFinite(width))throw Error('Ширина: введите число.');
+  if(ownWidthOnly(a.module))return {...p,modules:p.modules.map(x=>x.id===placedId?{...x,module:{...x.module,width}}:x)};
+  const side:Side=rowContext(p,a).wall.right&&!rowContext(p,a).wall.left?'left':'right';
+  const delta=r1(width-a.module.width),g=freeSpace(p,a)[side];
+  if(delta>0 && g.what==='стена' && fillAdd(gaps(p,a.id)[side])<delta-0.1)throw Error(noRoom(a,side,gaps(p,a.id)[side],delta));
+  return moveFreeEdge(p,a,side,delta);
+}
+/** Explicit legacy row redistribution, never called by ordinary width fields. */
+export function resizeJointInRow(p: Project, placedId: string, width: number): Project {
   const a = p.modules.find((x) => x.id === placedId);
   if (!a) throw Error("Модуль не найден.");
   const W = a.module.width, delta = r1(width - W);
@@ -378,11 +378,11 @@ export function flush(p: Project, id: string, side: Side, gap = 0): Project {
  *  project — результат (если можно), problem — почему нельзя. */
 export type StretchPlan = { mode: "free" | "joint"; width: number; delta: number; gap: number; neighbor?: { id: string; name: string; width: number }; project?: Project; problem?: string; filler?: number };
 export const STRETCH_SNAP = 30;
-export function planStretch(p: Project, id: string, side: Side, raw: number, snap = true): StretchPlan {
+export function planStretch(p: Project, id: string, side: Side, raw: number, snap = true, redistribute = false): StretchPlan {
   const a = p.modules.find((x) => x.id === id);
   if (!a) throw Error("Модуль не найден.");
   const ctx = rowContext(p, a), g = freeSpace(p, a)[side], n = ctx.neighbor[side], W = a.module.width;
-  const joint = !!n && g.gap === 0 && !locked(n.module);
+  const joint = redistribute && !!n && g.gap === 0 && !locked(n.module);
   let lo = minWidth(a.module) - W, hi = maxWidth(a.module) - W;
   if (joint) { lo = Math.max(lo, n!.module.width - maxWidth(n!.module)); hi = Math.min(hi, n!.module.width - minWidth(n!.module)); }
   else hi = Math.min(hi, g.gap);

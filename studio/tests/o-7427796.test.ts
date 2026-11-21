@@ -1,3 +1,4 @@
+import {isSeparateHardware} from '../src/clientPrices';
 // Заказ 7427796 (26.10.2026): функции студии для прихожей с сиденьем — посадочное место 32 (две плиты 16 склейкой), задник ЛДСП только
 // у ниши (backFrom), добор 32 сбоку (sidePanels.thick), зеркало на фасаде-основе (mirror), угол открывания петель по створке (hingeAngles),
 // скрытые Blum TANDEM, кромка на клей PUR, ручка-кнопка. Цены без счёта — «после финального расчёта» (pendingPrices).
@@ -88,13 +89,13 @@ test('угол открывания петель по створке: призн
   assert.equal(line(p,'hinge:blum')!.quantity,2);
   assert.ok(validate(mod({},{hingeAngles:[120 as never]})).some(e=>e.includes('угол открывания')));
 });
-test('Blum TANDEM 10 000 ₽ клиенту; кромки PUR нет (решение Макса 26.10 — старое поле игнорируется); ручка-кнопка в каталоге', () => {
+test('Blum TANDEM по комплектному прайсу; кромки PUR нет (решение Макса 26.10 — старое поле игнорируется); ручка-кнопка в каталоге', () => {
   assert.ok(SLIDE_SYSTEMS.some(s=>s.id==='hidden-blum-soft'));
   const m=mod({doors:false},{drawers:1,drawerConfigs:[{slide:'gtv0fpo',operation:'soft-close',brand:'blum',height:140,length:500}]});
   const raw=JSON.parse(JSON.stringify(proj(m,{markup:2.2,overrides:{}})));raw.calculation.edgeGlue='pur'; // проект ветки o-7427796
   const p=parseProject(raw),e=estimate(p);
   const sl=e.lines.find(l=>l.id.startsWith('slide:gtv0fpo:500:hidden-blum-soft'))!;
-  assert.equal(sl.unitPrice,10000);assert.equal(sl.retail,true);
+  assert.equal(sl.unitPrice,6222.4);assert.equal(sl.retail,true);
   assert.equal(e.lines.some(l=>/pur/i.test(l.id+l.label)),false,'строки PUR в смете нет');
   assert.equal(e.missing.length,0);
   assert.equal((p.calculation as Record<string,unknown>).edgeGlue,undefined,'поле PUR при загрузке отброшено');
@@ -127,7 +128,7 @@ test('цена только по листам (решение 30.10.2026): ли�
   const e=estimate(proj(m,{markup:2.2,overrides:{},sheetPrice:23000}));
   // зеркало/стекло × коэффициент в цене по листам (offSheet, без округления до 100)
   const glass=e.lines.filter(l=>l.id.startsWith('glass-')&&!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0);
-  assert.equal(e.offSheet,Math.round(glass*2.2));
+  assert.equal(e.offSheet,Math.round((glass+e.lines.filter(l=>!l.retail&&isSeparateHardware(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0))*2.2));
   assert.equal(e.retail,e.bySheet);
   assert.equal(estimate(proj(m,{markup:2.2,overrides:{},sheetPrice:23000,maxModel:true})).retail,e.retail,'старый флаг не меняет цену');
   // старое поле ветки o-7427796 (calculation.priceMax) при загрузке отбрасывается

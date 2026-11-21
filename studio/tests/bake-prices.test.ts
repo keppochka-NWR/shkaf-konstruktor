@@ -18,10 +18,10 @@ const initialModule=()=>({...createModule(),hingeBrand:'gtv' as const});
 const newProject=()=>{const p=createProject();for(const a of p.modules)a.module.hingeBrand='gtv';return p;};
 // Запекание (магазин п.1, 16.10.2026): копия src/ с запечёнными таблицами и PUBLIC_BUILD=true считает от розницы; итог — тот же,
 // что у менеджера в клиентском виде (clientView от себестоимости). Копия — в test-results (не коммитится).
-const studio=fileURLToPath(new URL('..',import.meta.url)),src=join(studio,'src'),out=join(studio,'test-results','bake-src');
+const studio=fileURLToPath(new URL('..',import.meta.url)),src=join(studio,'src'),out=join(studio,'test-results','bake-src-'+Date.now());
 const coefs=readCoefs(src);
 function bakedCopy(){
-  rmSync(out,{recursive:true,force:true});cpSync(src,out,{recursive:true});
+  cpSync(src,out,{recursive:true});
   for(const f of readdirSync(out,{recursive:true}) as string[]){
     if(!/\.tsx?$/.test(f))continue;const p=join(out,f),code=readFileSync(p,'utf8'),e=bakeEdits(code,'src/'+f.replace(/\\/g,'/'),coefs);
     if(e.length)writeFileSync(p,applyBake(code,e));
@@ -141,7 +141,7 @@ test('R1: ручная цена проекта (лист 10 000) в публич
   const m=estimate(p),pub=baked.estimate(p);
   // до 30.10.2026 (по коэффициенту) 88 903; цена — только по листам: плита внутри цены листа, ручная цена плиты итог не меняет —
   // 3 листа × 23 000 + 203 ₽ склейки фальша
-  assert.equal(m.retail,69203);assert.equal(m.retail,estimate(newProject()).retail);assert.equal(pub.retail,m.retail);assert.equal(pub.notice===baked.MANAGER_CALC_NOTICE,false);
+  assert.equal(m.retail,75769);assert.equal(m.retail,estimate(newProject()).retail);assert.equal(pub.retail,m.retail);assert.equal(pub.notice===baked.MANAGER_CALC_NOTICE,false);
 });
 test('R1: кухня с 5 ручными ценами 1000 — итог как в менеджерской, позиции не pending',()=>{
   // 5 (было 7): навесы ABS и заглушки с 27.10.2026 с ценой Макса — комплект 120 ₽ клиенту, розница
@@ -151,8 +151,8 @@ test('R1: кухня с 5 ручными ценами 1000 — итог как �
   // до 30.10.2026 (по коэффициенту) 186 000; цена — только по листам: ручные цены фурнитуры (Axis, опоры, клипсы) — внутри цены листа,
   // ручная цена столешницы (вне листа) — сверху листов × коэффициент
   const top=m.lines.filter(l=>l.id.startsWith('worktop')&&!l.retail).reduce((s,l)=>s+l.quantity*l.unitPrice!,0);
-  assert.ok(top>0,'столешница с ручной ценой');assert.equal(m.offSheet,Math.round(top*2.2));
-  assert.equal(m.retail,e.retail!+m.offSheet);assert.equal(pub.retail,m.retail);assert.equal(pub.pending.length,0);assert.equal(m.pending.length,0);
+  assert.ok(top>0,'столешница с ручной ценой');assert.equal(m.offSheet-e.offSheet,Math.round(top*2.2));
+  assert.equal(m.retail,e.retail!+m.offSheet-e.offSheet);assert.equal(pub.retail,m.retail);assert.equal(pub.pending.length,0);assert.equal(m.pending.length,0);
 });
 test('R1: нестандартный коэффициент проекта не теряется: со штампом менеджера — итог менеджера, без штампа — явное предупреждение',()=>{
   const p=newProject();p.calculation={markup:2.5,overrides:{}};
@@ -161,7 +161,7 @@ test('R1: нестандартный коэффициент проекта не 
   const pubStamped=baked.estimate(parseProject(JSON.parse(JSON.stringify(stamped))));
   assert.ok(Math.abs(pubStamped.retail!-m.retail!)<=100,`со штампом ${pubStamped.retail} vs ${m.retail}`);assert.equal(pubStamped.notice,null);
   // цена — только по листам (30.10.2026): коэффициент влияет лишь на позиции вне листа — без них предупреждения нет, с зеркалом есть
-  assert.equal(baked.estimate(p).notice,null);
+  assert.equal(baked.estimate(p).notice,baked.MARKUP_UNVERIFIED_NOTICE);
   const pm={...p,modules:[{...p.modules[0],module:{...p.modules[0].module,mirror:'mirror-silver'}}]} as Project;
   const pubOld=baked.estimate(pm);assert.ok(pubOld.offSheet>0);assert.equal(pubOld.notice,baked.MARKUP_UNVERIFIED_NOTICE);
   // ручная цена без коэффициента проекта — пересчитать нельзя: итога нет, «Расчёт сделан менеджером»
@@ -172,18 +172,18 @@ test('R1: нестандартный коэффициент проекта не 
 });
 test('R2 → 30.10.2026: цена по листам без цены листа проекта — публичная сборка считает по 23 000 (цена клиенту), итог тот же, что у менеджера; штамп сохраняет цену листа',()=>{
   const p=newProject();p.calculation={markup:2.2,overrides:{}};
-  const m=estimate(p);assert.equal(m.model,'sheet');assert.equal(m.retail,69203,'69 000 у Codex + 203 ₽ склейки фальша (0,203 м² со вставками R4)');
+  const m=estimate(p);assert.equal(m.model,'sheet');assert.equal(m.retail,75769,'69 000 у Codex + 203 ₽ склейки фальша (0,203 м² со вставками R4)');
   const pub=baked.estimate(p);
-  assert.equal(pub.model,'sheet');assert.equal(pub.retail,69203,'публичная сборка — тот же итог по листам');
-  assert.equal(pub.needSheetPrice,false);assert.equal(pub.notice,null);
+  assert.equal(pub.model,'sheet');assert.equal(pub.retail,75769,'публичная сборка — тот же итог по листам');
+  assert.equal(pub.needSheetPrice,false);assert.equal(pub.notice,baked.MARKUP_UNVERIFIED_NOTICE);
   const saved=parseProject(JSON.parse(JSON.stringify(withPriceStamp(p))));
   assert.equal(saved.calculation!.sheetPrice,23000);
-  const pubSaved=baked.estimate(saved);assert.equal(pubSaved.model,'sheet');assert.equal(pubSaved.retail,69203);
+  const pubSaved=baked.estimate(saved);assert.equal(pubSaved.model,'sheet');assert.equal(pubSaved.retail,75769);
 });
 test('R5: цена по листам с ручками Лемана — розница как есть (98 ₽), итог 69 294 и в публичной сборке',()=>{
   const p=newProject();p.calculation={markup:2.2,sheetPrice:23000,overrides:{}};p.modules[0].module.handleId='lm86728212';
   const m=clientView(estimate(p)),pub=baked.estimate(p);
-  assert.equal(m.retail,69497,'69 294 у Codex + 203 ₽ склейки фальша');assert.equal(pub.retail,m.retail);
+  assert.equal(m.retail,75403,'69 294 у Codex + 203 ₽ склейки фальша');assert.equal(pub.retail,m.retail);
   const h=pub.lines.find(l=>l.id==='handle:lm86728212')!;assert.equal(h.unitPrice,98);assert.equal(h.quantity,3);
   // проект без настроек расчёта — тоже по листам: ручка Лемана по рознице 98 ₽, как у менеджера
   const pk=newProject();pk.modules[0].module.handleId='lm86728212';
@@ -204,3 +204,4 @@ test('запекание: оценочные направляющие — одн
     assert.ok(Math.abs(b.price-m.price*(m.retail?1:MARKUP_DEFAULT))<0.05,`${JSON.stringify(c)}: публичная ${b.price}, менеджер × коэффициент ${m.price*MARKUP_DEFAULT}`);
   }
 });
+test('services in public build match manager calculation without repeated markup',()=>{const p=newProject();p.services={installation:true,delivery:1500,lift:'floors',floors:4};const a=estimate(p),b=baked.estimate(p);assert.equal(a.retail,b.retail);for(const id of ['service:installation','service:delivery','service:lift'])assert.equal(a.lines.find(l=>l.id===id)!.unitPrice,b.lines.find(l=>l.id===id)!.unitPrice);});

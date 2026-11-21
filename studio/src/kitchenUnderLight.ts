@@ -22,7 +22,7 @@ export function underLightParts(m: Module, out: Part[]) {
   const t = RULES.panel, [lw, lt] = underLedSize(m), len = m.width - 2 * t - 40;
   if (len <= 0) return;
   const y0 = bottom.position[1] - bottom.size[1] / 2, front = bottom.position[2] + bottom.size[2] / 2;
-  out.push({ id: UNDER_LIGHT_ID, name: "Подсветка LED рабочей зоны под навесным модулем", size: [len, lt, lw], position: [m.width / 2, y0 - lt / 2, front - 20 - lw / 2],
+  out.push({ id: UNDER_LIGHT_ID, name: "Подсветка LED рабочей зоны под навесным модулем", size: [len, lt, lw], position: [m.width / 2, y0 - lt / 2, front - (m.kitchen.underLightOffset ?? 20) - lw / 2],
     length: len, width: lw, thickness: lt, role: "light", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0] });
 }
 

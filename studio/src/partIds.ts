@@ -47,7 +47,7 @@ export function cutHost(m: Module, c: Pick<Cutout, "host" | "ref">): string | un
   return s && j >= 0 && j < count(s, k) ? `${x[1]}:${k}:${j}${x[4] ?? ""}` : undefined;
 }
 /** Постоянная ссылка на деталь pid: полка/ящик — по id (id секции заводятся, если их не было); иначе undefined (ссылка — сам pid). */
-function refFor(m: Module, pid: string): string | undefined {
+export function refFor(m: Module, pid: string): string | undefined {
   const x = POS.exec(pid);
   if (!x) return undefined;
   const k = x[2] as FillKind, s = m.sections.find((q) => q.id === x[1]), j = Number(x[3]);
@@ -125,10 +125,11 @@ export function renewIds(s: Section): void {
 }
 /** Ссылки вырезов при смене id секций (копия корпуса — rekeySections): `<старая>:…` → `<новая>:…`, `layout:<старый>` → `layout:<новый>`. */
 export function rekeyCutouts(m: Module, map: Map<string, string>): void {
-  if (!m.cutouts?.length) return;
+  if (!m.cutouts?.length && !m.surfaceLights?.length) return;
   const re = (v: string) => { const i = v.indexOf(":"), head = i < 0 ? v : v.slice(0, i), tail = i < 0 ? "" : v.slice(i);
     if (map.has(head)) return map.get(head)! + tail;
     if (head === "layout") { const t = v.slice(7), n = map.get(t); return n ? "layout:" + n : v; }
     return v; };
-  m.cutouts = m.cutouts.map((c) => ({ ...c, host: re(c.host), ...(c.ref ? { ref: re(c.ref) } : {}) }));
+  if(m.cutouts) m.cutouts = m.cutouts.map((c) => ({ ...c, host: re(c.host), ...(c.ref ? { ref: re(c.ref) } : {}) }));
+  if(m.surfaceLights) m.surfaceLights = m.surfaceLights.map(c => ({...c,host:re(c.host),...(c.ref?{ref:re(c.ref)}:{})}));
 }

@@ -52,7 +52,7 @@ const tidy = (s: Section) => {
   if (!s.topLight) delete s.topLight;
   // тон/тип детали живёт, пока место подсвечено
   if (s.lightSpec) {
-    for (const k of Object.keys(s.lightSpec)) if (!slotLit(s, k) || (s.lightSpec[k].tone === undefined && s.lightSpec[k].type === undefined)) delete s.lightSpec[k];
+    for (const k of Object.keys(s.lightSpec)) if (!slotLit(s, k) || (s.lightSpec[k].tone === undefined && s.lightSpec[k].type === undefined && s.lightSpec[k].frontOffset === undefined)) delete s.lightSpec[k];
     if (!Object.keys(s.lightSpec).length) delete s.lightSpec;
   }
 };
@@ -81,7 +81,7 @@ export function lightKeys(m: Module): LightKey[] {
     ...(s.topLight ? [`${s.id}:top`] : []),
   ]);
 }
-export function anyLight(m: Module) { return lightKeys(m).length > 0; }
+export function anyLight(m: Module) { return lightKeys(m).length > 0 || !!m.surfaceLights?.length || !!m.kitchen?.underLight; }
 
 /** Включить/снять подсветку по ключу. Сначала переводит старые флаги в поштучный набор. */
 export function setLight(m: Module, key: LightKey, on: boolean) {
@@ -178,6 +178,8 @@ export function setAllStands(m: Module, on: boolean) {
 export function allStandsLit(m: Module) { return m.sections.length > 0 && m.sections.every((s) => hasStand(m, s.id, "left") && hasStand(m, s.id, "right")); }
 /** «Убрать всю подсветку». */
 export function clearLights(m: Module) {
+  delete m.surfaceLights;
+  if(m.kitchen) delete m.kitchen.underLight;
   migrateLights(m);
   for (const s of m.sections) { delete s.standLights; delete s.shelfLights; delete s.topLight; delete s.lightSpec; }
 }
@@ -209,13 +211,17 @@ export function setModuleLight(m: Module, patch: { tone?: LightTone | null; type
   if (patch.type === null) delete m.lightType; else if (patch.type !== undefined) m.lightType = patch.type;
 }
 /** Тон/тип одной подсвеченной детали (null — как у модуля). */
-export function setDetailSpec(m: Module, key: LightKey, patch: { tone?: LightTone | null; type?: LightType | null }) {
+export function setDetailSpec(m: Module, key: LightKey, patch: { tone?: LightTone | null; type?: LightType | null; frontOffset?: number }) {
   migrateLights(m);
   const { sid, slot } = slotOf(key), s = sec(m, sid);
   if (!slotLit(s, slot)) throw Error("Деталь не подсвечена.");
   const cur: LightSpec = { ...(s.lightSpec?.[slot] ?? {}) };
   if (patch.tone === null) delete cur.tone; else if (patch.tone !== undefined) cur.tone = patch.tone;
   if (patch.type === null) delete cur.type; else if (patch.type !== undefined) cur.type = patch.type;
+  if (patch.frontOffset !== undefined) {
+    if (!Number.isFinite(patch.frontOffset) || patch.frontOffset < 0 || patch.frontOffset > m.depth - 40) throw Error("Отступ подсветки выходит за глубину детали.");
+    cur.frontOffset = patch.frontOffset;
+  }
   s.lightSpec = { ...(s.lightSpec ?? {}), [slot]: cur };
   tidy(s);
 }
@@ -254,8 +260,8 @@ export function lightSummary(m: Module): { vertical: { count: number; meters: nu
   const leds = parts(m).filter((p) => p.role === "light" && !p.id.startsWith("groove:"));
   const sum = (list: Part[]) => ({ count: list.length, meters: Math.round(list.reduce((a, p) => a + p.length, 0)) / 1000, spec: groupSpec(m, list) });
   // горизонтали: полки, крыша и подсветка рабочей зоны под навесным кухонным (kitchenUnderLight.ts)
-  const horizontal = leds.filter((p) => p.id.includes(":shelf-light:") || p.id.endsWith(":light:roof") || p.id === UNDER_LIGHT_ID);
-  const places = [horizontal.some((p) => p.id.includes(":shelf-light:")) && "в полках", horizontal.some((p) => p.id.endsWith(":light:roof")) && "под крышей", horizontal.some((p) => p.id === UNDER_LIGHT_ID) && "рабочей зоны под навесными"].filter((x): x is string => !!x);
+  const horizontal = leds.filter((p) => p.id.includes(":shelf-light:") || p.id.endsWith(":light:roof") || p.id === UNDER_LIGHT_ID || (p.id.startsWith("surface-led:") && p.grainAxis !== 1));
+  const places = [horizontal.some(p => p.id.startsWith("surface-led:")) && "на поверхностях", horizontal.some((p) => p.id.includes(":shelf-light:")) && "в полках", horizontal.some((p) => p.id.endsWith(":light:roof")) && "под крышей", horizontal.some((p) => p.id === UNDER_LIGHT_ID) && "рабочей зоны под навесными"].filter((x): x is string => !!x);
   const where = !places.length ? "в полках" : places.length === 1 ? places[0] : places.slice(0, -1).join(", ") + " и " + places[places.length - 1];
   return { vertical: sum(leds.filter((p) => !horizontal.includes(p))), horizontal: { ...sum(horizontal), where } };
 }

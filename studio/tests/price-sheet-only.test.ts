@@ -1,3 +1,4 @@
+import {isSeparateHardware} from '../src/clientPrices';
 // Цена — ТОЛЬКО по листам (решение Макса 30.10.2026): листы ЛДСП в раскрое × цена листа + всё вне листа (зеркало и стекло × коэффициент,
 // розница, Вернисаж, Лемана). «По коэффициенту» и «по большей модели» больше не используются; старые проекты с calculation.model /
 // maxModel открываются и считаются по листам. Цены изделий в КП — доли по листам (листовая часть по долям листов, «вне листа» — у своего изделия).
@@ -24,7 +25,7 @@ test("цена только по листам: листы × 23 000 + зерка
   assert.equal(e.model, "sheet"); assert.equal(e.sheetPrice, SHEET_PRICE_DEFAULT);
   const mirrorCost = e.lines.filter((l) => l.id.startsWith("glass-") && l.unitPrice !== null && !l.retail).reduce((s, l) => s + l.quantity * l.unitPrice!, 0);
   assert.ok(mirrorCost > 0, "зеркало, плёнка, полировка в смете");
-  assert.equal(e.offSheet, Math.round(mirrorCost * MARKUP_DEFAULT), "зеркало сверху листов × коэффициент");
+  assert.equal(e.offSheet, Math.round((mirrorCost+e.lines.filter(l=>!l.retail&&isSeparateHardware(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0)) * MARKUP_DEFAULT), "зеркало сверху листов × коэффициент");
   // наклейка зеркала — розница 1 200 ₽/м² (Макс 27.10.2026): сверху листов как есть, в retailExtras, не × коэффициент
   const glue = e.lines.find((l) => l.id === "glass-mirror-glue")!;
   assert.deepEqual([glue.unitPrice, glue.retail], [1200, true]); assert.equal(e.retailExtras, Math.round(glue.quantity * 1200));
@@ -58,7 +59,7 @@ test("цена по листам: зеркало шкафа меняет цен�
   const a: Project = proj(box(), box()), b: Project = proj(box(), box({ mirror: "mirror-silver" }));
   const ea = estimate(a), eb = estimate(b), pa = modulePrices(a, ea.retail)!, pb = modulePrices(b, eb.retail)!;
   // вне листа: зеркало, плёнка, полировка × коэффициент (offSheet) + наклейка зеркала — розница (retailExtras, Макс 27.10.2026)
-  const extra = eb.offSheet + eb.retailExtras - ea.retailExtras;
+  const extra = eb.offSheet - ea.offSheet + eb.retailExtras - ea.retailExtras;
   assert.equal(eb.retail! - ea.retail!, extra);
   assert.equal(pb[0], pa[0], "корпус без зеркала — та же цена");
   assert.equal(pb[1] - pa[1], extra, "шкаф дороже ровно на зеркало");

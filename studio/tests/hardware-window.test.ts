@@ -24,7 +24,7 @@ test('разница в цене: Blum дороже GTV; Pulse внутри це
   const d=(q:Project)=>estimate(q).retail!-base;
   const blumAll=d(scopedSwap(p,null,q=>setAllHinges(q,'blum'))),blumOne=d(scopedSwap(p,'m2',q=>setAllHinges(q,'blum')));
   assert.ok(blumAll>0&&blumOne>0&&blumOne<blumAll,`${blumOne} < ${blumAll}`);
-  assert.equal(d(scopedSwap(p,null,q=>setAllHinges(q,'pulse'))),0);
+  assert.notEqual(d(scopedSwap(p,null,q=>setAllHinges(q,'pulse'))),0,'Pulse is priced separately from LDSP sheets');
   assert.ok(d(scopedSwap(p,null,q=>setAllSlides(q,'hidden-premial-soft')))>0,'Premial: цена сайта ×1,3 поверх листов');
   assert.ok(d(scopedSwap(p,null,q=>setAllSlides(q,'hidden-blum-soft')))>0);
 });

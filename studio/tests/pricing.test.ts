@@ -41,7 +41,7 @@ test('hidden slides use workshop purchase of DTC/Unihopper and unknown lengths s
   const known=e.lines.find(l=>l.id==='slide:gtv0fpo:300')!,unknown=e.lines.find(l=>l.id==='slide:gtv0fpo:550')!;
   assert.equal(known.unitPrice,1040);assert.match(known.source,/DTC F10D300H/);
   // направляющая без цены — фурнитура внутри цены листа (цена — только по листам, 30.10.2026): итог есть
-  assert.equal(unknown.unitPrice,null);assert.equal(e.missingExtras,0);assert.equal(e.retail,e.bySheet);
+  assert.equal(unknown.unitPrice,null);assert.equal(e.missingExtras,1);assert.equal(e.retail,null);
   s.drawerConfigs=[{slide:'gtv0fpo',height:140,length:250}];
   const short=estimate(p).lines.find(l=>l.id==='slide:gtv0fpo:250')!;
   assert.equal(short.unitPrice,990);assert.match(short.source,/Оценка/);
@@ -209,7 +209,7 @@ test('aluminium framed doors: geometry, calculator pricing, limits, cut list and
   assert.equal(line('alu-seal').unitPrice,150);assert.equal(line('alu-seal').retail,true);
   // price by sheets only (Max 30.10.2026): the frame is retail on top of the sheets; the LDSP door leaves the cutting (may free a sheet)
   const alu=e.lines.filter(l=>l.id.startsWith('alu-')).reduce((s,l)=>s+l.quantity*l.unitPrice!,0);
-  assert.ok(alu>0&&e.retail!==null&&ldsp.retail!==null);assert.equal(e.retail,e.ldspSheets*23000+e.retailExtras);assert.ok(e.retailExtras>=Math.round(alu)-1);
+  assert.ok(alu>0&&e.retail!==null&&ldsp.retail!==null);assert.equal(e.retail,e.ldspSheets*23000+e.retailExtras+e.offSheet);assert.ok(e.retailExtras>=Math.round(alu)-1);
   m.alu.profile='F1-19';assert.equal(estimate(p).lines.find(l=>l.id==='alu-profile:F1-19:silver')!.unitPrice,3342,'F1-19: 1114 ₽/м × 3');
   assert.equal(parseProject(p).modules[0].module.alu!.profile,'F1-19');
   assert.ok(specificationHTML(p).includes('алюминиевой рамке'));
@@ -221,9 +221,9 @@ test('aluminium framed doors: geometry, calculator pricing, limits, cut list and
 test('price by sheets only (Max 30.10.2026): 23 000 per LDSP sheet + extras; fasteners drawn and counted',()=>{
   const p=newProject(),e=estimate(p);
   assert.equal(e.model,'sheet');assert.equal(e.sheetPrice,23000);assert.ok(e.ldspSheets>=1);
-  assert.equal(e.bySheet,e.ldspSheets*23000+e.retailExtras);assert.equal(e.retail,e.bySheet);
+  assert.equal(e.bySheet,e.ldspSheets*23000+e.retailExtras+e.offSheet);assert.equal(e.retail,e.bySheet);
   p.calculation={markup:2.2,overrides:{},model:'markup',sheetPrice:24000};
-  const s=estimate(p);assert.equal(s.retail,s.ldspSheets*24000+s.retailExtras,'old model field is ignored');assert.equal(parseProject(p).calculation!.model,undefined);
+  const s=estimate(p);assert.equal(s.retail,s.ldspSheets*24000+s.retailExtras+s.offSheet,'old model field is ignored');assert.equal(parseProject(p).calculation!.model,undefined);
   p.calculation.sheetPrice=100;assert.ok(projectErrors(p).length);
   const m=p.modules[0].module,fc=fastenerCounts(m),fast=parts(m).filter(x=>x.role==='fastener'&&!x.id.startsWith('shp:'));
   assert.equal(fast.length,fc.confirmats);assert.equal(parts(m).filter(x=>x.id.startsWith('shp:')).length,fc.shelfHolders,'shelf holders drawn as counted');assert.ok(fc.confirmats>=8,'bottom and top give 8 confirmats');

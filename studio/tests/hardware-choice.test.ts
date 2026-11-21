@@ -22,9 +22,9 @@ test('hinge brand changes hinge line, price and keeps GTV ids for old projects',
   assert.deepEqual(hardwareChoice(setAllHinges(p,'blum')).hinges,['blum']);
 });
 
-test('every slide system has a price at 450 mm, push systems have no handle, old hidden configs stay DTC push',()=>{
-  // Blum TANDEM — 10 000 ₽ клиенту за комплект (решение Макса 26.10.2026, розница), остальные — закупка
-  for(const s of SLIDE_SYSTEMS){const q=slidePrice({slide:s.slide,operation:s.motion,brand:s.brand,length:450});assert.ok(q.price!==null&&q.price>0,s.id);assert.equal(!!q.retail,s.brand==='blum'||s.brand==='premial',s.id);assert.ok(q.source.length>0);}
+test('slide systems preserve unconfirmed Blum 450 mm pricing, push systems have no handle, old hidden configs stay DTC push',()=>{
+  // TANDEM 450: неоднозначная единица продажи, никакой подстановки фиксированной цены.
+  for(const s of SLIDE_SYSTEMS){const q=slidePrice({slide:s.slide,operation:s.motion,brand:s.brand,length:450});if(s.brand==='blum')assert.equal(q.price,null,s.id);else assert.ok(q.price!==null&&q.price>0,s.id);assert.equal(!!q.retail,s.brand==='blum'||s.brand==='premial',s.id);assert.ok(q.source.length>0);}
   assert.equal(slideSystem({slide:'gtv0fpo'}).id,'hidden-dtc-push');assert.equal(slideSystem({slide:'ball'}).id,'ball-soft');
   assert.equal(drawerHasHandle({slide:'ball',height:140,length:450,operation:'push'}),false);
   assert.equal(drawerHasHandle({slide:'gtv0fpo',height:140,length:450,operation:'soft-close',brand:'premial'}),true);

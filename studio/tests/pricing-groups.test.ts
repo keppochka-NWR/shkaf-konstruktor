@@ -79,7 +79,7 @@ test('сырой шкаф из корпуса Базиса без счётчик
   const e=estimate(corpus),l=e.lines.find(l=>l.id==='bazis-hardware:raw')!;
   assert.ok(l&&l.unitPrice===null);assert.match(l.label,/не импортирована/);
   // «по коэффициенту» нет (внутренняя оценка); цена — только по листам (30.10.2026): фурнитура внутри цены листа, итог есть
-  assert.equal(e.byMarkup,null);assert.equal(e.missingExtras,0);assert.equal(e.retail,e.bySheet);assert.equal(e.retail,e.ldspSheets*23000);
+  assert.equal(e.byMarkup,null);assert.equal(e.missingExtras,1);assert.equal(e.retail,null);
   // со счётчиками (кухня Базиса) строки нет
   const kitchen=project(rawModule({source:'bazis-kitchen',counts:{hinges:2},panels:[panel('Боковина',[0,0,0,16,720,560])],hardware:[]}));
   assert.ok(!estimate(kitchen).lines.some(l=>l.id==='bazis-hardware:raw'));
@@ -175,10 +175,10 @@ test('цена по листам: фурнитура Базиса без цен�
   const corpus=project(rawModule({source:'bazis-corpus',panels:[panel('Боковина',[0,0,0,16,2000,560]),panel('Полка',[16,500,0,584,516,560])],hardware:[{name:'Петля накладная',category:'петля',pos:[0,0,0],quat:[1,0,0,0]}]}));
   const e=estimate(corpus);
   assert.ok(e.missing.some(l=>l.id==='bazis-hardware:raw'),'справка менеджеру осталась');
-  assert.equal(e.missingExtras,0);assert.deepEqual(e.missingExtrasLines,[]);assert.equal(e.retail,e.bySheet);
-  const c=clientView(e);assert.deepEqual(c.missing,[]);assert.equal(c.lines.find(l=>l.id==='bazis-hardware:raw')!.source,CLIENT_SOURCE_IN_SHEET);
-  assert.ok(!JSON.stringify(estimateSheet(corpus,e,false).rows).includes('Позиций без цены'),'Excel клиента');
-  assert.match(reviewFiles(corpus)['00-Прочитайте.txt'],/НЕЗАПОЛНЕННЫЕ ЦЕНЫ: 0/);
+  assert.equal(e.missingExtras,1);assert.equal(e.missingExtrasLines[0].id,"bazis-hardware:raw");assert.equal(e.retail,null);
+  const c=clientView(e);assert.equal(c.missing.length,1);assert.equal(c.lines.find(l=>l.id==='bazis-hardware:raw')!.unitPrice,null);
+  assert.ok(JSON.stringify(estimateSheet(corpus,e,false).rows).includes('Позиций без цены'),'Excel клиента');
+  assert.match(reviewFiles(corpus)['00-Прочитайте.txt'],/НЕЗАПОЛНЕННЫЕ ЦЕНЫ: 1/);
 });
 test('цена по листам: 0 листов ЛДСП — позиции по закупке сверху × коэффициент (комплект не пропадает), без цены — итога нет',()=>{
   // как P344 (стеклянные полки Базиса, 0 листов): комплект 150 ₽ × 2,2 сверху; фурнитура Базиса без цены — «цены листа» нет, итога нет

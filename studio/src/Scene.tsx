@@ -51,6 +51,8 @@ function ledGlow(mesh: THREE.Mesh, p: LedPart, m: LedModule, all: LedPart[]) {
   const add = (geo: THREE.PlaneGeometry, material: THREE.Material, pos: [number, number, number], rot: [number, number, number]) => {
     const g = new THREE.Mesh(geo, material); g.position.set(...pos); g.rotation.set(...rot); g.raycast = () => {}; g.renderOrder = 2; g.userData = { glow: true }; mesh.add(g);
   };
+  // Surface lines may shine up or sideways; the legacy downward glow is not applicable.
+  if (p.id.startsWith("surface-led:")) return;
   const stand = /:light:(left|right)$/.exec(p.id);
   if (stand) {
     const left = stand[1] === "left", front = Math.max(20, m.depth - p.position[2]), w = 2 * Math.min(170, front);
@@ -531,6 +533,13 @@ export function Scene(p: Props) {
     const anims=new Map<string,OpenMove>(),openOverride=new Map<string,boolean>();
     let lastOpenDoors:boolean|undefined,lastFrame=performance.now();
     const products=new Set<THREE.Object3D>();
+    if((import.meta.env.DEV||import.meta.env.VITE_RENDER_WORKER==='1')&&new URLSearchParams(location.search).has('renderWorker')){
+      (window as unknown as {__exportRender?:()=>Promise<unknown>}).__exportRender=async()=>{
+        if(pendingTextures)throw Error('Textures still loading');
+        return (await import('./renderSceneExport')).exportRenderScene(products,anims);
+      };
+    }
+
     function rebuild() {
       needsRender=true;products.clear();
       const state = current.current,
@@ -1526,6 +1535,7 @@ export function Scene(p: Props) {
     }
     function startStretch(side:'left'|'right',e:PointerEvent){
       const s=current.current,a=s.arrangement.find(x=>x.id===s.activeId);if(!a||drag)return;
+      endTween(); // Freeze the final view before converting pointer pixels to millimetres.
       const {axis,screen}=screenAxis(a,side);if(screen.k<.02)return; // ось ширины вдоль взгляда — тянуть нечем (ручки тогда скрыты)
       const hl=labels.find(l=>l.element.classList.contains('stretch-handle')&&l.element.dataset.side===side),wl=labels.find(l=>l.element.dataset.dim==='width');
       stretch={mid:a.id,side,axis,screen,start:[e.clientX,e.clientY],raw:0,snap:true,moved:false,touched:[],handle:hl?{label:hl,base:hl.position.clone()}:undefined,

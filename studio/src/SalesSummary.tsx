@@ -1,3 +1,4 @@
+import {serviceTerms} from './orderServices';
 import {Fragment,useMemo,useState} from 'react';
 import {estimateXLSX,ESTIMATE_XLSX_NAME} from './estimateXlsx';
 import {saveBinary} from './xlsx';
@@ -11,7 +12,7 @@ import {PENDING_ITEM_PRICE} from './itemPrices';
 import {printDocument} from './printDocument';
 // стили — в OutputPanel (estimate-breakdown.css): этот файл читают тесты и комплект на проверку (salesCSV), им CSS не нужен
 /** Итог для клиента: «Материалы / Фурнитура / Двери купе / Итого» (сумма граф = итогу) и позиции после финального расчёта конструктором. */
-export function salesCSV(project:Project){const e=estimate(project),split=e.retail===null?null:quoteBreakdown(String(e.retail),e);return '﻿Показатель;Значение\r\n'+(split?splitRows(split).map(([k,v])=>k+';'+v+'\r\n').join(''):'')+'Итоговая стоимость;'+(e.retail??'Требует уточнения')+'\r\n'+(e.pending.length?pendingTotalLabel(e.pending.length).replace(': ',';')+'\r\n':'')+'Условия;Без доставки и монтажа\r\n';}
+export function salesCSV(project:Project){const e=estimate(project),split=e.retail===null?null:quoteBreakdown(String(e.retail),e);return '﻿Показатель;Значение\r\n'+(split?splitRows(split).map(([k,v])=>k+';'+v+'\r\n').join(''):'')+'Итоговая стоимость;'+(e.retail??'Требует уточнения')+'\r\n'+(e.pending.length?pendingTotalLabel(e.pending.length).replace(': ',';')+'\r\n':'')+'Условия;'+serviceTerms(project.services)+'\r\n';}
 const rub=(v:number)=>v.toLocaleString('ru-RU')+' ₽';
 const qty=(r:BreakdownRow)=>String(Math.round(r.qty*1000)/1000).replace('.',',')+' '+r.unit;
 export function SalesSummary({project}:{project:Project}){
@@ -28,10 +29,10 @@ export function SalesSummary({project}:{project:Project}){
  async function excel(){setXlsx('Готовим файл…');try{saveBinary(ESTIMATE_XLSX_NAME,await estimateXLSX(project,e));setXlsx('Файл «'+ESTIMATE_XLSX_NAME+'» передан браузеру: листы «Смета», «Детали», «Кратко для клиента».');}catch(err){setXlsx(err instanceof Error?err.message:'Не удалось подготовить Excel.');}}
  async function copy(){try{await navigator.clipboard.writeText(breakdownText(b));setXlsx('Стоимость скопирована — вставьте в письмо или мессенджер.');}catch{setXlsx('Браузер не дал скопировать. Используйте «Печать / PDF».');}}
  function print(){if(!printDocument(breakdownHTML(b,'Стоимость проекта',project.modules.length>1?itemShares(project,e.retail):null),'Стоимость проекта'))setXlsx('Браузер не открыл печать.');}
- return <section className="sales-summary"><h2>Итоговая стоимость проекта</h2><p className="sales-total">{e.retail===null?'Требует уточнения':e.retail.toLocaleString('ru-RU')+' ₽'}</p>{split&&<p className="sales-split">{splitRows(split).map(([k,v],i)=><span key={k}>{i?' · ':''}{i?k.toLowerCase():k}: <b>{v.toLocaleString('ru-RU')} ₽</b></span>)}</p>}<p>Предварительная стоимость без доставки и монтажа.</p>
+ return <section className="sales-summary"><h2>Итоговая стоимость проекта</h2><p className="sales-total">{e.retail===null?'Требует уточнения':e.retail.toLocaleString('ru-RU')+' ₽'}</p>{split&&<p className="sales-split">{splitRows(split).map(([k,v],i)=><span key={k}>{i?' · ':''}{i?k.toLowerCase():k}: <b>{v.toLocaleString('ru-RU')} ₽</b></span>)}</p>}<p>{serviceTerms(project.services)}</p>
   <div className="estimate-breakdown" data-testid="estimate-breakdown">
    <div className="eb-head"><h3>Из чего складывается цена</h3><button className="text-action" onClick={toggleAll}>{allOpen?'Свернуть всё':'Развернуть всё'}</button></div>
-   <p className="field-note">Цена — листы ЛДСП в раскрое × {rub(b.sheetPrice)} (плита, кромка, фурнитура корпуса и работа) + позиции вне листа.{b.hdfSheets?` ЛХДФ (задники, дно ящиков) — ${b.hdfSheets} л., в цене листов.`:''}</p>
+   <p className="field-note">Цена — листы ЛДСП в раскрое × {rub(b.sheetPrice)} (плита, кромка, крепёж и работа) + позиции вне листа.{b.hdfSheets?` ЛХДФ (задники, дно ящиков) — ${b.hdfSheets} л., в цене листов.`:''}</p>
    {b.groups.map(g=><details key={g.id} className="eb-group" data-group={g.id} open={!!open[g.id]} onToggle={ev=>{const o=(ev.currentTarget as HTMLDetailsElement).open;if(o!==!!open[g.id])setOpen(s=>({...s,[g.id]:o}));}}>
     <summary><span className="eb-title">{g.title}</span><span className="eb-count">{g.rows.length} поз.{g.inSheet?` · ${g.inSheet} в цене листов`:''}{g.pending?` · ${g.pending} после расчёта`:''}{g.missing?<b className="eb-missing"> · {g.missing} без цены</b>:''}</span><b className="eb-sum">{(s=>s?<span className="eb-badge">{STATUS_TEXT[s]}</span>:rub(g.total))(groupBadge(g))}</b></summary>
     <table className="eb-table"><tbody>{g.rows.map((r,i)=><Fragment key={r.id}>{r.sub&&r.sub!==g.rows[i-1]?.sub&&<tr className="eb-sub"><th colSpan={4}>{r.sub}</th></tr>}<tr className={'eb-row '+r.status}><td>{r.label}</td><td className="n">{qty(r)}</td><td className="n">{r.status==='priced'&&r.price!==null?'× '+rub(r.price):''}</td><td className="n">{r.status==='priced'?rub(r.amount!):<span className="eb-badge">{STATUS_TEXT[r.status]}</span>}</td></tr></Fragment>)}</tbody></table>

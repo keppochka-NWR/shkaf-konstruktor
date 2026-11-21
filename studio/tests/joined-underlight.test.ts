@@ -23,3 +23,11 @@ test('rotated row joins in room coordinates',()=>{
  const a=make('a',0),b=make('b',0);a.rotation=b.rotation=90;a.z=600;b.z=0;
  assert.equal(led(a,[a,b]).length,564);assert.equal(led(b,[a,b]).length,564);
 });
+test('only lines at the same front setback join',()=>{
+ const a=make('a',0),b=make('b',600);
+ a.module.kitchen!.underLightOffset=120;
+ assert.equal(led(a,[a,b]).length,528);
+ b.module.kitchen!.underLightOffset=120;
+ assert.equal(led(a,[a,b]).length,564);
+ assert.equal(led(b,[a,b]).length,564);
+});

@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { initialModule, type Module } from "../src/model";
 import { bounds, projectErrors, applyAutoFillers, type PlacedModule, type Project } from "../src/project";
-import { resizeInRow, gaps, fillGap, flush, planStretch } from "../src/rowResize";
+import { resizeJointInRow as resizeInRow, gaps, fillGap, flush, planStretch as independentStretch } from "../src/rowResize";
 import { kitchenTemplate } from "../src/kitchenProject";
 
 const mod = (name: string, width = 600, extra: Partial<Module> = {}): Module => ({ ...initialModule(), name, width, ...extra });
@@ -174,3 +174,6 @@ test("кухня: справа свободно, но там кончается 
   const q = resizeInRow(proj([base("a", 500), base("b", 1100), long]), "b", 700);
   assert.deepEqual([get(q, "b").x, get(q, "b").module.width, get(q, "a").module.width], [1100, 700, 600]);
 });
+
+// Historical joint mode is explicit; ordinary resize is covered by resize-independent.
+function planStretch(...args:Parameters<typeof independentStretch>){return independentStretch(args[0],args[1],args[2],args[3],args[4],true)}

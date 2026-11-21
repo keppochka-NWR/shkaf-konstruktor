@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { initialModule, section, boxes, type Module } from "../src/model";
 import { bounds, projectErrors, applyAutoFillers, type PlacedModule, type Project } from "../src/project";
-import { resizeInRow, placeInRow } from "../src/rowResize";
+// Historical explicit redistribution is kept separate from the default UI behaviour.
+import { resizeJointInRow as resizeInRow, placeInRow } from "../src/rowResize";
 import { fitMeshItem } from "../src/operations";
 import { DEFAULT_MESH } from "../src/mesh";
 import { kitchenTemplate, type KitchenItem } from "../src/kitchenProject";
@@ -145,13 +146,15 @@ test("модуль под 90° у бока считается стеной: ра
   assert.deepEqual([get(p, "b").x, get(p, "b").module.width], [x0 + 700, 500]);
 });
 
-test("столешница над внешним краем: модуль не выходит из-под неё и она не начинает торчать", () => {
+test("столешница над внешним краем: свес разрешён, выход корпуса из-под неё запрещён", () => {
   const base = (id: string, x: number) => at(id, x, mod("Н" + id, 600, { height: 800 }));
   const top = at("t", 500, mod("Столешница", 1200, { height: 38, worktop: { material: "postforming", thickness: 38 } as unknown as Module["worktop"] }), { y: 800 });
   // одиночный модуль без соседей меняет внешний край ряда: шире — выходит из-под столешницы, уже — столешница торчит
   const single = () => proj([at("s", 500, mod("Один", 600, { height: 800 })), { ...top, module: { ...top.module, width: 600 } }]);
   assert.throws(() => resizeInRow(single(), "s", 700), /из-под столешницы/);
-  assert.throws(() => resizeInRow(single(), "s", 500), /торчать/);
+  const original=single(), shorter=resizeInRow(original,"s",500);
+  assert.equal(shorter.modules.find(a=>a.id==="s")!.module.width,500);
+  assert.deepEqual(shorter.modules.filter(a=>a.id!=="s"),original.modules.filter(a=>a.id!=="s"));
   // цоколь «Ряда» Базиса вдоль модуля: не удлиняется — модуль не выходит за него и он не торчит
   const plinth = at("z", 500, mod("Цоколь · Фронтальная", 600, { height: 100, depth: 19, raw: { panels: [], hardware: [], row: true } as unknown as Module["raw"] }), { z: 500 });
   const onPlinth = () => proj([at("s", 500, mod("Один", 600, { height: 800 })), plinth]);
@@ -177,17 +180,14 @@ test("кухня: сосед растёт до 1650 (как проверка и 
   assert.deepEqual([get(ok, "s").x, get(ok, "s").module.width], [1300, 600]);
 });
 
-test("подгонка ширины под сетку (fitMeshItem) идёт по правилу ряда: без щели и без наезда", () => {
-  const empty = (name: string) => mod(name, 600, { depth: 650, sections: [section()] });
-  const z = { z: 30 }; // задняя стенка внакладку — корпус на 3 мм от стены, иначе «выходит за границы помещения»
-  const p = proj([at("a", 500, empty("Левый"), z), at("b", 1100, empty("Средний"), z), at("c", 1700, empty("Правый"), z)]);
-  const b = get(p, "b"), sid = b.module.sections[0].id;
-  const next = fitMeshItem(p, "b", sid, DEFAULT_MESH, boxes(b.module)[0].bottom);
-  const w = get(next, "b").module.width;
-  assert.notEqual(w, 600, "ширина подогнана");
-  assert.equal(get(next, "b").x, 1100);
-  assert.deepEqual([get(next, "c").x, get(next, "c").x + get(next, "c").module.width], [1100 + w, 2300], "правый сосед вплотную, правый край ряда на месте");
-  assert.deepEqual(projectErrors(next), []);
+test("подгонка под сетку не меняет невыбранного соседа", () => {
+ const empty = (name: string) => mod(name,600,{depth:650,sections:[section()]});
+ const p=proj([at('a',500,empty('Левый'),{z:30}),at('b',1100,empty('Средний'),{z:30}),at('c',1700,empty('Правый'),{z:30})]);
+ const before=structuredClone(p),b=get(p,'b');
+ const next=fitMeshItem(p,'b',b.module.sections[0].id,DEFAULT_MESH,boxes(b.module)[0].bottom);
+ assert.notEqual(get(next,'b').module.width,600);
+ assert.deepEqual(get(next,'a'),get(p,'a'));assert.deepEqual(get(next,'c'),get(p,'c'));
+ assert.deepEqual(p,before);
 });
 
 test("объект замера (колонна, короб) — как стена: модуль у него меняется от него, в свободное место до него — не дальше", () => {
@@ -237,13 +237,14 @@ test("кухонный ряд при поворотах 0/90/180/270: вплот
 
 test("подсказка у ширины проёма не обещает, что соседние корпуса стоят на месте (их меняет правило ряда)", () => {
   const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
-  assert.doesNotMatch(app, /Соседние корпуса сохраняют положение/);
-  assert.match(app, /сосед вплотную в ряду сузится или расширится на ту же величину/);
+  assert.match(app, /Соседние корпуса сохраняют положение и размеры/);
+  assert.doesNotMatch(app, /сосед вплотную в ряду сузится или расширится на ту же величину/);
 });
 
 test("placeInRow: правка модуля из панели с той же шириной — просто замена; угловой — по-старому", () => {
   const p = row3(), next = { ...get(p, "b").module, name: "Новое имя" };
   assert.equal(get(placeInRow(p, "b", next), "b").module.name, "Новое имя");
-  const wider = placeInRow(p, "b", { ...next, width: 700 });
-  assert.deepEqual([get(wider, "c").x, get(wider, "c").module.width, get(wider, "b").module.name], [1800, 500, "Новое имя"]);
+  assert.throws(()=>placeInRow(p,"b",{...next,width:700}),/свободно/);
+  const smaller=placeInRow(p,"b",{...next,width:500});
+  assert.equal(get(smaller,"b").module.width,500);assert.deepEqual(get(smaller,"c"),get(p,"c"));
 });

@@ -1910,7 +1910,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {lightMode&&!presentation&&(()=>{const lm=project.modules.find(x=>x.id===lightMode)?.module;if(!lm)return null;
             return <LightModeBar module={lm} orient={lightOrient} note={lightNote} onOrient={o=>{setLightOrient(o);setLightNote('');}} onTone={t=>modifyAt(lightMode,n=>applyToAll(n,{tone:t}))} onPanel={()=>setLightPanel(lightMode)} onDone={()=>{setLightMode(null);setLightNote('');}}/>;})()}
           {lightPanel&&(()=>{const lp=project.modules.find(x=>x.id===lightPanel)?.module;if(!lp)return null;
-            return <LightPanel module={lp} onModify={u=>{modifyAt(lightPanel,u);}} onClose={()=>setLightPanel(null)} onMode={lightMode?undefined:()=>{setLightPanel(null);setLightNote('');setLightMode(lightPanel);}}/>;})()}
+            return <LightPanel module={lp} onModify={u=>{modifyAt(lightPanel,u);}} onClose={()=>setLightPanel(null)} onMode={lightMode||!quickMenuApplies(lp)?undefined:()=>{setLightPanel(null);setLightNote('');setLightMode(lightPanel);}}/>;})()}
           {rmbTip&&!presentation&&!roomPlan&&(stage==='bodies'||stage==='filling'||stage==='facades')&&<div className="rmb-tip" role="status"><span>Нажмите на шкаф <b>правой кнопкой мыши</b> — откроется меню: размеры, полки, ящики, петли, цвет.</span><button onClick={hideRmbTip}>Понятно</button></div>}
           {/* Макс 31.10: клавиши — плашками на сплошной полосе, по режиму; «?» — полный список */}
           {!presentation&&!roomPlan&&<KeyHints mode={presentation||editingFacades?'orbit':mode} moveAll={moveAll} group={liveGroupIds.length} snapping={snapping} focus={focusActive} onHelp={()=>setModal('help')}/>}
@@ -1918,6 +1918,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         <aside className="properties" ref={propertiesRef}><SafeBoundary label="Свойства" resetKey={project}><div className="selected-module-heading">
               <button className="outline" disabled={!project.modules.some(a=>!decorSkip(a.module))} onClick={()=>{setAllCarcassPicker(true);setMaterialTarget("decor");setMaterialScope("all");setSearch("");setModal("materials");}}>Цвет всех каркасов ЛДСП</button>{project.modules.some(a=>a.module.kitchen?.role==='wall'&&a.module.cornerKind==='plank'&&!a.module.bazis&&!a.module.raw)&&<button className="outline" onClick={()=>commitProject(applyAutoFillers(project))}>Убрать планки стыков верхних модулей</button>}<button className="outline" disabled={nothingSelected} onClick={isolateSelection}>Скрыть невыделенные · Shift+X</button>{isolation&&<button className="outline" onClick={()=>{setIsolation(null);setHiddenModules([]);}} title="Shift+C">Показать всё</button>}</div>
           {selectedPart&&<div className="selected-module-heading" role="status" aria-label="Выбранная деталь"><strong>{selectedDetail?.name??'Деталь модуля'}</strong><button className="outline" onClick={()=>selectModule(selectedPart.mid)}>Выбрать весь модуль · Tab</button></div>}
+          {tab!=='room'&&!nothingSelected&&!m.metalFrame&&!m.worktop&&!m.kupe&&<button className="outline full" onClick={()=>setLightPanel(placed.id)}>Подсветка: стороны и отступы…</button>}
           {editingFacades?<section className="facade-panel" role="region" aria-label="Редактор фасадов" onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setModal(null);}}}>
             <header><h2>Редактор фасадов</h2><button className="text-action" aria-label="Закрыть редактор фасадов" onClick={()=>setModal(null)}><X size={18}/></button></header>
             <p className="facade-preview-note">Предпросмотр · камера доступна. Чтобы продолжить построение, примените изменения или отмените.</p>
@@ -2411,7 +2412,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   onChange={resizeSection}
                 />
                 <p className="field-note">
-                  {m.sections.length===1?'Изменение проёма изменит ширину корпуса: сосед вплотную в ряду сузится или расширится на ту же величину (справа, а если справа никого — слева; у стены корпус меняется от стены).':`Изменится только соседняя секция ${idx<m.sections.length-1?'справа':'слева'}. Остальные проёмы сохранят ширину.`}
+                  {m.sections.length===1?'Изменение проёма изменит только ширину этого корпуса. Соседние корпуса сохраняют положение и размеры. При уменьшении останется зазор; увеличение возможно в свободное место.':`Изменится только соседняя секция ${idx<m.sections.length-1?'справа':'слева'}. Остальные проёмы сохранят ширину.`}
                 </p>
                 <button
                   className="outline full"

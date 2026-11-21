@@ -283,7 +283,7 @@ test('Вернисаж: шкаф по умолчанию, №86, эмаль ма
   assert.ok(cost > 20000, `закупка фасадов ${cost}`);
   // фасады Вернисажа сверху листов — закупка × свой коэффициент 2 (решение Макса 10.10.2026), не общий 2,2
   assert.equal(withV.vernissageMarkup, 2);
-  assert.equal(withV.bySheet, withV.ldspSheets * withV.sheetPrice + withV.retailExtras + Math.round(cost * 2 / 100) * 100);
+  assert.equal(withV.bySheet, withV.ldspSheets * withV.sheetPrice + withV.retailExtras + withV.offSheet + Math.round(cost * 2 / 100) * 100);
   assert.equal(withV.vernissageOnTop, Math.round(cost * 2 / 100) * 100);
   assert.ok(withV.bySheet > plain.bySheet, `цена по листам ${plain.bySheet} → ${withV.bySheet}: фасады не должны удешевлять шкаф`);
   // цена клиента (retail) в модели «по листам» — с фасадами: листы те же (фасады вне раскроя ЛДСП), разница — фасады × коэффициент
@@ -322,7 +322,7 @@ test('Вернисаж: цена клиенту = закупка × 2 (реше�
   // модель «цена за лист»: листы × 23 000 + фасады Вернисаж 17 400 сверху
   const s = estimate({ ...q, calculation: { markup: 2.2, overrides: {}, model: 'sheet' } });
   assert.equal(s.vernissageOnTop, 17400);
-  assert.equal(s.bySheet, s.ldspSheets * 23000 + s.retailExtras + 17400);
+  assert.equal(s.bySheet, s.ldspSheets * 23000 + s.retailExtras + s.offSheet + 17400);
   assert.equal(s.retail, s.bySheet);
   // свой коэффициент проекта (calculation.vernissageMarkup): 8710,40 × 1,8 = 15 678,72 → 15 700
   assert.equal(estimate({ ...q, calculation: { markup: 2.2, overrides: {}, vernissageMarkup: 1.8 } }).vernissageOnTop, 15700);

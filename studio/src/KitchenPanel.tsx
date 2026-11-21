@@ -290,6 +290,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       return <Group icon={<Lightbulb size={15} />} title="Подсветка рабочей зоны" note={k.underLight ? "есть" : undefined}>
         <Check label="Подсветка рабочей зоны под модулем" checked={!!k.underLight} change={(v) => run(v, false)} />
         {rowIds.length > 1 && <button type="button" className="outline full" aria-label={rowLit ? "Снять подсветку рабочей зоны у всех навесных ряда" : "Подсветка рабочей зоны всем навесным ряда"} onClick={() => run(!rowLit, true)}>{rowLit ? "Снять у всех навесных ряда" : `Всем навесным ряда (${rowIds.length} шт.)`}</button>}
+        {k.underLight && <Num label="От передней кромки дна до подсветки" value={k.underLightOffset ?? 20} min={0} max={m.depth - 40} change={v => modify(n => { if(n.kitchen) n.kitchen.underLightOffset = v; })} />}
         {k.underLight && <Check label="Блок питания подсветки рабочей зоны" checked={!!m.lightPsu} change={(v) => modify((n) => { if (v) n.lightPsu = true; else delete n.lightPsu; })} />}
         <p className="field-note">LED-профиль снизу дна у переднего края{led ? `, ${Math.round(led.length)} мм` : ""} — светит на столешницу; {RULES.shelfLightRetailPerM.toLocaleString("ru-RU")} ₽/пог.м (горизонталь). Блок питания 12 В — отдельной строкой сметы, ставится один на ряд.</p>
       </Group>;
@@ -300,8 +301,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       {item && kinds.length > 1 && <p className="field-note">Смена назначения пересобирает модуль по регламенту Базиса (габариты, цвета, петли и ручки сохраняются).</p>}
       <label className="hardware-field">Название<input aria-label="Название кухонного модуля" key={m.name} defaultValue={m.name} maxLength={80} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.name) modify((n) => { n.name = v; }); }} /></label>
       {/* предел — как в проверке кухни (KITCHEN.maxModuleWidth 1650: мойка 1480 k28 m17), не 1200 нарезки ряда */}
-      <Check label="Менять ширину только этого корпуса" checked={!!m.ownWidthOnly} change={v=>modify(n=>{if(v)n.ownWidthOnly=true;else delete n.ownWidthOnly;})}/>
-      <p className="field-note">{m.ownWidthOnly?'Соседи сохраняют размеры. Проверьте зазор после изменения.':'Ширина перераспределяется с соседним корпусом в ряду.'}</p>
+      <p className="field-note">Ширина меняется только у выбранного корпуса. Соседи сохраняют положение и размеры; при уменьшении остаётся зазор.</p>
       <Num label="Ширина" value={m.width} min={KITCHEN.minWidth} max={KITCHEN.maxModuleWidth} reasons={(v) => ({ list: fieldReasons(m, "width", v), moduleId: placed.id, moduleName: m.name })} change={(v) => modify((n) => { n.width = v; })} />
       <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={maxHeightOf(m)} reasons={(v) => ({ list: fieldReasons(m, "height", v), moduleId: placed.id, moduleName: m.name })} change={(v) => modify((n) => { n.height = v; if (n.kitchen?.column) configureColumn(n); else if (n.kdrawers) n.kdrawers = refitKDrawers(n, "height"); })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
       <Num label="Глубина" value={m.depth} min={RULES.minD} max={RULES.maxD} reasons={(v) => ({ list: fieldReasons(m, "depth", v), moduleId: placed.id, moduleName: m.name })} change={(v) => modify((n) => { n.depth = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "depth"); })} note={m.backType === "nailed" ? "Боковина; накладной ХДФ добавляет 3 мм" : undefined} />
@@ -529,7 +529,7 @@ function WorktopPanel(props: KitchenPanelProps) {
         {(["left", "right"] as const).map((side) => <Check key={side} label={side === "left" ? "Водопад слева" : "Водопад справа"} checked={!!w.waterfall?.[side]}
           change={(v) => { try { props.commit(toggleWaterfall(props.project, props.placed.id, side, v)); } catch (e) { window.dispatchEvent(new CustomEvent("studio-error", { detail: (e as Error).message })); } }} />)}
         {w.waterfall && <Num label="Высота водопада" value={w.waterfall.drop} min={50} max={Math.max(50, Math.min(1500, waterfallFloorDrop(props.placed)))} change={(v) => setW({ waterfall: { ...w.waterfall!, drop: v } })} note={`До пола — ${waterfallFloorDrop(props.placed)} мм (от низа столешницы)`} />}
-        <p className="field-note">Боковина толщиной {w.thickness} мм во всю глубину, стык со столешницей под 45°; площадь — в строке камня, стык и торец — отдельной строкой. Над нижним корпусом столешница удлиняется на толщину в сторону водопада.</p>
+        <p className="field-note">Боковина толщиной {w.thickness} мм во всю глубину, стык со столешницей под 45°; {w.material==='compact'?'детали входят в раскладку целых листов':'площадь входит в строку камня'}, стык и торец - отдельной строкой. Над нижним корпусом столешница удлиняется на толщину в сторону водопада.</p>
       </fieldset> : <p className="field-note">Водопад (боковины до пола) — только у компакта, акрила и кварца.</p>}
       {w.material==='compact'?<label className="hardware-field">Декор компакт-плиты<select aria-label="Декор компакт-плиты" value={m.decor} onChange={e=>modify(n=>{n.decor=e.target.value;})}>{!compactDecors.some(d=>d.n===m.decor)&&<option value={m.decor} disabled>Прежний декор: {m.decor} — выберите компакт</option>}{['Premial','Eterno'].map(brand=><optgroup key={brand} label={brand}>{compactDecors.filter(d=>d.brand===brand).map(d=><option key={d.code} value={d.n} disabled={d.withdrawal}>{d.n}{d.withdrawal?' · выводится':''}</option>)}</optgroup>)}</select><p className="field-note">Компакт 12 мм, чёрный торец. Материал и обработка рассчитываются отдельно; ставка фасадных панелей сюда не применяется.</p></label>:<Colors m={m} material={material} />}
       <div className="kitchen-cuts">
@@ -551,7 +551,7 @@ function WorktopPanel(props: KitchenPanelProps) {
         <p>Монтажные шаблоны пока не подтверждены: при добавлении используются предварительные вырезы. Для производственного раскроя они не подходят.</p>
         <div className="kitchen-chips"><button type="button" onClick={() => addCut("sink")}>+ произвольный вырез</button><button type="button" onClick={() => addCut("hob")}>+ под варочную</button></div>
       </div>
-      <p className="field-note">Столешница — отдельное изделие: в раскрой ЛДСП не идёт (кроме ЛДСП 16+16), в смете — {WORKTOP_THICKNESS[w.material] ? "за м² и обработка лицевого торца за погонный метр" : "за погонный метр"}, вырезы — отдельными работами.</p>
+      <p className="field-note">Столешница - отдельное изделие: в раскрой ЛДСП не идёт (кроме ЛДСП 16+16), в смете - {w.material==='compact'?'целые листы по раскладке; обработка лицевого торца за погонный метр':WORKTOP_THICKNESS[w.material] ? 'за м² и обработка лицевого торца за погонный метр' : 'за погонный метр'}, вырезы - отдельными работами.</p>
     </Group>
     <Position {...props} open={stage === "bodies"} />
   </div>;

@@ -6,6 +6,7 @@
 // занятой площади (доля листа), а не целыми листами: больше материала — больше доля.
 // K3: изделие, у которого все позиции «после финального расчёта конструктором» (столешница и т. п.), — без доли («0 ₽» в КП был
 // неверен); признак pending — у изделия есть такие позиции.
+import { serviceTotal } from './orderServices';
 import { estimate, type PriceLine } from "./pricing";
 import { nest, type Sheet } from "./exports";
 import { clientLine, SHEETS_LINE_ID } from "./clientPrices";
@@ -56,9 +57,15 @@ export function priceModel(_p: Project): "markup" | "sheet" {
  *  model — модель долей; по умолчанию та, по которой посчитан итог проекта (priceModel). */
 export function moduleQuote(p: Project, total: number | null, model: "markup" | "sheet" = priceModel(p)): { prices: number[]; pending: boolean[] } | null {
   if (total === null || !Number.isFinite(total) || total <= 0 || !p.modules.length) return null;
+  if(p.services){
+    const e=estimate(p);
+    if(e.lines.some(l=>l.id.startsWith("service:")&&l.unitPrice===null))return null;
+    total=Math.round((total-serviceTotal(e.lines))*100)/100;
+    if(total<=0)return null;
+  }
   const own: number[] = [], pending: boolean[] = [], sheets: number[] = [];
   for (const a of p.modules) {
-    const v = ownValue({ ...p, premialExtras:undefined, modules: [a] }, model);
+    const v = ownValue({ ...p, services:undefined, premialExtras:undefined, modules: [a] }, model);
     if (!v) return null;
     own.push(v.value); pending.push(v.pending); sheets.push(v.sheets);
   }
@@ -66,7 +73,7 @@ export function moduleQuote(p: Project, total: number | null, model: "markup" | 
   const sum = own.reduce((s, v) => s + v, 0);
   if (!(sum > 0)) return null;
   // итог кратен сотне — цены изделий тоже сотнями; иначе — рублями
-  const step = Math.round(total) % 100 === 0 ? 100 : 1, units = Math.round(total / step);
+  const step = Number.isInteger(total) ? (total % 100 === 0 ? 100 : 1) : 0.01, units = Math.round(total / step);
   // «за лист»: по долям листов делится только листовая часть итога, то, что вне листа (зеркало, склейка, розница), — у своего изделия
   // как есть (зеркало шкафа не меняет цену тумбы); итог меньше суммы «вне листа» (скидка) или листов нет — пропорция, как у коэффициента
   const sheetSum = sheets.reduce((s, v) => s + v, 0), extra = own.map((v, i) => v - sheets[i]), pool = total - extra.reduce((s, v) => s + v, 0);
@@ -75,7 +82,7 @@ export function moduleQuote(p: Project, total: number | null, model: "markup" | 
   // метод наибольших остатков: недостающие единицы — изделиям с самой большой дробной частью (изделие без доли не получает)
   const order = raw.map((v, i) => [v - Math.floor(v), i] as const).filter(([, i]) => own[i] > 0).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
   for (let k = 0; rest > 0 && order.length; k++, rest--) out[order[k % order.length][1]]++;
-  return { prices: out.map((v) => v * step), pending };
+  return { prices: out.map((v) => Math.round(v * step * 100) / 100), pending };
 }
 /** Цены изделий в порядке p.modules, сумма = total. null — разделить нельзя (нет итога, у изделия нет цены, смета не считается). */
 export function modulePrices(p: Project, total: number | null, model?: "markup" | "sheet"): number[] | null {

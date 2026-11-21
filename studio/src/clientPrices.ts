@@ -20,7 +20,11 @@ const isLemana=(id:string)=>id.startsWith('mesh:')||id.startsWith('handle:lm');
  *  стекло и зеркало (glass-*: зеркало на фасаде, плёнка, полировка, наклейка, стеклянная крыша и полка; решение Макса 26.10.2026);
  *  с 30.10.2026 (цена — только по листам, «листы + все допы») — и то, что не идёт в раскрой ЛДСП: столешница и вырезы в ней, фасады,
  *  цоколь и стеновые панели из фасадного материала поставщика, мойка. Без цены они не «входят в лист» — итог требует уточнения. */
-export const isOffSheetLine=(id:string)=>id.startsWith('glass-')||id.startsWith('worktop:')||id.startsWith('worktop-cut:')||id==='facade-external'||id==='plinth-external'||id.startsWith('wallpanel:')||id.startsWith('premial-sink:')||id.startsWith('mat:');
+export function isSeparateHardware(id:string){
+ if(id.startsWith('bazis:'))return !/рафикс|шуруп|саморез|гвозд|винт|заглушк|отверстие|конфирмат|шкант|полкодерж/i.test(id);
+ return /^(hinge|slide:|handle:|legs|kitchen-leg|kitchen-clip|kitchen-hanger|hanger|rod|flange|pantograph|pullout|lift-mechanism|kitchen-lift|push-latch|tip-on|axis-pro|guides:|firmax|versalite|modern-slide|indigo|start-sc|bazis-hardware:)/.test(id);
+}
+export const isOffSheetLine=(id:string)=>isSeparateHardware(id)||id.startsWith('glass-')||id.startsWith('worktop:')||id.startsWith('worktop-cut:')||id==='facade-external'||id==='plinth-external'||id.startsWith('wallpanel:')||id.startsWith('premial-sink:')||id.startsWith('mat:');
 /** noSheets — в раскрое нет листов ЛДСП: «цены листа» нет, позиции по закупке идут сверху × коэффициент (pricing.ts estimate: offLine). */
 export function clientLine(l:PriceLine,markup:number,vernissageMarkup:number,model:'markup'|'sheet'='markup',noSheets=false):PriceLine{
   // позиция «после финального расчёта конструктором» (pendingPrices.ts) — без цены, с клиентской подписью; поставщик и ориентир — только менеджеру
@@ -39,7 +43,7 @@ export function clientView<T extends EstimateLike>(e:T):T{
   const block=e.missingExtrasLines?new Set(e.missingExtrasLines):null;
   const missing=lines.filter((_,i)=>e.lines[i].unitPrice===null&&!e.lines[i].pending&&(!block||block.has(e.lines[i]))),pending=lines.filter((_,i)=>e.lines[i].pending);
   const missingExtrasLines=block?missing:undefined;
-  if(e.model==='sheet'&&e.ldspSheets)lines.unshift({id:SHEETS_LINE_ID,label:'Листы ЛДСП с кромкой, фурнитурой и работой',quantity:e.ldspSheets,unit:'лист',unitPrice:e.sheetPrice,source:CLIENT_SOURCE,retail:true});
+  if(e.model==='sheet'&&e.ldspSheets)lines.unshift({id:SHEETS_LINE_ID,label:'Листы ЛДСП с кромкой, крепежом и работой',quantity:e.ldspSheets,unit:'лист',unitPrice:e.sheetPrice,source:CLIENT_SOURCE,retail:true});
   const client=lines.reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0);
   return {...e,lines,missing,...(missingExtrasLines?{missingExtrasLines}:{}),pending,knownCost:Math.round(client),
     split:{...e.split,materialCost:e.split.material,hardwareCost:e.split.hardware},

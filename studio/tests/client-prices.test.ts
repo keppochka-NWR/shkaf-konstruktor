@@ -86,7 +86,8 @@ test('price guard pattern: coefficients in minified JS are caught; plain numbers
 test('sheet model client line: inside the sheet price, Lemana and Vernissage on top',()=>{
   const base={quantity:2,unit:'шт',source:'x'};
   const inSheet=clientLine({...base,id:'hinge',label:'Петля',unitPrice:100},2.2,1.6,'sheet');
-  assert.equal(inSheet.unitPrice,null);assert.equal(inSheet.source,CLIENT_SOURCE_IN_SHEET);
+  assert.equal(inSheet.unitPrice,220);
+  assert.equal(clientLine({...base,id:'confirmat',label:'Конфирмат',unitPrice:1},2.2,1.6,'sheet').source,CLIENT_SOURCE_IN_SHEET);
   assert.equal(clientLine({...base,id:'mesh:1',label:'Сетка',unitPrice:100},2.2,1.6,'sheet').unitPrice,100);
   assert.equal(clientLine({...base,id:'vernissage:x',label:'Фасад',unitPrice:1000},2.2,1.6,'sheet').unitPrice,1600);
 });
