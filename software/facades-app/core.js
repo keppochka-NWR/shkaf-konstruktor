@@ -5,7 +5,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (retail) {
   'use strict';
   const families = ['MDF', 'PAINT', 'ALU', 'Eterno', 'AGT', 'LDSP'];
-  const familyNames = {MDF:'МДФ в плёнке', PAINT:'МДФ в краске', ALU:'Алюминиевые фасады', Eterno:'Eterno', AGT:'AGT', LDSP:'ЛДСП / Lamarty'};
+  const familyNames = {MDF:'МДФ в Плёнке', PAINT:'МДФ краска', ALU:'Алюминиевые фасады', Eterno:'Eterno', AGT:'AGT', LDSP:'ЛДСП / Lamarty'};
   const hasEdging = p => ['Eterno','AGT','LDSP'].includes(p.family);
   const clone = x => JSON.parse(JSON.stringify(x));
   const money = x => Math.round((x + Number.EPSILON) * 100) / 100;
@@ -81,10 +81,13 @@
   function calculatePart(p) {
     const a=area(p), e=hasEdging(p)?edgeLength(p):0;
     const film = p.family==='MDF';
-    const tableRate = film ? retail.rates[[retail.series[p.millingId],retail.categories[p.filmId],p.t,p.variant==='glass'?'glass':'solid'].join('/')] : null;
-    const automatic = film && p.rates.material===null && tableRate!=null;
-    const amount = automatic ? Math.round(Math.max(retail.minimum,p.w*p.h/1e6)*10000)/10000*p.qty : a;
-    const lines=[{key:'material',label:automatic?'Полотно в плёнке · по прайсу Конструктора':'Материал и изготовление полотна',amount,unit:'м²',rate:automatic?tableRate:p.rates.material}];
+    const variant=p.variant==='glass'?'glass':'solid';
+    const paint=p.family==='PAINT'&&p.paintColorId&&retail.enamelPatterns.find(m=>m.id===p.paintMillingId);
+    const rateKey=film ? [retail.series[p.millingId],retail.categories[p.filmId],p.t,variant] : paint ? [paint.studioId,'paint',p.paintFinish,p.t,variant] : [];
+    const tableRate=retail.rates[rateKey.join('/')];
+    const automatic = p.rates.material===null && tableRate!=null;
+    const amount = automatic ? Math.round(Math.max(film?retail.minimum:0,p.w*p.h/1e6)*10000)/10000*p.qty : a;
+    const lines=[{key:'material',label:automatic?(film?'Полотно в плёнке':'Полотно в краске')+' · по прайсу Конструктора':'Материал и изготовление полотна',amount,unit:'м²',rate:automatic?tableRate:p.rates.material}];
     if(automatic && p.drilling.enabled && p.drilling.ys.length) lines.push({key:'boring',label:'Присадка чашек петель',amount:p.qty*p.drilling.ys.length,unit:'шт.',rate:retail.boring});
     if(!automatic || p.rates.work!==null) lines.push({key:'work',label:'Дополнительная обработка',amount:p.qty,unit:'шт.',rate:p.rates.work});
     if(e>0) lines.splice(1,0,{key:'edge',label:'Кромление выбранных сторон',amount:e,unit:'м',rate:p.rates.edge});
@@ -131,7 +134,7 @@
         else if(p.h<lim[0]||(lim[1]!==null&&p.h>lim[1])||p.w<lim[2]||(lim[3]!==null&&p.w>lim[3])) list.push('Размер вне диапазона исходного каталога: H '+lim[0]+'-'+lim[1]+', W '+lim[2]+'-'+lim[3]+' мм.');
         if(p.variant==='glass') list.push('Витрина: наполнение, штапик и монтажные зазоры требуют отдельного согласования.');
       }
-      list.push('Параметры МДФ в краске перенесены из прежнего калькулятора; актуальность у поставщика не подтверждена.');
+      if(m&&!m.studioId) list.push('Параметры МДФ в краске перенесены из прежнего калькулятора; актуальность у поставщика не подтверждена.');
     } else if(p.family==='ALU') {
       if(!p.aluProfileId) list.push('Профиль алюминиевого фасада не выбран.');
       if(!p.aluFillId) list.push('Наполнение алюминиевого фасада не выбрано.');

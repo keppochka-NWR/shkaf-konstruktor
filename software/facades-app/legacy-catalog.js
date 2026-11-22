@@ -937,6 +937,8 @@
     }
   ]
 };
+  const retail=typeof module==='object'&&module.exports ? require('./retail-film.js') : root.facadeFilmRetail;
+  catalog.paintMillings.push(...retail.enamelPatterns);
   if(typeof module==='object'&&module.exports) module.exports=catalog;
   root.FACADE_LEGACY=catalog;
   if(root.FACADE_CATALOG) Object.assign(root.FACADE_CATALOG,catalog);

@@ -32,13 +32,13 @@
   function describe(p,catalog={},legacy={}){
     const s=selection(p,catalog,legacy);
     if(p.family==='MDF')return 'МДФ в плёнке · '+(s.milling?'№ '+s.milling.id+' · '+s.milling.series:'фрезеровка не выбрана')+' · '+(s.film?.name||'плёнка не выбрана');
-    if(p.family==='PAINT')return 'МДФ в краске · '+(s.paintMilling?.name||'фрезеровка не выбрана')+' · '+(s.paintColor?'RAL '+s.paintColor.code+' '+s.paintColor.name:'цвет не выбран')+' · '+(s.paintFinish?.name||'покрытие не выбрано');
+    if(p.family==='PAINT')return 'МДФ краска · '+(s.paintMilling?.name||'фрезеровка не выбрана')+' · '+(s.paintColor?'RAL '+s.paintColor.code+' '+s.paintColor.name:'цвет не выбран')+' · '+(s.paintFinish?.name||'покрытие не выбрано');
     if(p.family==='ALU')return 'ALU · '+(s.aluProfile?.name||'профиль не выбран')+' · '+(p.aluColorName||'цвет профиля не указан')+' · '+(s.aluFill?.name||'заполнение не выбрано');
     return p.family+' · '+(s.panel?.name||'декор не выбран');
   }
   function note(p,catalog={},legacy={}){
     const s=selection(p,catalog,legacy);
-    if(p.family==='MDF'){const model=M?.drawing(String(p.millingId),p.w,p.h,p.t,p.variant||'solid');return model?'Рисунок построен по той же геометрии, что в Ё Конструкторе. Рамка и отступы сохраняются в миллиметрах при изменении размеров. '+model.notes.join(' '):'Выберите фрезеровку, чтобы показать рисунок на фасаде.';}
+    if(p.family==='MDF'||s.paintMilling?.studioId){const model=M?.drawing(String(p.millingId||s.paintMilling?.studioId),p.w,p.h,p.t,p.variant||'solid');return model?'Рисунок построен по той же геометрии, что в Ё Конструкторе. Рамка и отступы сохраняются в миллиметрах при изменении размеров. '+model.notes.join(' '):'Выберите фрезеровку, чтобы показать рисунок на фасаде.';}
     if(p.family==='PAINT')return 'Параметрический эскиз: шаг фрезеровки взят из старого каталога. Цвет RAL на экране условный; сечение инструмента не моделируется.'+(p.variant==='glass'?' Проём витрины условный, требуется подтверждение.':'');
     if(p.family==='ALU')return 'Условный вид профиля и заполнения. Ширина и сечение рамки в источнике не заданы; проём не является размерным. Цвет профиля введён вручную.';
     return (s.panel?.image?'Фактура показана по образцу каталога без масштаба рисунка. ':'')+'Экранный цвет условный. Синим отмечены выбранные стороны кромки.';
@@ -72,9 +72,10 @@
         const img=asset(p.family==='MDF'?s.film?.image:s.panel?.image,options);
         if(img)svg+='<image href="'+esc(img)+'" x="'+num(x)+'" y="'+num(y)+'" width="'+num(rw)+'" height="'+num(rh)+'" preserveAspectRatio="xMidYMid slice" clip-path="url(#'+uid+'_clip)"/>';
       }
-      if(p.family==='MDF'){
-        const model=M?.drawing(String(p.millingId),p.w,p.h,p.t,p.variant||'solid');
-        if(model)svg+='<g clip-path="url(#'+uid+'_clip)"><g data-milling="'+esc(p.millingId)+'" data-source="studio" data-width-mm="'+p.w+'" data-height-mm="'+p.h+'" data-frame-mm="'+(model.frame??'')+'" transform="translate('+num(x)+' '+num(y)+') scale('+scale+')">'+model.markup+'</g></g>';
+      const patternId=p.family==='MDF'?p.millingId:s.paintMilling?.studioId;
+      if(patternId){
+        const model=M?.drawing(String(patternId),p.w,p.h,p.t,p.variant||'solid');
+        if(model)svg+='<g clip-path="url(#'+uid+'_clip)"><g data-milling="'+esc(patternId)+'" data-source="studio" data-width-mm="'+p.w+'" data-height-mm="'+p.h+'" data-frame-mm="'+(model.frame??'')+'" transform="translate('+num(x)+' '+num(y)+') scale('+scale+')">'+model.markup+'</g></g>';
       }
       if(p.family==='PAINT'&&s.paintMilling?.specs?.step>0){
         // Retains the source patterns and real millimetre pitch; no invented tool geometry.
