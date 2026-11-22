@@ -335,7 +335,7 @@ export function RoomTools({
               }}
             >
               <option value="ldsp">ЛДСП (раскрой цеха, кромка)</option>
-              <option value="vernissage">МДФ Вернисаж (фрезеровка, плёнка или эмаль)</option>
+              <option value="vernissage">МДФ (фрезеровка, плёнка или эмаль)</option>
             </select>
           </label>
           {(panel.vernissage ? (["width", "height"] as const) : (["width", "height", "thickness", "edge"] as const)).map((k) => (
@@ -383,14 +383,14 @@ export function RoomTools({
             </select>
           </label>
           {panel.vernissage ? (
-            <div aria-label="МДФ Вернисаж отдельной панели" role="group">
+            <div aria-label="МДФ отдельной панели" role="group">
               <VernissagePicker
                 value={panel.vernissage}
                 onChange={(v) => setPanel({ ...panel, vernissage: v, thickness: v.thickness })}
                 sample={[panel.width, panel.height]}
               />
               <p>
-                Панель МДФ {panel.vernissage.thickness} мм: не в раскрое ЛДСП и без кромки цеха; в смете — строкой Вернисажа по площади панели.
+                Панель МДФ {panel.vernissage.thickness} мм: не в раскрое ЛДСП и без кромки цеха; в смете — строкой фасадов МДФ по площади панели.
               </p>
             </div>
           ) : (

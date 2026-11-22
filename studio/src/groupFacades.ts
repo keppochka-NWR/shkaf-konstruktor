@@ -55,11 +55,11 @@ export const GROUP_FIELDS:Record<GroupFacadeField,FieldDef>={
   // кухня — список «Материал фасадов» KitchenPanel (толщина модуля сохраняется), шкафы — «Тип фасадов» панели корпуса
   apply:(n,v)=>{if(n.kitchen){const k=changeFacadeKind(n,v as FacadeKind,{keepThickness:true});for(const key of Object.keys(n) as (keyof Module)[])delete n[key];Object.assign(n,k);}else setFacadeKind(n,v as 'ldsp'|'alu'|'vernissage');}},
  facadeDecor:{label:'Декор фасадов ЛДСП',
-  applies:m=>m.vernissage?'фасады МДФ Вернисаж — не ЛДСП':m.alu?'алюминиевая рамка — не ЛДСП':null,
+  applies:m=>m.vernissage?'фасады МДФ — не ЛДСП':m.alu?'алюминиевая рамка — не ЛДСП':null,
   read:m=>m.facadeDecor,
   apply:(n,v)=>{n.facadeDecor=v;}},
  drawerFacadeDecor:{label:'Декор фасадов ящиков',
-  applies:m=>!hasDrawerFronts(m)?'нет ящиков с фасадом':m.vernissage?'фасады МДФ Вернисаж — не ЛДСП':m.alu&&m.aluDrawers?'ящики в рамке ALU':null,
+  applies:m=>!hasDrawerFronts(m)?'нет ящиков с фасадом':m.vernissage?'фасады МДФ — не ЛДСП':m.alu&&m.aluDrawers?'ящики в рамке ALU':null,
   read:m=>m.drawerFacadeDecor??'',
   apply:(n,v)=>{if(v)n.drawerFacadeDecor=v;else delete n.drawerFacadeDecor;}},
  handle:{label:'Ручки распашных фасадов',
@@ -94,7 +94,7 @@ export const GROUP_FIELDS:Record<GroupFacadeField,FieldDef>={
 };
 
 export const OPEN_LABEL:Record<string,string>={handle:'Ручка · петли с доводчиком',simple:'Ручка · петли без доводчика',push:'Push-to-open · без ручек'};
-export const KIND_LABEL:Record<string,string>={ldsp:'ЛДСП',vernissage:'МДФ Вернисаж',alu:'Алюминиевая рамка',external:'Другой поставщик'};
+export const KIND_LABEL:Record<string,string>={ldsp:'ЛДСП',vernissage:'МДФ в плёнке / МДФ краска',alu:'Алюминиевая рамка',external:'Другой поставщик'};
 /** Подпись значения поля для сообщений и «разные». */
 export function groupValueLabel(field:GroupFacadeField,v:string):string{
  if(v==='*individual')return 'индивидуальные';if(v==='*mixed')return 'разное по фасадам';
@@ -154,7 +154,7 @@ export function applyGroupPatch(p:Project,ids:readonly string[],kind:PatchKind,p
  return applyEach(p,ids,n=>{
   const r=noFacades(n);if(r)return r;
   const cur=n[kind] as Record<string,unknown>|undefined;
-  if(!cur)return kind==='vernissage'?'фасады не МДФ Вернисаж':'фасады не в алюминиевой рамке';
+  if(!cur)return kind==='vernissage'?'фасады не МДФ':'фасады не в алюминиевой рамке';
   const v={...cur};for(const [k,x] of Object.entries(patch)){if(x===undefined)delete v[k];else v[k]=structuredClone(x);}
   Object.assign(n,{[kind]:v});
   // как VernissagePicker в панели корпуса: толщина фасада — по выбору МДФ

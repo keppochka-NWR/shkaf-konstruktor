@@ -19,7 +19,7 @@ test('МДФ Вернисаж: модуль с выбором Вернисажа
   assert.equal(p.fm,true);assert.equal(p.kind,'mdf');assert.equal(p.edges,undefined,'кромки ЛДСП нет');assert.equal(p.thick,19);
   assert.deepEqual([m.width,m.height,m.depth],[19,2100,600],'боковая панель: толщина МДФ по X');
   const d=parts(m).find(q=>q.id==='raw:p0')!;
-  assert.equal(d.external,true);assert.equal(d.vernissage,true);assert.deepEqual(d.edge,[0,0,0,0]);assert.match(d.name,/МДФ Вернисаж №1/);
+  assert.equal(d.external,true);assert.equal(d.vernissage,true);assert.deepEqual(d.edge,[0,0,0,0]);assert.match(d.name,/МДФ №1/);
   assert.deepEqual(validate(m),[]);
   assert.equal(details(project(a)).length,0,'нет деталей в раскрое ЛДСП');
 });
@@ -31,7 +31,7 @@ test('смета: строка Вернисажа по площади панел
   const pr=vernissageFacadePrice(a.module.vernissage!,600,2100);
   assert.equal(v[0].quantity,Math.round(pr.billArea*1e4)/1e4);assert.equal(v[0].quantity,1.26);
   assert.equal(v[0].unitPrice,pr.perM2);assert.ok(pr.perM2&&pr.perM2>0,'цена из прайса');
-  assert.match(v[0].label,/Панели МДФ Вернисаж .*№1.*эмаль мат RAL 9003.*МДФ 19/);assert.match(v[0].source,/коэффициент Вернисажа/);
+  assert.match(v[0].label,/Панели МДФ .*№1.*эмаль мат RAL 9003.*МДФ 19/);assert.match(v[0].source,/коэффициент фасадов МДФ/);
   assert.equal(e.lines.some(l=>l.id.startsWith('sheet:')),false,'листов ЛДСП нет');
   assert.equal(e.lines.some(l=>/^edge\d/.test(l.id)&&l.quantity>0),false,'кромки ЛДСП нет');
   assert.equal(e.lines.some(l=>l.id==='facade-external'),false,'не «фасадный материал без цены»');
@@ -66,7 +66,7 @@ test('размер вне паспорта фрезеровки — ошибка
   assert.ok(mill,'есть фрезеровка с пределами паспорта');
   const big=freePanel({...base,plane:'xy',width:1500,height:2900,vernissage:{milling:mill.id,cover:'film',film:'Моно белый',thickness:19}});
   const err=validate(big.module);
-  assert.ok(err.length>0&&err.every(x=>/^Панель МДФ Вернисаж .*по паспорту/.test(x)),err.join('; '));
+  assert.ok(err.length>0&&err.every(x=>/^Панель МДФ .*по паспорту/.test(x)),err.join('; '));
   // боковая панель: лицо — глубина × высота (600 × 2100), а не толщина
   assert.deepEqual(validate(freePanel({...base,vernissage:{...ENAMEL,milling:mill.id}}).module).filter(x=>/толщ/.test(x)),[]);
 });

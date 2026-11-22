@@ -36,7 +36,7 @@ export function vernissageClientLabel(v: VernissageFacade): string {
   const s = seriesOf(v.milling), m = vernissageMilling(v.milling);
   const open = v.open === "glass" ? ", под стекло" : v.open === "grille" ? ", с решёткой" : "";
   const milling = s.id === "pet" ? "" : `, фрезеровка №${m?.id ?? v.milling}${open}`;
-  return `МДФ «Вернисаж», серия «${s.name}»${milling}, ${vernissageCover(v)}, ${v.thickness} мм`;
+  return `МДФ, серия «${s.name}»${milling}, ${vernissageCover(v)}, ${v.thickness} мм`;
 }
 /** Фасады в алюминиевой рамке: профиль, цвет профиля, вставка. */
 export function aluClientLabel(m: Module): string {

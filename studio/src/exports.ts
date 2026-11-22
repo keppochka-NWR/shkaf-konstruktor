@@ -22,8 +22,8 @@ import type {Module} from './model';
 import {hasSeller,type SellerInfo} from './sellerInfo';
 import {count,DETAILS} from './ru';
 import {pendingTotalLabel} from './pendingPrices';
-/** Деталь без направления текстуры: ЛХДФ или однотонный декор без картинки в каталоге — на карте можно класть поперёк. */
-export function grainFree(d:Pick<Detail,'material'|'decor'>){return d.material==='hdf'||!catalog.find(c=>c.n===d.decor)?.tex;}
+export { grainFree } from './sheetLimits';
+import { grainFree, fitsSheet } from './sheetLimits';
 export type Detail = Part & { moduleName: string; moduleId: string; code: string };
 export type Placement = {
   detail: Detail;
@@ -128,8 +128,7 @@ export type NestPlan={sheets:Sheet[];unplaced:{detail:Detail;reason:string}[];en
 /** Раскрой с подробностями: карты + детали, которые не помещаются в лист (только у гильотины — старый движок в этом случае падает). */
 /** Прежний движок: влезает ли деталь в рабочее поле листа (поле RULES.sheetMargin 10 мм; поперёк — только без направления текстуры). */
 function classicFits(d:Detail){
-  const M2=2*RULES.sheetMargin,W=(d.material==='hdf'?RULES.hdfH:panelSheetSize(d.decor)?.width??RULES.sheetH)-M2,H=(d.material==='hdf'?RULES.hdfW:panelSheetSize(d.decor)?.height??RULES.sheetW)-M2;
-  return (d.width<=W&&d.length<=H)||(grainFree(d)&&d.length<=W&&d.width<=H);
+  return fitsSheet(d);
 }
 /** Детали больше листа у прежнего движка (БЛОКЕР 1 критика релиза 22.10): раньше раскрой бросал «Деталь не помещается в лист»
  *  и ронял студию; теперь они — строки «не помещается в лист» сметы и список с «Показать», как у гильотины. */

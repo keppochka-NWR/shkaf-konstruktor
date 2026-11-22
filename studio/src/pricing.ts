@@ -39,10 +39,10 @@ import {rawKitchen,rawOwnMaterial,rawDims,rawWorktop,rawIsWorktop,rawIsRoom,rawI
  *  (ПВХ меньше 0,3 м² — как 0,3), закупка за м² и источник. Фасады модулей — «vernissage:», свободная панель МДФ — «vernissage-panel:». */
 /** Панели из МДФ Вернисаж вне фасадов (интеграция 29.10.2026 — один механизм): видимый бок из фасада (sidePanels.facade) и отдельная
  *  панель МДФ (freePanels.ts) — одна строка «Панели МДФ» на одинаковый МДФ (фрезеровка, покрытие, толщина), цена по прайсу Вернисажа. */
-const vernissagePanelLabel=(label:string)=>`Панели МДФ ${label} (видимые бока, отдельные панели) — сторонний участок, без раскроя ЛДСП`;
+const vernissagePanelLabel=(label:string)=>`Панели ${label} (видимые бока, отдельные панели) — сторонний участок, без раскроя ЛДСП`;
 function vernissageRow(v:VernissageFacade,w:number,h:number){const pr=vernissageFacadePrice(v,w,h);
   return {key:`${v.milling}:${v.cover}:${v.film??v.enamelColor??''}:${v.thickness}:${v.open??'solid'}:${v.patina?1:0}${v.twoSided?1:0}${v.lacquer?1:0}`,label:vernissageLabel(v),qty:Math.round(pr.billArea*1e4)/1e4,perM2:pr.perM2,
-    source:`Прайс Вернисаж от ${priceDateRu()}: ${pr.column??'нет колонки'}${pr.base!==null?' '+pr.base+' ₽/м²':''}${pr.notes.map(n=>'; '+n).join('')}${pr.warnings.length?'; ВНИМАНИЕ: '+pr.warnings.join('; '):''}`};}
+    source:`Прайс фасадов МДФ от ${priceDateRu()}: ${pr.column??'нет колонки'}${pr.base!==null?' '+pr.base+' ₽/м²':''}${pr.notes.map(n=>'; '+n).join('')}${pr.warnings.length?'; ВНИМАНИЕ: '+pr.warnings.join('; '):''}`};}
 /** Цена клиенту — ТОЛЬКО по листам (решение Макса 30.10.2026): листы ЛДСП в раскрое × цена листа (плита, кромка, фурнитура и работа
  *  внутри) + всё, что вне листа (розница, Вернисаж, Лемана, стекло и зеркало). markup — коэффициент к закупке позиций вне листа
  *  (стекло, зеркало, ЛДСП дверей купе). Поля model ('markup'|'sheet') и maxModel («по большей модели») старых файлов при загрузке
@@ -238,7 +238,7 @@ export type LineGroup='material'|'hardware';
  *  столешницы, стеновые панели) и детали, не попавшие в лист. Всё остальное — фурнитура (аудит 11.10.2026: покупные шли в «Фурнитуру»). */
 /** Фигурные детали (shapes.ts, задача 29.10.2026): цены работы «вырез / сложный выпил» и «кромка по кривой» Макс ещё не назвал. */
 export const CUT_WORK_SRC='Цех: цена работы не задана — вопрос Максу (фигурные детали 29.10.2026)';
-export function lineGroup(id:string):LineGroup{return /^(facade-panel:|sheet:|mat:|cut-work$|edge|small$|work$|work-hdf$|falsh-glue$|seat-glue$|worktop-glue$|glue32$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
+export function lineGroup(id:string):LineGroup{return /^(sheet-oversize$|facade-panel:|sheet:|mat:|cut-work$|edge|small$|work$|work-hdf$|falsh-glue$|seat-glue$|worktop-glue$|glue32$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
 /** Покупные материалы (фасады МДФ, цоколь из фасадного, столешницы, стеновые панели, не ЛДСП-материалы Базиса): в раскрой ЛДСП не идут,
  *  в цене «за лист» их нет. Сумма закупки × коэффициент — для включения в bySheet сверху листов; пока не вызывается (ярус B: коэффициент —
  *  решение Макса, вариант «закупка × 2 как Вернисаж» или свой на группу). */
@@ -569,7 +569,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(d.id.startsWith('gola:')&&!(bz&&rowGola)){const kind=d.id.split(':')[1]==='L'?'L':'C',q=premialGolaQuote(kind);add('gola-'+kind,q.label,d.length/1000,'м',q.price,q.source,true);}
       // фасады «Вернисаж»: м² по прайсу (серия фрезеровки × колонка покрытия × толщина), ПВХ меньше 0,3 м² — как 0,3, наценки прайса
       if((d.role==='door'||d.id.endsWith(':facade'))&&d.vernissage&&a.module.vernissage){const r=vernissageRow(a.module.vernissage,d.size[0],d.size[1]);
-        add('vernissage:'+r.key,`Фасады МДФ ${r.label} — сторонний участок, без раскроя ЛДСП`,r.qty,'м²',r.perM2,r.source);}
+        add('vernissage:'+r.key,`Фасады ${r.label} — сторонний участок, без раскроя ЛДСП`,r.qty,'м²',r.perM2,r.source);}
       // видимый бок из фасадного материала (sidePanels.facade, dp-2810): гладкий МДФ №15 в покрытии фасадов модуля, с одной стороны —
       // интеграция 29.10: та же строка «Панели МДФ», что у отдельной панели МДФ Вернисаж (freePanels.ts), один механизм цены (vernissageRow)
       else if(d.sideFacade&&a.module.vernissage){const r=vernissageRow(sideFacadeSpec(a.module.vernissage),d.length,d.width);
@@ -583,7 +583,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         const push=a.module.doorOpen==='push',inset=a.module.doorMount==='inset',n=placedHinges||hingeCount(d.length,d.width);
         // СТП: с ручками — петля с доводчиком; push-to-open — петля без пружины + толкатель. Бренд — выбор клиента (GTV по умолчанию).
         const bk=a.module.hingeBrand??'gtv',hb=HINGE_BRANDS[bk],suffix=bk==='gtv'?'':':'+bk;
-        if(d.vernissage&&d.hinge!=='top'||d.vernissage&&placedHinges)add('vernissage-hinge-boring','Присадка под петли на фасадах Вернисаж',n,'шт',VERNISSAGE_NOTES.hingeBoringPerPc,`Прайс Вернисаж от ${priceDateRu()}: присадка под петли`);
+        if(d.vernissage&&d.hinge!=='top'||d.vernissage&&placedHinges)add('vernissage-hinge-boring','Присадка под петли на фасадах МДФ',n,'шт',VERNISSAGE_NOTES.hingeBoringPerPc,`Прайс фасадов МДФ от ${priceDateRu()}: присадка под петли`);
         // кухня: подъёмник — только выбранный газлифт Базиса (kitchenLift); без него у Базиса на откидном фасаде одни петли
         const selectedLift=a.module.sections.find(s=>s.id===d.sectionId)?.doorLifts?.[Number(d.id.split(':door:')[1])];
         // решение Макса 26.10.2026: газлифты Premial АДАЖИО — по цене с сайта Premial, это сразу цена клиенту (розница, без коэффициента); 2 шт на фасад (по боковине)
@@ -707,14 +707,18 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const hdfSheets=plan.filter(s=>s.material==='hdf').length;
   add('work','Работа цеха: ЛДСП',plan.filter(s=>s.material!=='hdf'&&!facadePanel(s.decor)).length,'лист',SHOP_WORK_LDSP_SHEET,'Цех: '+rub(SHOP_WORK_LDSP_SHEET)+' ₽ за лист ЛДСП'+(kitchenOnly&&hdfSheets?' (у кухни лист ЛХДФ без работы)':'')+notBazis);
   if(!kitchenOnly)add('work-hdf','Работа цеха: ЛХДФ',hdfSheets,'лист',SHOP_WORK_HDF_SHEET,'Цех: '+rub(SHOP_WORK_HDF_SHEET)+' ₽ за лист ЛХДФ (сам лист — строкой «ЛХДФ 3 мм»)'+notBazis);
-  const frameBase=plan.filter(s=>s.material!=='hdf'&&!facadePanel(s.decor)).length*(settings.sheetPrice??SHEET_PRICE_DEFAULT);
+  const carcassSheets=plan.filter(sheet=>sheet.material!=='hdf'&&!facadePanel(sheet.decor));
+  const oversizedSheets=carcassSheets.filter(sheet=>sheet.items.some(({detail})=>
+    Math.max(detail.width,detail.length)>2500 && Math.min(detail.width,detail.length)>900)).length;
+  const ldspSheets=carcassSheets.length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT;
+  const frameBase=(ldspSheets+oversizedSheets)*sheetPrice;
   const installationBase=p.modules.some(a=>!!a.module.kupe||!!a.module.metalFrame)||lines.some(l=>l.id.startsWith("unplaced"))?null:installationValue(frameBase,lines,settings.markup,settings.vernissageMarkup??VERNISSAGE_MARKUP_DEFAULT);
   for(const row of serviceRows(p.services,installationBase))add('service:'+row.id,row.label,row.quantity,row.id==='lift'&&p.services?.lift==='floors'?'этаж':'усл.',row.price,'Согласованные услуги заказа',true);
   for(const l of lines)l.quantity=Math.round(l.quantity*1000)/1000;
   for(const l of lines)if(l.unitPrice===null){const pp=pendingPrice(l.id);if(pp){l.pending=true;l.source=pp.source;}}
   const missing=lines.filter(l=>l.unitPrice===null&&!l.pending),pending=lines.filter(l=>l.pending),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  const ldspSheets=plan.filter(s=>s.material!=='hdf'&&!facadePanel(s.decor)).length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT;
+
   // R2: без цены листа итога нет, пока её не укажут (цена — только по листам, решение Макса 30.10.2026)
   const needSheetPrice=!(sheetPrice>0);
   // Решение Макса 06.10.2026: клиенту показываем отдельно «материалы» (плита, кромка, работа, фасадные материалы) и «фурнитуру»,
@@ -727,7 +731,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const vernissageCost=lines.filter(l=>!l.retail&&isVernissageLine(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0);
   const vernissageClient=vernissageCost?Math.round(vernissageCost*vernissageMarkup/100)*100:0;
   const materialOwn=Math.round(lines.filter(l=>!l.retail&&lineGroup(l.id)==='material'&&!isVernissageLine(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  for(const l of lines)if(!l.retail&&isVernissageLine(l.id))l.source+=`; клиенту: закупка × ${String(vernissageMarkup).replace('.',',')} (коэффициент Вернисажа)`;
+  for(const l of lines)if(!l.retail&&isVernissageLine(l.id))l.source+=`; клиенту: закупка × ${String(vernissageMarkup).replace('.',',')} (коэффициент фасадов МДФ)`;
   // Розничные позиции (двери-купе по прайсу калькулятора купе, подсветка) идут в свою группу без коэффициента.
   // Двери купе — своя графа разбивки (решение Макса 16.10.2026), не «материалы» и не «фурнитура».
   const retailOf=(g:LineGroup)=>Math.round(lines.filter(l=>l.retail&&!isKupeLine(l.id)&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
@@ -758,7 +762,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   // идёт сверху × коэффициент, как позиции вне листа (критик 30.10: комплект 150 ₽ не должен пропадать при 0 листов).
   const noSheets=ldspSheets===0,offLine=(l:PriceLine)=>!l.retail&&!isVernissageLine(l.id)&&!isLemanaLine(l.id)&&(noSheets||isOffSheetLine(l.id));
   const offSheet=Math.round(lines.filter(offLine).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0)*settings.markup);
-  const bySheet=ldspSheets*sheetPrice+retailExtras+lemana+vernissageOnTop+offSheet;
+  const bySheet=frameBase+retailExtras+lemana+vernissageOnTop+offSheet;
   // Цена клиенту — ТОЛЬКО по листам (решение Макса 30.10.2026; «по коэффициенту» и «по большей модели» больше не используются).
   // model результата всегда 'sheet' (КП, публичная смета, Excel, цены изделий).
   const model='sheet' as const;
@@ -771,7 +775,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   /** byMarkup/byMarkupKnown/perSheet — «себестоимость × коэффициент» только для внутренней статистики (скрипты), в интерфейсе, КП и
    *  выгрузках не показываются; unplaced — строк «не помещается в лист» (смета не завершена, retail=null); engine — движок раскроя
    *  проекта (флаг); листы сметы — по картам plan (по умолчанию nest, classic): выбор движка для цены — ярус B. */
-  const result={installationBase,compactSheets,lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,offSheet,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,needSheetPrice,notice:needSheetPrice?SHEET_PRICE_NOTICE:blocked?MANAGER_CALC_NOTICE:markupMatters?pub?.notice??null:null,missingExtras,missingExtrasLines,retail:unplacedLines||blocked||needSheetPrice||missingExtras?null:bySheet};
+  const result={oversizedSheets,installationBase,compactSheets,lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,offSheet,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,needSheetPrice,notice:needSheetPrice?SHEET_PRICE_NOTICE:blocked?MANAGER_CALC_NOTICE:markupMatters?pub?.notice??null:null,missingExtras,missingExtrasLines,retail:unplacedLines||blocked||needSheetPrice||missingExtras?null:bySheet};
   // публичная сборка: в строках только клиентские цены, итог тот же (buildMode.ts, clientPrices.ts)
   return PUBLIC_BUILD?clientView(result):result;
 }
@@ -789,8 +793,8 @@ export function estimateCSV(p:Project,result=estimate(p)){
  // B1 (критик 22.10): сумма строк ≠ итогу (копейки цен строк, итог к сотне) — явная строка «Округление», чтобы столбец сходился
  if(PUBLIC_BUILD)rows.push(['Итого по позициям','','','',result.knownCost,'',''],...(result.retail!==null&&result.retail!==result.knownCost?[['Округление до итога сметы','','','',result.retail-result.knownCost,'','']]:[]),['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения',serviceTerms(p.services),'','','','','']);
  // цена — только по листам (решение Макса 30.10.2026): строк «по коэффициенту» и выбора модели нет
- else rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент к закупке вне листа (стекло, зеркало, столешница)',result.markup,'','',result.offSheet||'','',''],...(result.vernissageOnTop?[['Фасады Вернисаж: закупка × коэффициент Вернисажа',result.vernissageMarkup,'',result.vernissageCost,result.vernissageOnTop,'Решение Макса 10.10.2026: клиенту закупка по прайсу × '+vk,'']]:[]),...(result.retailExtras?[['Розничные позиции','','','',result.retailExtras,'','']]:[]),['Листов ЛДСП',result.ldspSheets,'лист',result.sheetPrice,result.ldspSheets*result.sheetPrice,'Цена за лист: плита, кромка, крепёж и работа внутри','']
-   ,['Цена по листам','','','',result.bySheet,'Листы × цена листа + позиции вне листа (розница, Лемана, Вернисаж, стекло и зеркало)',''],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],[engineNote(result),result.engine,'','','','',''],['Ограничения',serviceTerms(p.services),'','','','','']);
+ else rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент к закупке вне листа (стекло, зеркало, столешница)',result.markup,'','',result.offSheet||'','',''],...(result.vernissageOnTop?[['Фасады МДФ: закупка × коэффициент фасадов МДФ',result.vernissageMarkup,'',result.vernissageCost,result.vernissageOnTop,'Решение Макса 10.10.2026: клиенту закупка по прайсу × '+vk,'']]:[]),...(result.retailExtras?[['Розничные позиции','','','',result.retailExtras,'','']]:[]),['Листов ЛДСП',result.ldspSheets,'лист',result.sheetPrice,result.ldspSheets*result.sheetPrice,'Цена за лист: плита, кромка, крепёж и работа внутри','']
+   ,...(result.oversizedSheets?[['Доплата за листы с деталью свыше 2500 × 900 мм',result.oversizedSheets,'лист',result.sheetPrice,result.oversizedSheets*result.sheetPrice,'Оба габарита одной детали превышены','']]:[]),['Цена по листам','','','',result.bySheet,'Листы × цена листа + позиции вне листа (розница, Лемана, фасады МДФ, стекло и зеркало)',''],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],[engineNote(result),result.engine,'','','','',''],['Ограничения',serviceTerms(p.services),'','','','','']);
  // разбивка «Материалы / Фурнитура / Двери купе / Итого» (сумма граф = итогу) и позиции после финального расчёта конструктором (решения 16.10.2026)
  const split=result.retail===null?null:quoteBreakdown(String(result.retail),result);
  if(split)rows.push(...splitRows(split).map(([k,v])=>['Разбивка: '+k,'','','',v,'',''] as (string|number)[]),['Разбивка: Итого','','','',result.retail!,'','']);

@@ -237,9 +237,11 @@ export const RAW_FALLBACK_MESH: Record<string, string> = {
  *  собственным длине/ширине/толщине (t, lw эталона): габарит такой двери 947×261×261 — не «столешница 261 мм»; наклонная полка шкафа —
  *  по obb (rawSize). Без lw, но с толщиной Базиса (thick), деталь под углом в плане (повёрнута вокруг вертикали: угловые двери
  *  и фасады k03, k07, k09) — ширина из габарита и толщины: a = w·cos + t·sin, b = w·sin + t·cos (n3-base). */
-export function rawDims(p: Pick<RawPanel, "box" | "obb" | "t" | "lw" | "thick">): [number, number, number] {
+export function rawDims(p: Pick<RawPanel, "box" | "obb" | "t" | "lw" | "thick" | "plane">): [number, number, number] {
   if (p.t && p.lw && p.lw.every((v) => v > 0)) return [Math.max(...p.lw), Math.min(...p.lw), p.t];
   const size = rawSize(p), s = [...size].sort((a, b) => b - a), t = p.thick;
+  if (p.plane==='xz' && !p.obb && t!==undefined && Math.abs(size[1]-t)<0.5)
+    return [Math.max(size[0],size[2]),Math.min(size[0],size[2]),t];
   if (!p.obb && t !== undefined && size[0] > t + 0.5 && size[2] > t + 0.5) {
     // ((a+b)/(w+t))² + ((a−b)/(w−t))² = 2 — бисекция по w в (t, a+b): левая часть убывает с ростом w
     const a = size[0], b = size[2], f = (w: number) => ((a + b) / (w + t)) ** 2 + ((a - b) / (w - t)) ** 2 - 2;
@@ -327,7 +329,7 @@ export function rawParts(m: Module): Part[] {
       else if ((p.plane === "xy" && thin === 2) || (p.plane === "yz" && thin === 0)) q.faceContour = rel;
     }
     // свободная панель МДФ «Вернисаж»: вид и вес — как у фасада Вернисажа (сцена: фрезеровка у фронтальной, цвет/плёнка у остальных)
-    if (p.fm && isVernissagePanel(m)) { const q = out[out.length - 1]; q.vernissage = true; q.name += ` · МДФ Вернисаж №${m.vernissage!.milling}`; }
+    if (p.fm && isVernissagePanel(m)) { const q = out[out.length - 1]; q.vernissage = true; q.name += ` · МДФ №${m.vernissage!.milling}`; }
   });
   // Сторона петель фасада «как есть» — по петлям Базиса у его кромок: каждая петля голосует за ближайшую кромку фасада.
   // Без этого сцена открывала вбок фасад на петлях сверху (навесной откидной: 42 фасада в 34 кухнях). Петли не нашлись (повёрнутый фасад
@@ -394,7 +396,7 @@ export function rawErrors(m: Module): string[] {
   for (const p of r.panels) if (!Array.isArray(p.box) || p.box.length !== 6 || p.box.some((v) => !Number.isFinite(v)) || p.box[3] < p.box[0] || p.box[4] < p.box[1] || p.box[5] < p.box[2]) return [`Сырой модуль: неверная деталь «${p.name}».`];
   // свободная панель МДФ «Вернисаж»: размеры по паспорту фрезеровки (как у фасадов, model.ts validate); ширина × высота лица панели
   if (isVernissagePanel(m)) for (const p of r.panels) if (p.fm) { const [w, h] = rawFaceSize(p);
-    return vernissageSizeCheck(m.vernissage!.milling, m.vernissage!.open, w, h).errors.map((e) => "Панель МДФ Вернисаж " + e + ". Выберите другую фрезеровку или измените размер."); }
+    return vernissageSizeCheck(m.vernissage!.milling, m.vernissage!.open, w, h).errors.map((e) => "Панель МДФ " + e + ". Выберите другую фрезеровку или измените размер."); }
   return [];
 }
 
@@ -411,7 +413,7 @@ export function parseRaw(x: unknown): RawSpec | undefined {
       ...(Array.isArray(p.edges) && p.edges.length ? { edges: p.edges.filter((e) => Array.isArray(e) && e.length === 2).map((e) => [Number(e[0]), Number(e[1])] as [number, number]).filter((e) => e.every(Number.isFinite)) } : {}),
       ...(p.mat ? { mat: String(p.mat).slice(0, 120) } : {}), ...(Number(p.thick) > 0 ? { thick: Number(p.thick) } : {}),
       ...(Number(p.t) > 0 && Array.isArray(p.lw) && p.lw.length === 2 && p.lw.every((v) => Number(v) > 0) ? { t: Number(p.t), lw: [Number(p.lw[0]), Number(p.lw[1])] as [number, number] } : {}),
-      ...(Array.isArray(p.contour) && p.plane && ["xz", "xy", "yz"].includes(p.plane) ? { contour: p.contour.slice(0, 400).map((c) => [Number(c[0]), Number(c[1])] as [number, number]).filter((c) => c.every(Number.isFinite)), plane: p.plane } : p.plane && ["xz", "xy", "yz"].includes(p.plane) ? { plane: p.plane } : {}), // плоскость и без контура: свободная панель МДФ Вернисаж — лицо панели по ней
+      ...(Array.isArray(p.contour) && p.plane && ["xz", "xy", "yz"].includes(p.plane) ? { contour: p.contour.slice(0, 400).map((c) => [Number(c[0]), Number(c[1])] as [number, number]).filter((c) => c.every(Number.isFinite)), plane: p.plane } : p.plane && ["xz", "xy", "yz"].includes(p.plane) ? { plane: p.plane } : {}), // плоскость и без контура: свободная панель МДФ — лицо панели по ней
       ...(p.obb && Array.isArray(p.obb.size) && p.obb.size.length === 3 && [...p.obb.size, p.obb.ry, p.obb.rz].map(Number).every(Number.isFinite) ? { obb: { size: p.obb.size.map(Number) as [number, number, number], ry: Number(p.obb.ry), rz: Number(p.obb.rz) } } : {}),
       ...(p.skew ? { skew: true } : {}), ...(p.figure ? { figure: true } : {}), ...(p.room ? { room: true as const } : {}) })),
     hardware: (Array.isArray(r.hardware) ? r.hardware : []).map((h) => ({ name: String(h.name ?? ""), category: String(h.category ?? ""), mesh: h.mesh ? String(h.mesh) : null, pos: (h.pos ?? [0, 0, 0]).map(Number) as RawHardware["pos"], quat: (h.quat ?? [1, 0, 0, 0]).map(Number) as RawHardware["quat"],

@@ -51,7 +51,7 @@ test("fillGap: край доходит до соседа, противополо
   const q = fillGap(maxRow(), "e", "left");
   assert.deepEqual([get(q, "e").x, get(q, "e").module.width], [3200, 900], "левый край дотянут, правый на месте");
   assert.throws(() => fillGap(maxRow(), "c", "right"), /уже вплотную/);
-  assert.throws(() => fillGap(proj([at("s", 1000, mod("Один"))], 4000), "s", "right"), /ширина стала бы 3000 мм, а больше 1300/);
+  assert.throws(() => fillGap(proj([at("s", 1000, mod("Один"))], 4000), "s", "right"), /ширина стала бы 3000 мм, а больше 2782/);
   const k = (kind: Parameters<typeof kitchenTemplate>[0], w: number) => kitchenTemplate(kind, w, initialModule());
   assert.throws(() => fillGap(proj([at("o", 500, k("oven", 600)), at("b", 1200, k("base-doors", 600))]), "o", "right"), /под технику.*стала бы 700/);
 });

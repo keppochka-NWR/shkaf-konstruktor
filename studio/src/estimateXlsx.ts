@@ -115,10 +115,11 @@ export function estimateSheet(p: Project, e: Estimate, manager = !PUBLIC_BUILD, 
   if (manager) {
     plain("Себестоимость (закупка)", sumCells(buy, e.lines.filter((l) => !l.retail && l.unitPrice !== null).reduce((s, l) => s + l.quantity * l.unitPrice!, 0)));
     plain("Коэффициент к закупке вне листа (стекло, зеркало, столешница)", num(e.markup, XS.subNum));
-    if (e.vernissageOnTop) plain("Фасады Вернисаж клиенту (закупка × " + String(e.vernissageMarkup).replace(".", ",") + ")", num(e.vernissageOnTop, XS.subMoney), "сверху листов");
+    if (e.vernissageOnTop) plain("Фасады МДФ клиенту (закупка × " + String(e.vernissageMarkup).replace(".", ",") + ")", num(e.vernissageOnTop, XS.subMoney), "сверху листов");
     if (retail.length) plain("Розничные позиции", sumCells(retail, e.retailExtras));
     // цена — только по листам (решение Макса 30.10.2026): строки «по коэффициенту» и выбора модели нет
-    plain(`Цена по листам: ${e.ldspSheets} × ${e.sheetPrice.toLocaleString("ru-RU")} ₽${e.offSheet ? " + вне листа (стекло, зеркало, столешница…) " + e.offSheet.toLocaleString("ru-RU") + " ₽" : ""}`, num(e.bySheet, XS.subMoney), "листы + позиции вне листа");
+    if(e.oversizedSheets) plain(`Доплата за крупные детали: ${e.oversizedSheets} лист. × ${e.sheetPrice} ₽`, num(e.oversizedSheets*e.sheetPrice, XS.subMoney));
+    plain(`Цена по листам: ${e.ldspSheets} × ${e.sheetPrice.toLocaleString("ru-RU")} ₽${e.oversizedSheets ? " + доплата за крупные детали" : ""}${e.offSheet ? " + вне листа (стекло, зеркало, столешница…) " + e.offSheet.toLocaleString("ru-RU") + " ₽" : ""}`, num(e.bySheet, XS.subMoney), "листы + позиции вне листа");
   } else plain("Итого по позициям", sumCells(buy, fit ? e.retail! : e.knownCost));
   const rounded = !!fit && e.retail !== null && e.retail % 100 === 0;
   total("Расчётная цена", e.retail === null ? str(e.notice ?? (e.unplaced ? "Смета не завершена: не помещается в лист" : "Стоимость уточнит менеджер"), XS.totalLabel) : num(e.retail, XS.totalMoney), e.retail === null ? "" : (rounded ? "итог округлён до 100 ₽; " : "") + "предварительно. " + serviceTerms(p.services));

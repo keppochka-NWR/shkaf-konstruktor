@@ -11,7 +11,7 @@ const TECH=/в раскрое цеха|сторонний участок|\(пр�
 
 test('материал фасадов — клиентские названия',()=>{
  assert.equal(FACADE_KIND_LABEL.ldsp,'ЛДСП');
- assert.equal(FACADE_KIND_LABEL.vernissage,'МДФ Вернисаж');
+ assert.equal(FACADE_KIND_LABEL.vernissage,'МДФ в плёнке / МДФ краска');
  assert.equal(FACADE_KIND_LABEL.alu,'Алюминиевая рамка');
  for(const v of Object.values(FACADE_KIND_LABEL))assert.doesNotMatch(v,TECH);
 });

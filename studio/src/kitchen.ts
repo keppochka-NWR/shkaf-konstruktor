@@ -1,3 +1,4 @@
+import { BODY_DIMENSION_ENVELOPE } from "./sheetLimits";
 import {basketErrors,type KitchenBasket} from './kitchenBasket';
 import {maestroLayout} from './maestroDrawer';
 import {worktopDecors} from './worktopCatalog';
@@ -436,7 +437,7 @@ export const KITCHEN = {
   deepBottom: 600,      // дно под боковинами ГЛУБЖЕ 600 (602–700) — 3 конфирмата на сторону (третий посередине): 9 из 9 днищ Базиса; ровно 600 (k30 m03) и мельче — 2
   narrowJoint: 120,     // стык горизонтали глубиной до 120 — одна точка крепежа посередине (Базис: 402 из 468 таких стыков)
   minWidth: 100, maxWidth: 1200, // волна 29.10: кухонный модуль от 100 (было 150 — бутылочница)
-  maxModuleWidth: 1650, // предел ширины кухонного модуля в проверке: самый широкий модуль 34 кухонь Базиса — 1649 (шкафы — RULES.maxW 1300)
+  maxModuleWidth: BODY_DIMENSION_ENVELOPE, // Реальный предел - по деталям и формату листа.
   maxHeight: 2900,      // пеналы в Базисе до 2869 (k30 m15), 2850 (k31 m05), 2820 (k27); у шкафов студии лимит RULES.maxH 2500 не меняется
 } as const;
 

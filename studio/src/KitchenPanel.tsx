@@ -300,7 +300,7 @@ function CabinetPanel(props: KitchenPanelProps) {
         {kinds.map((x) => <option key={x} value={x}>{KITCHEN_ITEMS[x].label}</option>)}</select></label>}
       {item && kinds.length > 1 && <p className="field-note">Смена назначения пересобирает модуль по регламенту Базиса (габариты, цвета, петли и ручки сохраняются).</p>}
       <label className="hardware-field">Название<input aria-label="Название кухонного модуля" key={m.name} defaultValue={m.name} maxLength={80} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.name) modify((n) => { n.name = v; }); }} /></label>
-      {/* предел — как в проверке кухни (KITCHEN.maxModuleWidth 1650: мойка 1480 k28 m17), не 1200 нарезки ряда */}
+      {/* реальный предел — по деталям и листу; 1200 относится только к автоматической нарезке ряда */}
       <p className="field-note">Ширина меняется только у выбранного корпуса. Соседи сохраняют положение и размеры; при уменьшении остаётся зазор.</p>
       <Num label="Ширина" value={m.width} min={KITCHEN.minWidth} max={KITCHEN.maxModuleWidth} reasons={(v) => ({ list: fieldReasons(m, "width", v), moduleId: placed.id, moduleName: m.name })} change={(v) => modify((n) => { n.width = v; })} />
       <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={maxHeightOf(m)} reasons={(v) => ({ list: fieldReasons(m, "height", v), moduleId: placed.id, moduleName: m.name })} change={(v) => modify((n) => { n.height = v; if (n.kitchen?.column) configureColumn(n); else if (n.kdrawers) n.kdrawers = refitKDrawers(n, "height"); })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
@@ -401,7 +401,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       {m.vernissage && <VernissagePicker value={m.vernissage} sample={door ? [Math.round(door.size[0]), Math.round(door.size[1])] : undefined} sizes={vernissageSizes(m)} onChange={(v) => modify((n) => { n.vernissage = v; n.facadeT = v.thickness; })} />}
       {/* у фасадов Вернисажа толщина задаётся выбором МДФ (цена и 3D от одного значения) — отдельного поля нет */}
       {m.doors&&role==='tall'&&<><Check label="Разделить фасад по высоте" checked={s.doorSplit!==undefined} change={v=>modify(n=>{if(v)n.sections[sIdx].doorSplit=Math.round((m.height-(m.feet?.height??0))/2);else{delete n.sections[sIdx].doorSplit;delete n.sections[sIdx].doorRows;}})}/>{s.doorSplit!==undefined&&<Num label="Высота нижней части фасада" value={s.doorSplit} min={200} max={m.height-(m.feet?.height??0)-200} step={.5} change={v=>modify(n=>{n.sections[sIdx].doorSplit=v;})}/>}</>}
-      {m.vernissage ? <p className="field-note">Толщина фасада — по выбору МДФ Вернисаж: {m.vernissage.thickness} мм.</p>
+      {m.vernissage ? <p className="field-note">Толщина фасада — по выбору МДФ: {m.vernissage.thickness} мм.</p>
         : m.alu && !ldspFronts ? null /* рамка: толщина по профилю ({ALU_EXTRAS.frameDepth} мм, см. выше) — поле ЛДСП не показываем */
         : <Num label={m.alu ? "Толщина фасадов ящиков (ЛДСП)" : "Толщина фасада"} value={m.facadeT ?? RULES.panel} min={3} max={40} change={(v) => modify((n) => { if (v === RULES.panel) delete n.facadeT; else n.facadeT = v; })} note="ЛДСП 16, МДФ 18–19, рамка со стеклом — по профилю" />}
       <Num label="Отступ от кромок корпуса" value={m.faceGap ?? RULES.faceGap} min={0} max={5} step={0.5} change={(v) => modify((n) => { n.faceGap = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n); })} note={`Базис цеха: ${KITCHEN.faceGap} → фасад W−3 × H−3`} />
@@ -585,7 +585,7 @@ function RawInfo(props: KitchenPanelProps) {
   // пересечения проверяются только у позиций с 3D-моделью Базиса (check.checked), а не у всей фурнитуры сметы (total) — сказать это прямо
   // интеграция 29.10: отдельная панель студии (freePanels.ts) — сырой модуль по хранению, но не импорт Базиса
   if (isFreePanel(m)) return <div className="kitchen-panel"><div className="property-section kitchen-head"><span className="eyebrow">Отдельная панель студии</span><h2>{m.name}</h2><p>{Math.round(m.width)} × {Math.round(m.height)} × {Math.round(m.depth)} мм</p></div>
-    <div className="property-section kitchen-note"><Info size={14} /><p>Размеры и материал (ЛДСП или МДФ Вернисаж) правятся в окне «Отдельная панель» инструментов комнаты; здесь — положение в комнате, смета и раскрой.</p></div>
+    <div className="property-section kitchen-note"><Info size={14} /><p>Размеры и материал (ЛДСП или МДФ) правятся в окне «Отдельная панель» инструментов комнаты; здесь — положение в комнате, смета и раскрой.</p></div>
     <Position {...props} open stages="bodies" /></div>;
   return <div className="kitchen-panel">
     <div className="property-section kitchen-head"><span className="eyebrow">Импорт из Базиса · как есть</span><h2>{m.name}</h2><p>{Math.round(m.width)} × {Math.round(m.height)} × {Math.round(m.depth)} мм</p></div>

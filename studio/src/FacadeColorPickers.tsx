@@ -44,10 +44,10 @@ export function FilmSwatches({ cover, list, value, onPick }: { cover: "film" | "
   return <div className="facade-colors" data-picker={cover}>
     <div className="facade-colors-head">
       <span className="facade-colors-cur" style={{ background: cur?.color ?? "transparent", backgroundImage: cur?.url ? `url(${base}${cur.url})` : undefined }} aria-hidden="true" />
-      <b>{value ?? "Плёнка не выбрана"}</b>{cur?.kind === "name" && <small title="Образца этой плёнки на сайте Вернисажа нет — цвет условный, по названию"> ≈ цвет условный</small>}
+      <b>{value ?? "Плёнка не выбрана"}</b>{cur?.kind === "name" && <small title="Образца этой плёнки на сайте поставщика нет — цвет условный, по названию"> ≈ цвет условный</small>}
     </div>
     <input type="search" className="facade-colors-search" aria-label="Поиск плёнки" placeholder="Название плёнки…" value={q} onChange={(e) => setQ(e.target.value)} />
-    <div className="facade-colors-box" role="radiogroup" aria-label="Каталог плёнок Вернисаж">
+    <div className="facade-colors-box" role="radiogroup" aria-label="Каталог плёнок МДФ">
       {groups.map((g) => <section key={g}><h5>{g}</h5><div className="facade-colors-grid facade-colors-grid--film">
         {found.filter((f) => f.group === g).map((f) => {
           const s = swatches.get(f.name)!, tip = `${f.name}${f.note ? " · " + f.note : ""}${s.kind === "name" ? " · образца на сайте нет, цвет условный" : ""}`;
@@ -58,6 +58,6 @@ export function FilmSwatches({ cover, list, value, onPick }: { cover: "film" | "
       </div></section>)}
       {!found.length && <p className="field-note">Не найдено.</p>}
     </div>
-    <p className="field-note">{list.length} плёнок: {real} — образец с сайта Вернисажа, у остальных «≈» — цвет условный, по названию (образца на сайте нет).</p>
+    <p className="field-note">{list.length} плёнок: {real} — образец с сайта поставщика, у остальных «≈» — цвет условный, по названию (образца на сайте нет).</p>
   </div>;
 }

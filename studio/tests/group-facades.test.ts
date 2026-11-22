@@ -102,7 +102,7 @@ test('Вернисаж группе: меняется только изменё�
   const base=mod(p,'w1').vernissage!,next={...base,film:'Моно серый'};
   const patch=changedKeys(base,next) as Record<string,unknown>;assert.deepEqual(patch,{film:'Моно серый'});
   const r=applyGroupPatch(p,['w1','w2','w3','dr'],'vernissage',patch);
-  assert.deepEqual(r.changed,['w1','w2','w3']);assert.deepEqual(r.skipped.map(s=>[s.id,s.reason]),[['dr','фасады не МДФ Вернисаж']]);
+  assert.deepEqual(r.changed,['w1','w2','w3']);assert.deepEqual(r.skipped.map(s=>[s.id,s.reason]),[['dr','фасады не МДФ']]);
   assert.equal(mod(r.project,'w2').vernissage!.milling,'4','фрезеровка w2 осталась своя');
   assert.equal(mod(r.project,'w1').vernissage!.milling,base.milling);
   for(const id of ['w1','w2','w3'])assert.equal(mod(r.project,id).vernissage!.film,'Моно серый');

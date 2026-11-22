@@ -40,7 +40,7 @@ export function FacadeEditor({project,moduleId,selectedIds=[],commit,close,onPre
    <AluPicker value={draft.alu} onChange={v=>setDraft({...draft,alu:v})}/>
    {aluDrawersAvailable(draft)&&<AluDrawersCheck checked={!!draft.aluDrawers} onChange={v=>{const n={...draft};if(v)n.aluDrawers=true;else delete n.aluDrawers;setDraft(n);}}/>}
   </>}
-  {kind==='external'&&<p className="field-note">Для другого поставщика требуется отдельная цена. Выберите Вернисаж, чтобы задать плёнку или краску и фрезеровку из каталога с прайсом.</p>}
+  {kind==='external'&&<p className="field-note">Для другого поставщика требуется отдельная цена. Выберите МДФ с фрезеровкой, чтобы задать плёнку или краску и фрезеровку из каталога с прайсом.</p>}
   <label className="hardware-field">Область применения<select aria-label="Область применения фасадов" value={scope} onChange={e=>setScope(e.target.value as typeof scope)}><option value="module">Фасады корпуса: {source.name}</option><option value="group" disabled={!selectedIds.length}>Выделенные модули ({selectedIds.length})</option><option value="all">Фасады всех редактируемых модулей</option></select></label>
   {scope==='group'&&<p className="field-note">Выделенным модулям переносится только то, что вы изменили здесь; их остальные настройки фасадов сохраняются. Поле за полем — раздел «Фасады выделенных модулей» справа.</p>}{scope!=='module'&&<p className="field-note">Корпуса без фасадов, импорт Базиса, двери купе и столешницы пропускаются. Размеры и наполнение сохраняются.</p>}
   {error&&<p role="alert" className="field-note">{error}</p>}

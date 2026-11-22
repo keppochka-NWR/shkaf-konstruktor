@@ -32,7 +32,7 @@ export function sideFacadeSpec(v: VernissageFacade): VernissageFacade {
   delete out.open; delete out.patina; delete out.twoSided;
   return normalizeVernissage(out);
 }
-export const vernissageMillingName = (id: string) => (id === SIDE_FACADE_MILLING ? `Вернисаж №${id} гладкий` : `Вернисаж №${id}`);
+export const vernissageMillingName = (id: string) => (id === SIDE_FACADE_MILLING ? `МДФ №${id} гладкий` : `МДФ №${id}`);
 export const VERNISSAGE_SERIES = V_SERIES;
 export const VERNISSAGE_FILMS = V_FILMS;
 export const ADILET_FILMS = V_ADILET_FILMS;
@@ -315,8 +315,8 @@ export function vernissageLabel(v: VernissageFacade): string {
   const m = vernissageMilling(v.milling), s = seriesOf(v.milling);
   const cover = v.cover === 'film' ? `плёнка ${v.film ?? '—'}` : v.cover === 'adilet' ? `плёнка Адилет ${v.film ?? '—'}` : v.cover === 'pet' ? `ПЭТ ${v.film ?? '—'}` : v.cover === 'enamel-matte' ? `эмаль мат${v.enamelColor ? ' ' + enamelColorLabel(v.enamelColor) : ''}` : v.cover === 'enamel-gloss' ? `эмаль глянец${v.enamelColor ? ' ' + enamelColorLabel(v.enamelColor) : ''}` : s.id === 'handle' ? 'без покрытия' : 'без плёнки';
   const open = v.open === 'glass' ? ', под стекло' : v.open === 'grille' ? ', решётка' : '';
-  if (s.id === 'pet') return `Вернисаж ${s.name}, ${cover}, МДФ ${v.thickness}`;
-  return `Вернисаж ${s.name} ${s.id === 'handle' ? '' : '№'}${m?.id ?? v.milling}${open}, ${cover}, МДФ ${v.thickness}`;
+  if (s.id === 'pet') return `МДФ ${s.name}, ${cover}, МДФ ${v.thickness}`;
+  return `МДФ ${s.name} ${s.id === 'handle' ? '' : '№'}${m?.id ?? v.milling}${open}, ${cover}, МДФ ${v.thickness}`;
 }
 
 /** Текстура плёнки в 3D: образец декора с сайта Вернисажа (studio/public/textures/vernissage/, разрешение Макса 10.10.2026;

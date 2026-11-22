@@ -69,7 +69,7 @@ test('угловая мойка: Г-образный фальш (планки п
   assert.equal(k01.sections[0].hingeSide,'left');
 });
 
-test('фальш мойки сохраняется в проекте (parseModule); планка по высоте фальша у k28 m17; кухня до 1650 мм шириной, шкаф — до 1300',{skip:!has('k25')||!has('k28')},()=>{
+test('фальш мойки сохраняется в проекте (parseModule); планка по высоте фальша у k28 m17; ширина 1480 мм допустима для кухни и шкафа',{skip:!has('k25')||!has('k28')},()=>{
   const m=moduleFromEtalon(load('k25','m02')).module;
   const back=parseModule(JSON.parse(JSON.stringify(m)));
   assert.deepEqual(back.kitchen?.faceFiller,m.kitchen?.faceFiller);
@@ -78,7 +78,7 @@ test('фальш мойки сохраняется в проекте (parseModul
   assert.equal(k28.kitchen?.faceFiller?.stripFull,true);
   assert.ok(!validate(k28).some(e=>e.startsWith('Ширина')),'мойка 1480 — без ошибки ширины');
   const w=initialModule();w.width=1480;
-  assert.ok(validate(w).some(e=>e.startsWith('Ширина')),'шкаф 1480 — ошибка, как раньше');
+  assert.ok(!validate(w).some(e=>e.startsWith('Ширина')),'шкаф 1480 в пределах листа');
 });
 
 test('поле «Ширина» во вкладке Кухня — тот же предел, что в проверке кухни (KITCHEN.maxModuleWidth), а не 1200: мойку 1480 можно править',()=>{

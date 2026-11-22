@@ -51,7 +51,7 @@ export function estimateBreakdown(p:Project,plan:Sheet[]=nest(p),e:ReturnType<ty
  // раскрой и смета считают листы одинаково (estimate(p,plan)); если вдруг разошлись — одна строка по смете, чтобы итог сошёлся
  if(sheetRows.reduce((s,r)=>s+r.qty,0)!==e.ldspSheets&&e.ldspSheets)sheetRows.splice(0,sheetRows.length,{id:SHEETS_LINE_ID,label:'Листы ЛДСП с кромкой, крепежом и работой',qty:e.ldspSheets,unit:'лист',price:sheetPrice,amount:e.ldspSheets*sheetPrice,status:'priced'});
  groups.get('sheets')!.push(...sheetRows);
- for(const l of client.lines){if(l.id===SHEETS_LINE_ID)continue;const r=rowOf(l,byId.get(l.id)),g=groupOf(l.id);
+ for(const l of client.lines){if(l.id===SHEETS_LINE_ID)continue;const r=rowOf(l,byId.get(l.id)),g=l.id==='sheet-oversize'?'sheets':groupOf(l.id);
   if(g==='hardware')r.sub=HARDWARE_KINDS[hardwareKind(l.id)];groups.get(g)!.push(r);}
  // фурнитура — по видам (петли, направляющие комплектами, ручки, опоры, штанги, крепёж), внутри вида — с ценой выше
  const hw=groups.get('hardware')!,kindOf=(r:BreakdownRow)=>HW_ORDER.indexOf(hardwareKind(r.id));

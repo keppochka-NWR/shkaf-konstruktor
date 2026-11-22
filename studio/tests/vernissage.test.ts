@@ -143,8 +143,8 @@ test('Вернисаж: ограничения размеров из паспо�
   assert.ok(vernissageSizeCheck('45', 'solid', 1050, 2600).errors.length === 1);
   // проверка проекта: кухонная бутылочница 150 с №3 — фасад уже 246 мм по паспорту — ошибка; №1 (паспорта нет) — без ограничений
   const narrow = { ...kitchenBase(initialModule(), 150, 'doors'), vernissage: { milling: '3', cover: 'film', film: 'Моно белый', thickness: 19 } as VernissageFacade, facadeT: 19 };
-  assert.ok(validate(narrow).some((e) => e.includes('Вернисаж') && e.includes('246')), validate(narrow).join('; '));
-  assert.ok(!validate({ ...narrow, vernissage: { ...narrow.vernissage, milling: '1' } }).some((e) => e.includes('Вернисаж')));
+  assert.ok(validate(narrow).some((e) => e.includes('Фасад МДФ') && e.includes('246')), validate(narrow).join('; '));
+  assert.ok(!validate({ ...narrow, vernissage: { ...narrow.vernissage, milling: '1' } }).some((e) => e.includes('Фасад МДФ')));
   // шапка паспорта: №113 — МДФ 22 мм; №78 — эмаль только матовая
   assert.ok(vernissageFacadePrice({ milling: '113', cover: 'film', film: 'Моно белый', thickness: 19 }, 450, 716).warnings.some((w) => w.includes('22')));
 });
@@ -297,7 +297,7 @@ test('Вернисаж: шкаф по умолчанию, №86, эмаль ма
   assert.ok(mk.byMarkup !== null && mk.byMarkup > mkBase.byMarkup!, `оценка по коэффициенту ${mkBase.byMarkup} → ${mk.byMarkup}`);
   assert.ok(mk.split.materialCost >= Math.round(cost) - 1, 'закупка фасадов — в материалах');
   // CSV сметы показывает фасады сверху листов
-  assert.ok(estimateCSV({ ...base, modules: [{ ...p.modules[0], module: m }] }).includes('Фасады Вернисаж: закупка × коэффициент Вернисажа'));
+  assert.ok(estimateCSV({ ...base, modules: [{ ...p.modules[0], module: m }] }).includes('Фасады МДФ: закупка × коэффициент фасадов МДФ'));
 });
 
 test('Вернисаж: цена клиенту = закупка × 2 (решение Макса 10.10.2026) в обеих моделях — ручной пример', () => {
@@ -326,7 +326,7 @@ test('Вернисаж: цена клиенту = закупка × 2 (реше�
   assert.equal(s.retail, s.bySheet);
   // свой коэффициент проекта (calculation.vernissageMarkup): 8710,40 × 1,8 = 15 678,72 → 15 700
   assert.equal(estimate({ ...q, calculation: { markup: 2.2, overrides: {}, vernissageMarkup: 1.8 } }).vernissageOnTop, 15700);
-  assert.ok(estimateCSV(q).includes('коэффициент Вернисажа'));
+  assert.ok(estimateCSV(q).includes('коэффициент фасадов МДФ'));
 });
 
 test('Вернисаж: текстуры плёнок с сайта — файл есть, масштаб в мм, UV по образцу; однотонные и ПЭТ — цвет образца', () => {

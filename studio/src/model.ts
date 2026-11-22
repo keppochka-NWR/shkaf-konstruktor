@@ -1,3 +1,4 @@
+import { SHEETS, BODY_DIMENSION_ENVELOPE, fitsSheet, sheetFormat } from "./sheetLimits";
 import { surfaceLightParts, parseSurfaceLights, type SurfaceLight } from './surfaceLights';
 import {applyBasketParts} from './kitchenBasket';
 import { isEditableDesignIssue } from './editableDesignIssues';
@@ -46,7 +47,7 @@ export const RULES = {
   // ящичный модуль от 150). Наполнение, которое в малый корпус физически не входит (двери, ящики, штанга, полки, цоколь), не запрещает
   // размер — снимается с сообщением (smallSize.ts fitSmallModule).
   minW: 100,
-  maxW: 1300, // ТЗ Макса 1200, но заказ 7212718 — шкаф и антресоль 1244; СТП 900 — предупреждение по логистике выше 900
+  maxW: BODY_DIMENSION_ENVELOPE, // Реальный предел - по деталям и формату листа.
   minH: 100, // было 250 (антресоли заказов 300–372)
   // Подвесной ящик на стене (заказ 7437584: 800 × 200 и 600 × 200, push): корпус без дверей, в секциях только ящики (minHeightOf); было 150
   minDrawerModuleH: 100,
@@ -54,7 +55,7 @@ export const RULES = {
   seatH: 450, // предлагаемая высота скамьи в прихожей (заказ 7437584)
   maxH: 2500, // шкафы заказа 6785429 2412 (боковина 2396 из листа 2750); было 2200
   minD: 200, // заказы цеха: шкафы 240 (заказ 6990041), стеллажи 200 (Дельта КИП)
-  maxD: 700,
+  maxD: BODY_DIMENSION_ENVELOPE,
   minSection: 68, // секция от 100 мм по корпусу (100 − 2 × 16 внутри; волна 29.10, было 180 внутри)
   partialDividerMin: 150, // частичная перегородка — не ниже 150 мм (решение Макса 23.10.2026: перегородка между двумя горизонталями)
   maxSections: 4,
@@ -76,12 +77,12 @@ export const RULES = {
   // Палитра «Подвесной ящик»: низ над полом по умолчанию (заказ 7437584, изделие 1 — 750), дальше — поле «От пола».
   hangingFloorY: 750,
   shelfMinClear: 80,
-  sheetW: 2750,
-  sheetH: 1830,
-  hdfW: 2800,
-  hdfH: 2070,
+  sheetW: SHEETS.board.long,
+  sheetH: SHEETS.board.short,
+  hdfW: SHEETS.hdf.long,
+  hdfH: SHEETS.hdf.short,
   // Conservative preview envelope from G code/RULES.md; production release requires confirmation.
-  sheetMargin: 10,
+  sheetMargin: SHEETS.margin,
   // Пропил между деталями в раскрое (правило Макса: лист 2750×1830, пропил 4 мм; обрезка края листа — sheetMargin отдельно).
   // До 28.10.2026 промежуток был 10 мм тем же параметром, что и поле, — смета брала лишний лист (критик 28.10).
   sheetKerf: 4,
@@ -1392,7 +1393,7 @@ function partsCore(m: Module): Part[] {
     const sf = sp.facade && m.vernissage ? sideFacadeSpec(m.vernissage) : undefined, st = sf ? sf.thickness : t;
     if (sf) {
       add("side-panel:" + side, "Видимый бок " + (side === "left" ? "левый" : "правый") + " · МДФ " + vernissageMillingName(sf.milling) + " " + sp.height + "×" + sp.depth, [st, sp.height, sp.depth], [side === "left" ? -st / 2 : m.width + st / 2, sp.height / 2, d + (m.faceAir ?? 2) + (m.facadeT ?? t) - sp.depth / 2], sp.height, sp.depth, st);
-      const p = out.at(-1)!; p.edge = [0, 0, 0, 0]; p.external = true; p.sideFacade = true; p.decor = "Вернисаж"; p.look = { color: vernissageColor(sf), roughness: 0.62 };
+      const p = out.at(-1)!; p.edge = [0, 0, 0, 0]; p.external = true; p.sideFacade = true; p.decor = "МДФ"; p.look = { color: vernissageColor(sf), roughness: 0.62 };
       continue;
     }
     add("side-panel:" + side, (sp.thick === 32 ? "Добор декоративный 32 · плита 1 · " : "Фальшпанель боковая ") + (side === "left" ? "левая" : "правая") + " " + sp.height + "×" + sp.depth, [t, sp.height, sp.depth], [side === "left" ? -t / 2 : m.width + t / 2, sp.height / 2, d + 18 - sp.depth / 2], sp.height, sp.depth, t);
@@ -2166,7 +2167,7 @@ function partsCore(m: Module): Part[] {
   // Фасады из фасадного материала (МДФ, плёнка, эмаль) — сторонний участок: не в раскрой ЛДСП, без кромки.
   if(m.facadeMaterial==='external')for(const p of out)if((p.role==='door'||p.id.endsWith(':facade'))&&p.id!=='face-filler:panel:facade'&&p.id!=='side-strip:fp:facade'){const fk=m.facadeEdge??0;p.external=true;p.edge=[fk,fk,fk,fk];if(!p.name.includes('фасадный материал'))p.name+=' · фасадный материал';}
   // Фасады «Вернисаж» (МДФ с фрезеровкой) — сторонний участок: не в раскрой ЛДСП, без кромки цеха; 3D и цена — по фрезеровке и прайсу.
-  if(m.vernissage)for(const p of out)if((p.role==='door'||p.id.endsWith(':facade'))&&p.material==='board'&&!p.id.startsWith('face-filler')&&!p.taper&&!p.look&&!p.model){p.external=true;p.vernissage=true;p.edge=[0,0,0,0];if(!p.name.includes('Вернисаж'))p.name+=` · Вернисаж №${m.vernissage.milling}`;}
+  if(m.vernissage)for(const p of out)if((p.role==='door'||p.id.endsWith(':facade'))&&p.material==='board'&&!p.id.startsWith('face-filler')&&!p.taper&&!p.look&&!p.model){p.external=true;p.vernissage=true;p.edge=[0,0,0,0];if(!p.name.includes('МДФ №'))p.name+=` · МДФ №${m.vernissage.milling}`;}
   // Угловые фальши верхнего ряда наследуют покрытие фасадов, но всегда остаются гладкими.
   // facadeMat определяет конструкцию угла, поэтому при смене покрытия его не меняем.
   if(m.kitchen?.role==='wall'||m.kitchen?.role==='antresol')for(const p of out){
@@ -2174,8 +2175,8 @@ function partsCore(m: Module): Part[] {
     if(m.vernissage){
       const spec=sideFacadeSpec(m.vernissage),dt=spec.thickness-p.size[2];
       p.size[2]=spec.thickness;p.thickness=spec.thickness;p.position[2]+=dt/2;
-      p.external=true;p.sideFacade=true;p.edge=[0,0,0,0];p.decor='Вернисаж';
-      p.name='Угловая фальшпанель · МДФ Вернисаж №15 гладкий';
+      p.external=true;p.sideFacade=true;p.edge=[0,0,0,0];p.decor='МДФ';
+      p.name='Угловая фальшпанель · МДФ №15 гладкий';
       p.look={color:vernissageColor(spec),roughness:0.62};
     }else if(!m.alu&&m.facadeMaterial!=='external'){
       p.decor=m.facadeDecor??m.decor;
@@ -2766,7 +2767,7 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
     ["height", "Высота стола", RULES.deskMinH, RULES.deskMaxH],
     ["depth", "Глубина стола", RULES.minD, RULES.maxD],
   ] : [
-    // кухня: бутылочница 150 (вкладка «Кухня»); до 1650 — самый широкий модуль 34 кухонь Базиса 1649 (k19 m07), мойки 1430/1480 (n4-base)
+    // Верхняя граница поля не заменяет проверку каждой построенной детали по листу.
     ["width", "Ширина", m.kitchen ? KITCHEN.minWidth : RULES.minW, m.kitchen ? KITCHEN.maxModuleWidth : m.kupeZone ? kupeBodyMax() : RULES.maxW],
     ["height", "Высота", minHeightOf(m), maxHeightOf(m)], // кухонный пенал до 2900 (Базис), остальное до 2500; ящичный модуль от 150
     ["depth", "Глубина", RULES.minD, RULES.maxD],
@@ -2805,7 +2806,7 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
   if(m.doorMount!==undefined&&!['overlay','inset'].includes(m.doorMount))errors.push('Неверный тип монтажа фасадов.');
   if(m.doorOpen!==undefined&&!['handle','push'].includes(m.doorOpen))errors.push('Неверный тип открывания фасадов.');
   if(m.topStrip!==undefined&&(!Number.isFinite(m.topStrip)||m.topStrip<RULES.topStripMin||m.topStrip>RULES.topStripMax))errors.push(`Планка под крышей: от ${RULES.topStripMin} до ${RULES.topStripMax} мм.`);
-  if(m.sidePanels!==undefined)for(const side of ['left','right'] as const){const sp=m.sidePanels[side];if(sp===undefined)continue;if(!Number.isFinite(sp.height)||!Number.isFinite(sp.depth)||sp.height<m.height-1||sp.height>RULES.sidePanelMaxH||sp.depth<m.depth||sp.depth>RULES.sidePanelMaxD)errors.push(`Боковая фальшпанель: высота от высоты корпуса до ${RULES.sidePanelMaxH}, глубина от глубины корпуса до ${RULES.sidePanelMaxD} мм.`);if(sp.facade&&!m.vernissage)errors.push('Видимый бок из фасадного материала — только у фасадов МДФ Вернисаж. Снимите флажок «Видимый бок из фасада» у боковой панели (останется боковая панель ЛДСП) или оставьте фасады Вернисаж.');/* критик 29.10, п.11: текст с действием — плашка не подставляет «Измените размер корпуса» */if(sp.facade&&sp.thick)errors.push('Видимый бок из фасадного материала не склеивается в 32 мм: снимите «Добор 32 мм».');}
+  if(m.sidePanels!==undefined)for(const side of ['left','right'] as const){const sp=m.sidePanels[side];if(sp===undefined)continue;if(!Number.isFinite(sp.height)||!Number.isFinite(sp.depth)||sp.height<m.height-1||sp.height>RULES.sidePanelMaxH||sp.depth<m.depth||sp.depth>RULES.sidePanelMaxD)errors.push(`Боковая фальшпанель: высота от высоты корпуса до ${RULES.sidePanelMaxH}, глубина от глубины корпуса до ${RULES.sidePanelMaxD} мм.`);if(sp.facade&&!m.vernissage)errors.push('Видимый бок из фасадного материала — только у фасадов МДФ. Снимите флажок «Видимый бок из фасада» у боковой панели (останется боковая панель ЛДСП) или оставьте фасады МДФ.');/* критик 29.10, п.11: текст с действием — плашка не подставляет «Измените размер корпуса» */if(sp.facade&&sp.thick)errors.push('Видимый бок из фасадного материала не склеивается в 32 мм: снимите «Добор 32 мм».');}
   if(m.rodType!==undefined&&!['round','oval'].includes(m.rodType))errors.push('Неверный тип штанги.');
   if(m.feet&&m.bottomType==='none'&&!railsOf(m).some(r=>r.place.endsWith('bottom')))errors.push('Каркас без дна на ножках нужно связать нижней стяжкой.');
   for(const [k,lo,hi] of [['faceGap',0,5],['faceGapBetween',0,10],['backGap',0,10],['grooveWidth',3,10],['grooveClear',0,3],['facadeT',3,40],['drawerFacadeT',3,40],['faceAir',0,10],['shelfRear',m.kitchen?-100:0,100],['shelfPinInset',20,200],['confirmatInset',20,200]] as const){const v=m[k];if(v!==undefined&&(!Number.isFinite(v)||v<lo||v>hi))errors.push(`Параметр ${k}: ${lo}–${hi} мм.`);}
@@ -3044,16 +3045,11 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
   }
   for (const p of geometry) {
     if (p.material === "metal") continue;
-    const sw = p.material === "hdf" ? RULES.hdfW : RULES.sheetW,
-      sh = p.material === "hdf" ? RULES.hdfH : RULES.sheetH;
-    if (
-      !p.size.every((n) => Number.isFinite(n) && n > 0) ||
-      p.length > sw - 2 * RULES.sheetMargin ||
-      p.width > sh - 2 * RULES.sheetMargin
-    )
-      errors.push(
-        `«${p.name}» не помещается в полезное поле листа или имеет неверный размер.`,
-      );
+    const sheet = sheetFormat(p);
+    if (!p.size.every(n => Number.isFinite(n) && n > 0))
+      errors.push(`«${p.name}» имеет неверный размер.`);
+    else if (p.material !== "glass" && p.material !== "alu" && !p.external && !fitsSheet(p))
+      errors.push(`«${p.name}» ${p.length} × ${p.width} мм не помещается в полезное поле листа ${sheet.long - 2 * SHEETS.margin} × ${sheet.short - 2 * SHEETS.margin} мм с учётом направления текстуры (лист ${sheet.long} × ${sheet.short}, обрезка ${SHEETS.margin} мм с каждой стороны).`);
     if (p.id === "slope-filler") continue; // фальш над фасадами — не створка: без ограничений ширины/высоты двери
     // Кухня: фасады до 700 (в проектах Базиса цеха навесные 627–650 мм при высоте 927); шкафы — правило цеха doorMax.
     // антресоль кухни с подъёмным фасадом (петли сверху) — до ширины кухонного корпуса 1200, как в Базисе (А 975×357)
@@ -3093,7 +3089,7 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
   // фасады «Вернисаж»: габарит по таблице размеров паспорта PDF (глухой / витрина / решётка / ящик). Меньше минимума ящика при
   // примечании паспорта «Ящик < Min размера изготавливается без фрезеровки» — не ошибка: фасад без фрезеровки (предупреждение в выборе).
   errors.push(...kitchenLiftRowErrors(m,geometry,innerBottom(m)));
-  if(m.vernissage)for(const p of geometry)if(p.vernissage)errors.push(...vernissageSizeCheck(m.vernissage.milling,m.vernissage.open,p.size[0],p.size[1]).errors.map(e=>'Фасад Вернисаж '+e+'. Выберите другую фрезеровку или измените размер.'));
+  if(m.vernissage)for(const p of geometry)if(p.vernissage)errors.push(...vernissageSizeCheck(m.vernissage.milling,m.vernissage.open,p.size[0],p.size[1]).errors.map(e=>'Фасад МДФ '+e+'. Выберите другую фрезеровку или измените размер.'));
   // ревью R4: направляющие ящиков на составном фальше опираются на его плиту (после остальных проверок — геометрия собрана)
   if(!errors.length)errors.push(...falshSupportErrors(m));
   return [...new Set(errors)];

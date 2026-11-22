@@ -12,7 +12,7 @@ export type FacadeKindLabel = "ldsp" | "external" | "vernissage" | "alu";
 /** Материал фасадов — клиентские названия без «в раскрое цеха», «сторонний участок», «(прайс)». */
 export const FACADE_KIND_LABEL: Record<FacadeKindLabel, string> = {
   ldsp: "ЛДСП",
-  vernissage: "МДФ Вернисаж",
+  vernissage: "МДФ в плёнке / МДФ краска",
   alu: "Алюминиевая рамка",
   external: "Другой материал — МДФ, эмаль, плёнка",
 };

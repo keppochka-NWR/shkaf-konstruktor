@@ -58,7 +58,7 @@ test('КП: фасады Вернисаж — серия, фрезеровка �
   const p=kitchenProject(),m=p.modules.find(a=>a.module.doors&&a.module.kitchen?.role==='base')!.module,id=VERNISSAGE_MILLINGS[0].id;
   m.vernissage={milling:id,cover:'film',film:'Моно белый',thickness:19};
   const d=describeModule(m),f=d.materials.find(x=>x.startsWith('Фасады:'))!;
-  assert.ok(f.includes('«Вернисаж»')&&f.includes('серия «')&&f.includes('фрезеровка №'+id)&&f.includes('плёнка ПВХ «Моно белый»')&&f.includes('19 мм'),f);
+  assert.ok(!f.includes('Вернисаж')&&f.includes('МДФ')&&f.includes('серия «')&&f.includes('фрезеровка №'+id)&&f.includes('плёнка ПВХ «Моно белый»')&&f.includes('19 мм'),f);
   assert.ok(!f.includes(m.facadeDecor+'')||m.facadeDecor==='Моно белый','не декор ЛДСП «'+m.facadeDecor+'»');
   const w=newProject().modules[0].module;w.alu={profile:'F1-09',color:'silver',insert:'mirror-silver'};
   const a=describeModule(w).materials.find(x=>x.startsWith('Фасады:'))!;
