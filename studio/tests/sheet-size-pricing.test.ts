@@ -13,7 +13,18 @@ test('only a single part crossing both thresholds adds one surcharge per LDSP sh
  const ordinary=calc([[2500,900]]);
  for(const pair of [[2600,600],[2000,1000],[2500,901],[2501,900],[900,2500]])assert.equal(calc([pair]).bySheet,ordinary.bySheet);
  assert.equal(calc([[2600,600],[2000,1000]]).oversizedSheets,0);
- const large=calc([[2501,901],[901,2501]]);
+ for(const [edgeLong,edgeShort] of [[2500,900],[1700,1400],[2650,570]]){
+   for(const [long,short,count] of [[edgeLong,edgeShort,0],[edgeLong+1,edgeShort,0],[edgeLong,edgeShort+1,0],[edgeLong+1,edgeShort+1,1]]){
+     for(const pair of [[long,short],[short,long]]){
+       const quoted=calc([pair]);
+       assert.equal(quoted.oversizedSheets,count,pair.join(' × '));
+       assert.equal(quoted.bySheet,ordinary.bySheet+count*quoted.sheetPrice);
+     }
+   }
+ }
+ assert.equal(calc([[2650,1400]]).oversizedSheets,1); // превышает 2500 × 900
+ assert.equal(calc([[2651,550],[1699,1450]]).oversizedSheets,0);
+ const large=calc([[2651,1401],[901,2501]]);
  assert.equal(large.oversizedSheets,1);
  assert.equal(large.bySheet-ordinary.bySheet,large.sheetPrice);
  assert.equal(clientView(large).lines.find(l=>l.id==='sheet-oversize')?.quantity,1);

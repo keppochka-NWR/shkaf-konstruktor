@@ -1,3 +1,4 @@
+import {DOUBLE_PRICE_LABEL} from './sheetLimits';
 import type {PriceLine} from './pricing';
 import {PENDING_CLIENT} from './pendingPrices';
 /** Клиентский вид сметы для публичной сборки: в строках — розничная цена (база × коэффициент сметы, фасады Вернисаж —
@@ -43,7 +44,7 @@ export function clientView<T extends EstimateLike>(e:T):T{
   const block=e.missingExtrasLines?new Set(e.missingExtrasLines):null;
   const missing=lines.filter((_,i)=>e.lines[i].unitPrice===null&&!e.lines[i].pending&&(!block||block.has(e.lines[i]))),pending=lines.filter((_,i)=>e.lines[i].pending);
   const missingExtrasLines=block?missing:undefined;
-  if(e.model==='sheet'&&e.oversizedSheets) lines.unshift({id:'sheet-oversize',label:'Доплата за листы с деталью свыше 2500 × 900 мм',quantity:e.oversizedSheets,unit:'лист',unitPrice:e.sheetPrice,source:CLIENT_SOURCE,retail:true});
+  if(e.model==='sheet'&&e.oversizedSheets) lines.unshift({id:'sheet-oversize',label:DOUBLE_PRICE_LABEL,quantity:e.oversizedSheets,unit:'лист',unitPrice:e.sheetPrice,source:CLIENT_SOURCE,retail:true});
   if(e.model==='sheet'&&e.ldspSheets)lines.unshift({id:SHEETS_LINE_ID,label:'Листы ЛДСП с кромкой, крепежом и работой',quantity:e.ldspSheets,unit:'лист',unitPrice:e.sheetPrice,source:CLIENT_SOURCE,retail:true});
   const client=lines.reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0);
   return {...e,lines,missing,...(missingExtrasLines?{missingExtrasLines}:{}),pending,knownCost:Math.round(client),

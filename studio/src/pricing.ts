@@ -14,6 +14,7 @@ import {facadeHandleId} from './model';
 import {parts,drawerConfig,RULES,legCount,fastenerCounts,pulloutLength,HINGE_ANGLE_LABEL} from './model';
 import {worktopLines,isSlabWorktop} from './kitchen';
 import {edgeLength} from './edges';
+import {DOUBLE_PRICE_LABEL,requiresDoubleSheetPrice} from './sheetLimits';
 import {nest,unplacedDetails,cuttingEngine,quoteBreakdown,splitRows,type Sheet} from './exports';
 import {isBazisModule,type Project} from './project';
 import type {BazisItem} from './model';
@@ -708,8 +709,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   add('work','Работа цеха: ЛДСП',plan.filter(s=>s.material!=='hdf'&&!facadePanel(s.decor)).length,'лист',SHOP_WORK_LDSP_SHEET,'Цех: '+rub(SHOP_WORK_LDSP_SHEET)+' ₽ за лист ЛДСП'+(kitchenOnly&&hdfSheets?' (у кухни лист ЛХДФ без работы)':'')+notBazis);
   if(!kitchenOnly)add('work-hdf','Работа цеха: ЛХДФ',hdfSheets,'лист',SHOP_WORK_HDF_SHEET,'Цех: '+rub(SHOP_WORK_HDF_SHEET)+' ₽ за лист ЛХДФ (сам лист — строкой «ЛХДФ 3 мм»)'+notBazis);
   const carcassSheets=plan.filter(sheet=>sheet.material!=='hdf'&&!facadePanel(sheet.decor));
-  const oversizedSheets=carcassSheets.filter(sheet=>sheet.items.some(({detail})=>
-    Math.max(detail.width,detail.length)>2500 && Math.min(detail.width,detail.length)>900)).length;
+  const oversizedSheets=carcassSheets.filter(sheet=>sheet.items.some(({detail})=>requiresDoubleSheetPrice(detail))).length;
   const ldspSheets=carcassSheets.length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT;
   const frameBase=(ldspSheets+oversizedSheets)*sheetPrice;
   const installationBase=p.modules.some(a=>!!a.module.kupe||!!a.module.metalFrame)||lines.some(l=>l.id.startsWith("unplaced"))?null:installationValue(frameBase,lines,settings.markup,settings.vernissageMarkup??VERNISSAGE_MARKUP_DEFAULT);
@@ -794,7 +794,7 @@ export function estimateCSV(p:Project,result=estimate(p)){
  if(PUBLIC_BUILD)rows.push(['Итого по позициям','','','',result.knownCost,'',''],...(result.retail!==null&&result.retail!==result.knownCost?[['Округление до итога сметы','','','',result.retail-result.knownCost,'','']]:[]),['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения',serviceTerms(p.services),'','','','','']);
  // цена — только по листам (решение Макса 30.10.2026): строк «по коэффициенту» и выбора модели нет
  else rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент к закупке вне листа (стекло, зеркало, столешница)',result.markup,'','',result.offSheet||'','',''],...(result.vernissageOnTop?[['Фасады МДФ: закупка × коэффициент фасадов МДФ',result.vernissageMarkup,'',result.vernissageCost,result.vernissageOnTop,'Решение Макса 10.10.2026: клиенту закупка по прайсу × '+vk,'']]:[]),...(result.retailExtras?[['Розничные позиции','','','',result.retailExtras,'','']]:[]),['Листов ЛДСП',result.ldspSheets,'лист',result.sheetPrice,result.ldspSheets*result.sheetPrice,'Цена за лист: плита, кромка, крепёж и работа внутри','']
-   ,...(result.oversizedSheets?[['Доплата за листы с деталью свыше 2500 × 900 мм',result.oversizedSheets,'лист',result.sheetPrice,result.oversizedSheets*result.sheetPrice,'Оба габарита одной детали превышены','']]:[]),['Цена по листам','','','',result.bySheet,'Листы × цена листа + позиции вне листа (розница, Лемана, фасады МДФ, стекло и зеркало)',''],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],[engineNote(result),result.engine,'','','','',''],['Ограничения',serviceTerms(p.services),'','','','','']);
+   ,...(result.oversizedSheets?[[DOUBLE_PRICE_LABEL,result.oversizedSheets,'лист',result.sheetPrice,result.oversizedSheets*result.sheetPrice,'Оба габарита одной детали превышены','']]:[]),['Цена по листам','','','',result.bySheet,'Листы × цена листа + позиции вне листа (розница, Лемана, фасады МДФ, стекло и зеркало)',''],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],[engineNote(result),result.engine,'','','','',''],['Ограничения',serviceTerms(p.services),'','','','','']);
  // разбивка «Материалы / Фурнитура / Двери купе / Итого» (сумма граф = итогу) и позиции после финального расчёта конструктором (решения 16.10.2026)
  const split=result.retail===null?null:quoteBreakdown(String(result.retail),result);
  if(split)rows.push(...splitRows(split).map(([k,v])=>['Разбивка: '+k,'','','',v,'',''] as (string|number)[]),['Разбивка: Итого','','','',result.retail!,'','']);
