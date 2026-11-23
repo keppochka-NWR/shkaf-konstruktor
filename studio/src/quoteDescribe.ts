@@ -136,6 +136,7 @@ export function plainFeatures(m: Module, opts: { omitHinges?: boolean } = {}): s
   // заказ 7441182: утопленный цоколь, посадочное место и щит над ним — строкой в КП
   if (m.plinthRecess !== undefined) out.push(`цоколь утоплен на ${m.plinthRecess} мм, двери над цоколем`);
   if (m.seatTop) out.push("посадочное место 32 мм сверху — две плиты ЛДСП 16 склейкой под одну кромку");
+  if (m.topOnSides) out.push("крыша-столешка ЛДСП 16 на боковинах — на всю ширину и глубину");
   if (m.seatPanel) out.push(`щит ЛДСП 16 над сиденьем ${m.seatPanel.height} мм${m.seatPanel.decor && m.seatPanel.decor !== m.decor ? ", декор " + m.seatPanel.decor : ""}`);
   const handles = new Map<string, number>();
   for (const d of all) if (d.role === "handle") { const h = handleById(facadeHandleId(m, d.id) ?? DEFAULT_HANDLE); handles.set(h.label, (handles.get(h.label) ?? 0) + 1); }

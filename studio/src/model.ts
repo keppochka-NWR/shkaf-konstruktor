@@ -342,6 +342,9 @@ export type Module = {
   /** Посадочное место скамьи (заказ 7437584, скамья в прихожей): крыша 32 — две плиты 16 склейкой под одну кромку, лежит на боковинах
    *  на всю ширину и глубину корпуса (боковины короче на 32); кромка 2 по периметру верхней плиты, у нижней — нет. Склейка — розница 1000 ₽/м². */
   seatTop?: true;
+  /** Крыша-столешка на боковинах (заказ 7575931, шкаф над стиральной машиной): одна плита ЛДСП 16 на всю ширину и глубину корпуса,
+   *  боковины короче на 16; кромка 2 спереди и по бокам, сзади 0,4. Крепёж — эксцентрики снизу (видимого крепежа нет, решение 26.10). */
+  topOnSides?: true;
   /** Щит над корпусом у стены (заказ 7441182: щит 16 над посадочным местом на задней стене ниши): ЛДСП 16 на всю ширину корпуса,
    *  стоит на крыше (сиденье) у задней кромки, высота height от верха корпуса; декор — свой (decor) или корпуса. В раскрое — по своему декору. */
   seatPanel?: { height: number; decor?: string };
@@ -1294,7 +1297,7 @@ function partsCore(m: Module): Part[] {
   // Боковины: от пола (на цоколе) или от верха ножек; под стеклянной крышей — короче на её толщину.
   // Скос под потолок (правило Макса): крыша плоская на высоте низкой стороны, низкая боковина — до крыши, высокая — до потолка;
   // треугольник над фасадами закрывает фальш из фасадного материала вровень с фасадами. Так дешевле, чем косая крыша.
-  const sideTopAt = (x: number) => (m.slope ? (x < m.width / 2 === (m.slope.side === "left") ? m.slope.lowHeight : m.height) : m.height - (m.topGlass && hasTop(m) ? RULES.glassTop : m.seatTop && hasTop(m) ? 2 * t : 0));
+  const sideTopAt = (x: number) => (m.slope ? (x < m.width / 2 === (m.slope.side === "left") ? m.slope.lowHeight : m.height) : m.height - (m.topGlass && hasTop(m) ? RULES.glassTop : m.seatTop && hasTop(m) ? 2 * t : m.topOnSides && hasTop(m) ? t : 0));
   const lT = sideTopAt(t / 2), rT = sideTopAt(m.width - t / 2);
   // Скос фронта в плане: боковины разной глубины, горизонтали — трапецией (в раскрое габарит с пометкой «скос»).
   const dL = depthAt(m, 0), dR = depthAt(m, m.width), sk = m.skew ? " · скос" : "";
@@ -1336,6 +1339,10 @@ function partsCore(m: Module): Part[] {
       out.at(-1)!.edge = [2, 2, 2, 2];
       add("top:glue", "Посадочное место 32 · нижняя плита 16 (склейка до 32)", [m.width, t, d], [m.width / 2, m.height - 1.5 * t, d / 2], m.width, d, t);
       out.at(-1)!.edge = [0, 0, 0, 0];
+    } else if (m.topOnSides) {
+      // столешка на боковинах (заказ 7575931): плита 16 на всю ширину заподлицо с наружными гранями боковин; зад у стены — 0,4
+      add("top", "Крыша на боковинах · столешка 16", [m.width, t, d], [m.width / 2, m.height - t / 2, d / 2], m.width, d, t);
+      out.at(-1)!.edge = [2, 2, 2, 0.4];
     } else if (m.kitchen?.topBack) { // кухня Базиса (k33, k34): крыша короче сзади — перед ХДФ
       const tb = m.kitchen.topBack, td = d - tb;
       add("top", "Крыша" + sk, [m.width - 2 * t, t, td], [m.width / 2, m.height - t / 2, tb + td / 2], m.width - 2 * t, td, t); planTaper(out.at(-1)!, t, m.width - t, tb, 0);
@@ -1947,7 +1954,8 @@ function partsCore(m: Module): Part[] {
           const zc = k === 0 && !!m.kitchen && fixedIds.has(hp.id) && grooveBackFront !== undefined && Math.abs(z0 - grooveBackFront) < 0.6 && ins - z0 >= 20 && !m.kitchen.jointZ?.[`${hp.id}:${side}`] && !kitchenJointGrid(m, hp.id) ? ins : z;
           // посадочное место 32 лежит на боковинах (Module.seatTop): конфирмат сверху через обе плиты в торец боковины (под заглушку)
           // решение Макса 26.10: видимого крепежа быть не должно — сиденье крепим эксцентриками снизу (бочонок в нижней плите, шток в торец боковины)
-          if (hp.id === "top" && m.seatTop) { const sx = side === "left" ? t / 2 : m.width - t / 2, py = m.height - 2 * t;
+          // столешка на боковинах (Module.topOnSides, заказ 7575931) — так же, одна плита 16
+          if (hp.id === "top" && (m.seatTop || m.topOnSides)) { const sx = side === "left" ? t / 2 : m.width - t / 2, py = m.height - (m.seatTop ? 2 : 1) * t;
             add(`ecc:${hp.id}:${side}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelD, RULES.eccBarrelH, RULES.eccBarrelD], [sx + (side === "left" ? RULES.eccCenter : -RULES.eccCenter), py + RULES.eccBarrelH / 2 - 0.3, zc], RULES.eccBarrelD, RULES.eccBarrelH, RULES.eccBarrelD, "fastener", hp.sectionId, "metal");
             add(`ecc:${hp.id}:${side}:${k}:pin`, "Эксцентрик D15 · шток", [7, 7, 7], [sx, py - 3.5, zc], 7, 7, 7, "fastener", hp.sectionId, "metal"); }
           else confirmat(`fast:${hp.id}:${side}:${k}`, [edgeX - dir * t, hp.position[1], zc], dir > 0 ? "+x" : "-x", hp.sectionId);
@@ -2799,6 +2807,7 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
   if(m.plinthRecess!==undefined&&(!Number.isFinite(m.plinthRecess)||m.plinthRecess<RULES.plinthInset||m.plinthRecess>Math.min(RULES.plinthRecessMax,m.depth-100)||plinth(m)<=0||m.feet||m.kitchen))errors.push(`Цоколь утоплен: от ${RULES.plinthInset} до ${RULES.plinthRecessMax} мм от переда, только у корпуса на цоколе.`);
   if(m.hingeSoft!==undefined&&m.hingeSoft!==false)errors.push('Неверный тип петель.');
   if(m.seatTop!==undefined&&(m.seatTop!==true||m.topGlass||m.slope||m.skew||m.kitchen||m.kupe||m.kupeZone||m.desk||m.raw||m.corner||!hasTop(m)||m.doors&&m.doorMount!=='inset'&&m.height>RULES.seatMaxH))errors.push(`Посадочное место 32: у прямого корпуса с крышей ЛДСП (не стекло, не скос); с накладными дверями — только у корпуса до ${RULES.seatMaxH} мм.`);
+  if(m.topOnSides!==undefined&&(m.topOnSides!==true||m.seatTop||m.topGlass||m.slope||m.skew||m.mansard||m.radius||m.kitchen||m.kupe||m.kupeZone||m.desk||m.raw||m.corner||m.casework||!hasTop(m)))errors.push('Крыша на боковинах (столешка 16): у прямого корпуса с крышей ЛДСП (не стекло, не сиденье, не скос).');
   if(m.feet!==undefined&&(!Number.isFinite(m.feet.height)||m.feet.height<RULES.feetMin||m.feet.height>RULES.feetMax))errors.push(`Ножки: высота от ${RULES.feetMin} до ${RULES.feetMax} мм.`);
   if(m.bottomType!==undefined&&!['panel','none'].includes(m.bottomType))errors.push('Неверный тип дна.');
   if(m.topType!==undefined&&!['panel','none'].includes(m.topType))errors.push('Неверный тип крыши.');
@@ -3353,6 +3362,7 @@ export function parseModule(input: unknown, allowDesignIssues = false): Module {
     ...(x.alu!==undefined&&x.aluDrawers===true?{aluDrawers:true as const}:{}),
     ...(x.topGlass===undefined?{}:{topGlass:String(x.topGlass)}),
     ...(x.seatTop===true?{seatTop:true as const}:{}),
+    ...(x.topOnSides===true?{topOnSides:true as const}:{}),
     ...(x.seatPanel&&typeof x.seatPanel==='object'?{seatPanel:{height:Number((x.seatPanel as {height:number}).height),...(typeof (x.seatPanel as {decor?:unknown}).decor==='string'?{decor:String((x.seatPanel as {decor:string}).decor)}:{})}}:{}),
     ...(x.plinthRecess===undefined?{}:{plinthRecess:Number(x.plinthRecess)}),
     ...(x.hingeSoft===false?{hingeSoft:false as const}:{}),

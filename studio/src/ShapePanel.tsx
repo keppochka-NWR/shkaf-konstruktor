@@ -8,7 +8,7 @@ import { cutHost } from "./partIds";
 
 /** Мансарда ставится у прямого шкафа/стеллажа студии с крышей ЛДСП. */
 export function mansardApplies(m: Module) {
-  return !m.kitchen && !m.raw && !m.corner && !m.desk && !m.casework && !m.kupe && !m.kupeZone && !m.kupeBody && !m.worktop && !m.radius && !m.slope && !m.skew && m.topType !== "none" && !m.topGlass && !m.seatTop && !m.seatPanel && !m.sectionLayout && !m.hanging;
+  return !m.kitchen && !m.raw && !m.corner && !m.desk && !m.casework && !m.kupe && !m.kupeZone && !m.kupeBody && !m.worktop && !m.radius && !m.slope && !m.skew && m.topType !== "none" && !m.topGlass && !m.seatTop && !m.topOnSides && !m.seatPanel && !m.sectionLayout && !m.hanging;
 }
 export function ShapePanel({ m, modify, openCuts }: { m: Module; modify: (u: (n: Module) => void) => boolean; openCuts: (pid: string) => void }) {
   const warn = m.mansard ? (() => { try { return mansardWarnings(m, parts(m)); } catch { return []; } })() : [];
