@@ -43,7 +43,7 @@ export function setPartialDivider(m: Module, sid: string, span: { from: number; 
   const b = boxes(m)[i], r = (v: number) => Math.round(v * 10) / 10;
   const from = span.from <= b.bottom + 0.5 ? b.bottom : r(span.from), to = span.to >= b.top - 0.5 ? b.top : r(span.to);
   if (from <= b.bottom + 0.5 && to >= b.top - 0.5) { delete s.divider; return []; }
-  s.divider = { from, to };
+  s.divider = { from, to, ...(s.divider?.overRight && to < b.top ? { overRight: true as const } : {}) };
   if (!m.doors) return [];
   const notes: string[] = [];
   for (const [k, side] of [[i - 1, "right"], [i, "left"]] as const) {
@@ -138,4 +138,14 @@ export function dividerBounds(m: Module, i: number): { key: string; label: strin
   }
   out.push({ key: "roof", label: `Крыша · ${Math.round(bb[i].top)} мм`, y: bb[i].top, bound: "roof" });
   return out.sort((a, z) => a.y - z.y);
+}
+
+/** Заказ 7563292: полка над частичной перегородкой только справа (лежит на торце перегородки) — слева общий проём до верха
+ *  (длинная вешалка), штанга над перегородкой сквозная. Только у перегородки «до полки» (не до крыши). */
+export function setDividerOverRight(m: Module, sid: string, on: boolean): void {
+  const i = m.sections.findIndex((s) => s.id === sid), s = m.sections[i], dv = s?.divider;
+  if (i < 1 || !dv) throw Error("Сначала сделайте перегородку частичной.");
+  if (!on) { delete dv.overRight; return; }
+  if (dv.to >= boxes(m)[i].top - 0.5) throw Error("Перегородка идёт до крыши — полки над ней нет.");
+  dv.overRight = true;
 }

@@ -2,7 +2,7 @@
 // «Во всю высоту» или «Частичная: от … до …» (мм от пола) либо «от полки … до полки …». Команды — src/partialDivider.ts.
 import { useEffect, useState } from "react";
 import type { Module } from "./model";
-import { announceDividerNotes, dividerBounds, dividerInfo, setDividerByShelves, setPartialDivider } from "./partialDivider";
+import { announceDividerNotes, dividerBounds, dividerInfo, setDividerByShelves, setDividerOverRight, setPartialDivider } from "./partialDivider";
 
 function Mm({ label, value, change }: { label: string; value: number; change: (v: number) => boolean }) {
   const [text, setText] = useState(String(Math.round(value)));
@@ -41,6 +41,7 @@ function DividerRow({ module: m, i, edit }: { module: Module; i: number; edit: (
         {!highKey && <option value="">по размеру · {Math.round(info.to)} мм</option>}
         {bounds.filter((b) => b.key !== "floor").map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
       </select></label>
+      {info.to < info.top && <label className="hardware-field"><input type="checkbox" aria-label="Полка над перегородкой только справа" checked={!!m.sections[i].divider?.overRight} onChange={(e) => edit((n) => setDividerOverRight(n, sid, e.target.checked))} /> Полка над перегородкой только справа (слева — общий проём до верха, штанга сквозная)</label>}
       <p className="field-note">Перегородка стоит между горизонталями: ниже и выше неё — сквозная полка во всю ширину двух секций (или дно / крыша). Полки над и под перегородкой — тоже во всю ширину.</p>
     </>}
   </div>;

@@ -277,8 +277,10 @@ export type Section = {
   /** Частичная перегородка СЛЕВА от секции (решение Макса 23.10.2026; у первой секции поля нет): торцы перегородки from…to, мм от низа
    *  модуля (от пола). Перегородка стоит между двумя горизонталями: дном/крышей или сквозной полкой под/над ней (детали
    *  `${id}:divider:under|over`, на конфирматах в стойки). Выше и ниже перегородки две соседние секции — общий проём: их полки там
-   *  во всю ширину двух секций (сквозные). Без поля — перегородка во всю высоту, как раньше. См. dividerSpan, throughShelf. */
-  divider?: { from: number; to: number };
+   *  во всю ширину двух секций (сквозные). Без поля — перегородка во всю высоту, как раньше. См. dividerSpan, throughShelf.
+   *  overRight (заказ 7563292): горизонталь над перегородкой — только над правой секцией (полка правой половины лежит на торце
+   *  перегородки), слева над нижней опорой — общий проём до верха (длинная вешалка); штанга над перегородкой — сквозная. */
+  divider?: { from: number; to: number; overRight?: true };
   /** Кухня Базиса: своя глубина и отступ от задника у отдельных полок (номер полки → rear, depth), если они не как у остальных полок
    *  секции (k23 m14: жёсткая полка на всю глубину корпуса 577 при съёмных 575 с отступом 1). */
   shelfAt?: Record<number, { rear: number; depth: number }>;
@@ -1150,13 +1152,13 @@ export function boxes(m: Module): SectionBox[] {
 }
 /** Частичная перегородка слева от секции i (Section.divider): торцы from/to и есть ли сквозная полка-опора под (under) / над (over) ней.
  *  undefined — перегородка во всю высоту (поля нет, первая секция, кухня, составные проёмы, или от дна до крыши). */
-export function dividerSpan(m: Module, i: number, bb?: SectionBox[]): { from: number; to: number; under: boolean; over: boolean } | undefined {
+export function dividerSpan(m: Module, i: number, bb?: SectionBox[]): { from: number; to: number; under: boolean; over: boolean; overRight?: true } | undefined {
   const s = m.sections[i], dv = s?.divider;
   if (!dv || i < 1 || m.kitchen || m.sectionLayout || m.corner || m.casework || m.raw || m.desk) return undefined;
   const b = (bb ?? boxes(m))[i];
   if (!b) return undefined;
   const under = dv.from > b.bottom + 0.5, over = dv.to < b.top - 0.5;
-  return under || over ? { from: under ? dv.from : b.bottom, to: over ? dv.to : b.top, under, over } : undefined;
+  return under || over ? { from: under ? dv.from : b.bottom, to: over ? dv.to : b.top, under, over, ...(over && dv.overRight === true ? { overRight: true as const } : {}) } : undefined;
 }
 /** Полка секции k на высоте y (от низа модуля) вне частичной перегородки соседей — сквозная: во всю ширину двух секций.
  *  Возвращает её край слева/справа (x0, x1) и номера секций пары; undefined — обычная полка своей секции. */
@@ -1514,7 +1516,9 @@ function partsCore(m: Module): Part[] {
       if (sp) {
         const L = allBoxes[i - 1], x0 = L.x, x1 = b.x + b.width;
         if (sp.under) add(`${s.id}:divider:under`, "Горизонталь под перегородкой · сквозная", [x1 - x0, t, sdF], [(x0 + x1) / 2, sp.from - t / 2, rear + sdF / 2], x1 - x0, sdF, t, "body", s.id);
-        if (sp.over) add(`${s.id}:divider:over`, "Горизонталь над перегородкой · сквозная", [x1 - x0, t, sdF], [(x0 + x1) / 2, sp.to + t / 2, rear + sdF / 2], x1 - x0, sdF, t, "body", s.id);
+        // заказ 7563292: полка над перегородкой только справа — от левой грани перегородки (лежит на её торце) до правой стойки
+        if (sp.over && sp.overRight) { const ox0 = b.x - t; add(`${s.id}:divider:over`, "Полка над перегородкой · жёсткая, только справа", [x1 - ox0, t, sdF], [(ox0 + x1) / 2, sp.to + t / 2, rear + sdF / 2], x1 - ox0, sdF, t, "body", s.id); }
+        else if (sp.over) add(`${s.id}:divider:over`, "Горизонталь над перегородкой · сквозная", [x1 - x0, t, sdF], [(x0 + x1) / 2, sp.to + t / 2, rear + sdF / 2], x1 - x0, sdF, t, "body", s.id);
       }
     }
     // Подсветка по деталям (20.10.2026): старый флаг standLight = обе стойки каждой секции; новый — своя сторона секции.
@@ -1713,12 +1717,18 @@ function partsCore(m: Module): Part[] {
         : b.top;
       const ry = s.rodAt===undefined?topShelf-RULES.rodTopOffset:b.bottom+s.rodAt*h;
       const oval = m.rodType === "oval";
-      add(
+      // заказ 7563292: у перегородки с полкой только справа (overRight) штанга над перегородкой — в общем проёме двух секций: сквозная,
+      // от стойки до стойки пары; та же штанга у обеих секций пары (на той же высоте) — одна деталь (левой секции)
+      const rt0 = s.rodLower === undefined ? throughShelf(m, i, ry, allBoxes) : undefined, rsp = rt0 && dividerSpan(m, rt0.right, allBoxes);
+      const rt = rt0 && rsp?.overRight && ry > rsp.to ? rt0 : undefined;
+      const rx0 = rt ? rt.x0 : b.x, rw = rt ? rt.x1 - rt.x0 : b.width;
+      const twin = rt && rt.right === i && out.some((p) => p.id === m.sections[rt.left].id + ":rod" && Math.abs(p.position[1] - ry) < 1);
+      if (!twin) add(
         `${s.id}:rod`,
-        oval ? "Штанга овальная 15×30" : "Штанга",
-        [b.width, oval ? 15 : RULES.rodDiameter, oval ? 30 : RULES.rodDiameter],
-        [b.x + b.width / 2, ry, d / 2],
-        b.width,
+        oval ? "Штанга овальная 15×30" : "Штанга" + (rt ? " · сквозная" : ""),
+        [rw, oval ? 15 : RULES.rodDiameter, oval ? 30 : RULES.rodDiameter],
+        [rx0 + rw / 2, ry, d / 2],
+        rw,
         oval ? 15 : RULES.rodDiameter,
         oval ? 30 : RULES.rodDiameter,
         "rod",
@@ -1726,8 +1736,8 @@ function partsCore(m: Module): Part[] {
         "metal",
       );
     }
-    if(s.rod){const rp=out.find(p=>p.id===s.id+':rod')!;for(const side of [0,1])add(s.id+':flange:'+side,'Фланец штанги D25',[5,48,48],[side?b.x+b.width-2.5:b.x+2.5,rp.position[1],rp.position[2]],48,48,5,'flange',s.id,'metal');}
-    if(s.rod&&s.rodLower!==undefined)out.push(...rodTierParts(m,s,b,h,d,out.find(p=>p.id===s.id+':rod')!));
+    {const rp=s.rod?out.find(p=>p.id===s.id+':rod'):undefined;if(rp){const rl=rp.position[0]-rp.size[0]/2,rr=rp.position[0]+rp.size[0]/2;for(const side of [0,1])add(s.id+':flange:'+side,'Фланец штанги D25',[5,48,48],[side?rr-2.5:rl+2.5,rp.position[1],rp.position[2]],48,48,5,'flange',s.id,'metal');}}
+    if(s.rod&&s.rodLower!==undefined&&out.some(p=>p.id===s.id+':rod'))out.push(...rodTierParts(m,s,b,h,d,out.find(p=>p.id===s.id+':rod')!));
     if(s.pullouts){
       // Тремпель крепится под ближайшей полкой сверху (или под крышей), выдвигается вперёд. Длина — стандартный ряд GTV под глубину секции.
       // Под самой верхней полкой, если она в верхних 40 % секции (зона одежды под ней), иначе под крышей.
@@ -1913,7 +1923,10 @@ function partsCore(m: Module): Part[] {
     }
     const bottomUnderSides = hp.id === "bottom" && m.bottomUnder;
     const x0 = hp.position[0] - hp.size[0] / 2, x1 = hp.position[0] + hp.size[0] / 2; // грани горизонтали у боковин/перегородок
+    // полка над перегородкой только справа (заказ 7563292): слева она лежит на торце перегородки — крепёж там у перегородки (divider:top)
+    const overRightShelf = hp.id.endsWith(":divider:over") && !!dividerSpan(m, m.sections.findIndex((q) => q.id === hp.sectionId))?.overRight;
     for (const [side, edgeX, dir] of [["left", x0, 1], ["right", x1, -1]] as const) {
+      if (overRightShelf && side === "left") continue;
       if (bottomUnderSides && !droppedSide(m,side)) continue;
       // кухня Базиса: жёсткая полка без своего крепежа в jointFastening — на рафиксах по сетке Базиса (kitchenRafix.ts)
       // крыша на рафиксах (kitchen.rafix.top, k20 m09) — тоже по сетке Базиса (n4-tall)
@@ -3123,7 +3136,10 @@ export function dividerErrors(m: Module): string[] {
       }
       if (sec.rod || sec.pantograph) {
         const ys = sec.shelves.map((f) => f * h).sort((a, z) => a - z), rodY = sb.bottom + (sec.rodAt === undefined ? (ys[0] ?? h) - RULES.rodTopOffset : sec.rodAt * h);
-        if (rodY < dv.from || rodY > dv.to) out.push(`${lbl}: штанга крепится к перегородке, а она только от ${Math.round(dv.from)} до ${Math.round(dv.to)} мм. Перенесите штангу в зону перегородки.`);
+        // заказ 7563292: у перегородки с полкой только справа (overRight) штанга над перегородкой — сквозная в общем проёме пары
+        // (крепится к стойкам пары); вторая штанга-ярус и пантограф — по-прежнему только в зоне перегородки
+        const through = dv.overRight === true && rodY > dv.to && sec.rod && !sec.pantograph && sec.rodLower === undefined;
+        if ((rodY < dv.from || rodY > dv.to) && !through) out.push(`${lbl}: штанга крепится к перегородке, а она только от ${Math.round(dv.from)} до ${Math.round(dv.to)} мм. Перенесите штангу в зону перегородки.`);
       }
       if (m.standLight || sec.standLights?.includes(k === i ? "left" : "right")) out.push(`${lbl}: подсветка в стойке у частичной перегородки пока не ставится — снимите её с этой стойки.`);
       if (sec.pullouts) out.push(`${lbl}: выдвижной тремпель у частичной перегородки пока не ставится.`);
@@ -3463,7 +3479,7 @@ export function parseModule(input: unknown, allowDesignIssues = false): Module {
       ...(s.hingeAngles===undefined?{}:{hingeAngles:Array.isArray(s.hingeAngles)?s.hingeAngles.map((v:unknown)=>v===null||v===undefined?null:Number(v) as HingeAngle):s.hingeAngles}),
       ...(s.rodClearance===undefined?{}:{rodClearance:s.rodClearance}),
       ...(s.shelfDepth===undefined?{}:{shelfDepth:s.shelfDepth}),
-      ...(s.divider&&typeof s.divider==='object'?{divider:{from:Number((s.divider as {from:unknown}).from),to:Number((s.divider as {to:unknown}).to)}}:{}),
+      ...(s.divider&&typeof s.divider==='object'?{divider:{from:Number((s.divider as {from:unknown}).from),to:Number((s.divider as {to:unknown}).to),...((s.divider as {overRight?:unknown}).overRight===true?{overRight:true as const}:{})}}:{}),
       ...(s.shelfAt&&typeof s.shelfAt==='object'?{shelfAt:Object.fromEntries(Object.entries(s.shelfAt as Record<string,{rear:number;depth:number}>).map(([j,v])=>[j,{rear:Number(v.rear),depth:Number(v.depth)}]))}:{}),
       drawers: s.drawers,
       rod: s.rod,
