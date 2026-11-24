@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Двери-купе - локальный дизайн | Ё Софт</title>
+<title>Двери-купе | Ё Софт</title>
 <!-- Шрифт Satoshi (Fontshare CDN) отключён — приложение работает оффлайн с USB.
      Fallback: Helvetica Neue → Arial → системный sans-serif. См. --font в css/main.css. -->
 <link rel="stylesheet" href="css/main.css?v=20260930c">
@@ -24,7 +24,7 @@
       </div>
     </a>
     <!-- v1.3.2: переключатель темы удалён (тёмная тема не используется в B2B-калькуляторе) -->
-    <div class="hdr-actions"><span class="yo-local-badge">Локальная версия оформления</span><a class="yo-home-link" href="../">Все инструменты</a></div>
+    <div class="hdr-actions"><a class="yo-home-link" href="../">Все инструменты</a></div>
   </div>
   <nav class="nav-tabs" id="navTabs">
     <a class="nav-tab active" href="#kupe" data-tab="kupe">
@@ -32,7 +32,7 @@
       Двери-купе
     </a>
   </nav>
-</header><p role="note" style="margin:12px 24px;padding:12px 16px;background:#fff6e8;border:1px solid #ead6b4;border-radius:10px;font-size:14px">После открытия сохранённого расчёта перепроверьте отделку, доставку и монтаж: старое сохранение может их не восстановить.</p>
+</header>
 
 <!-- ============================================================
      MODULE: ДВЕРИ-КУПЕ — 3-column редизайн (Phase 5)
@@ -119,7 +119,6 @@
           </div>
           <label class="yo-field-label" for="profileColor">Цвет профиля</label>
           <select class="kupe-sel" id="profileColor" onchange="onProfileColorChange()" title="Цвет профиля"></select>
-          <input type="hidden" id="profMarkup" value="0">
         </div>
 
         <div class="kupe-sec" id="bulkPanel">
@@ -176,7 +175,6 @@
           </div>
         </div>
 
-        <input type="hidden" id="fillMarkup" value="0">
 
       </div><!-- /kupeForm -->
 
@@ -309,32 +307,6 @@
   </div>
 </div>
 
-<!-- v1.5: модал «Заказать дверь» — CTA для клиентов -->
-<div id="orderModal" class="psec-modal" style="display:none">
-  <div class="psec-modal-backdrop" onclick="closeOrderModal()"></div>
-  <div class="psec-modal-panel">
-    <div class="psec-modal-bar">
-      <span class="psec-modal-title">Заказать дверь</span>
-      <button class="psec-modal-close" type="button" onclick="closeOrderModal()" aria-label="Закрыть">✕</button>
-    </div>
-    <div class="psec-modal-body">
-      <p class="order-lead">Понравился расчёт? Отправьте его нам — менеджер свяжется, уточнит замер и оформит заказ.</p>
-      <div class="order-phone-row">
-        <span>Max&nbsp;/&nbsp;телефон:</span>
-        <a id="orderPhoneLink" class="order-phone" href="tel:+79101404291">+7 910 140-42-91</a>
-      </div>
-      <pre id="orderText" class="order-text"></pre>
-      <div class="order-actions">
-        <button type="button" class="order-btn order-btn-max" id="orderMaxBtn" style="display:none" onclick="orderOpenMessenger('max')">Написать в Max</button>
-        <button type="button" class="order-btn order-btn-tg" id="orderTgBtn" style="display:none" onclick="orderOpenMessenger('tg')">Написать в Telegram</button>
-        <button type="button" class="kupe-btn-fill order-btn" onclick="orderShare()">Отправить через другое приложение…</button>
-        <button type="button" class="kupe-btn-out order-btn" id="orderCopyBtn" onclick="orderCopy()">Скопировать текст</button>
-      </div>
-      <p class="order-hint" id="orderHint">Кнопки мессенджеров откроют чат с нами — расчёт уже скопирован, просто вставьте его в сообщение и отправьте.</p>
-    </div>
-  </div>
-</div>
-
 <!-- KP modal -->
 <div id="kpDocument">
   <div class="kp-modal-bar">
@@ -351,13 +323,13 @@
 </div>
 
 <!-- 1. Данные -->
-<script src="data/fillings.js?v=20261117-4mm"></script>
-<script src="data/profiles.js?v=20260930c"></script>
-<script src="data/lamarty.js?v=20260930c"></script>
+<script src="data/fillings.js?v=20261124"></script>
+<script src="data/profiles-client.js?v=20261124"></script>
+<script src="data/lamarty.js?v=20261124"></script>
 <script src="data/profile-sections.js?v=20260930c"></script>
 
 <!-- 2. Утилиты и store -->
-<script src="js/utils.js?v=20260930c"></script>
+<script src="js/utils.js?v=20261124"></script>
 <script src="js/store.js?v=20260930c"></script>
 
 <!-- 3. Router -->
@@ -367,6 +339,6 @@
 <script src="js/shared-kp.js?v=20260930c"></script>
 
 <!-- 5. Модуль купе -->
-<script src="js/kupe.js?v=20260930c"></script>
+<script src="js/kupe.js?v=20261124"></script>
 <script>document.addEventListener("DOMContentLoaded",()=>{if(typeof calculate==="function")document.querySelector(".kupe-btn-calc").disabled=false});</script></body>
 </html>

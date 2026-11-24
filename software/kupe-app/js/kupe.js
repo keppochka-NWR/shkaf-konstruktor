@@ -143,8 +143,10 @@ function recalculate() {
   if ($('kpClient'))   $('kpClient').value    = kp.client;
   if ($('kpPhone'))    $('kpPhone').value     = kp.phone;
   if ($('kpManager'))  $('kpManager').value   = kp.manager;
-  if ($('kpDelivery')) { $('kpDelivery').value = kp.delivery; updateKPPreview(); }
+  if ($('kpDelivery')) $('kpDelivery').value = kp.delivery;
   if ($('kpInstall'))  $('kpInstall').checked  = kp.install;
+  // 24.11.2026: пересчёт КП после восстановления обоих полей (раньше — до галочки установки, и итог КП терял установку)
+  if ($('kpDelivery') || $('kpInstall')) updateKPPreview();
   // Анимация обновления цены
   const rhv = document.querySelector('.rh-value');
   if (rhv) { rhv.classList.remove('rh-value-live'); void rhv.offsetWidth; rhv.classList.add('rh-value-live'); }
@@ -427,14 +429,12 @@ function kupeMobileCalc() {
 /* ============================================================
    v1.5: «ЗАКАЗАТЬ ДВЕРЬ» — отправка расчёта клиентом в мессенджер
    ============================================================ */
-const ORDER_PHONE_DISPLAY = '+7 910 140-42-91';
-const ORDER_PHONE_TEL = '+79101404291';
-const ORDER_SITE_URL = 'https://keppochka-nwr.github.io/kupe-calc/';
-// Прямые ссылки на чаты. Max НЕ поддерживает ссылки по номеру телефона —
-// нужна персональная ссылка профиля (Max: аватар → QR-код → Поделиться → Скопировать ссылку).
-// Пустая строка = кнопка мессенджера скрыта.
-const ORDER_MAX_URL = 'https://max.ru/u/f9LHodD0cOKgO6v0DjX0Vn7z30jisNqQU0PMLLr7KIOsieTNhK9Kmkwadm4';
-const ORDER_TG_URL  = 'https://t.me/Keppochka';
+// Контакты для «Заказать дверь» в Ё Софт не публикуются (кнопка убрана).
+const ORDER_PHONE_DISPLAY = '';
+const ORDER_PHONE_TEL = '';
+const ORDER_SITE_URL = '';
+const ORDER_MAX_URL = '';
+const ORDER_TG_URL  = '';
 
 function buildOrderText() {
   const d = window._lastCalcData;
@@ -1190,7 +1190,7 @@ function rerenderVisualization() {
 // Реальный индекс sysIdx (в PROFILE_SYSTEMS) хранится в #profileSystem.value — это сохраняет совместимость с drafts.
 
 function populateProfiles() {
-  const FAMILIES = ['Стандарт', 'Эконом', 'SLIM LINE', 'NOVA', 'GRACE', 'Свои'];
+  const FAMILIES = ['Стандарт', 'Эконом', 'SLIM LINE', 'NOVA', 'GRACE', 'Свои'].filter(f => PROFILE_SYSTEMS.some(s => s.family === f));
   // 1. Семейства
   const selF = $('profileFamily');
   selF.innerHTML = '';
@@ -1370,19 +1370,20 @@ function onDoorCountChange() {
 
 /* ============================================================
    BUSINESS LOGIC — getAdjustedPrices()
-   Возвращает цены профиля ×3 (фиксированная наценка)
+   Цены профиля (₽/пог.м.) — клиентские, из data/profiles.js
    ============================================================ */
 function getAdjustedPrices() {
-  const PROF_MULT = 3;
   const p = getCurrentProfile();
-  return {
-    ruchka:      p.ruchka      * PROF_MULT,
-    verh:        p.verh        * PROF_MULT,
-    niz:         p.niz         * PROF_MULT,
-    razd:        p.razd        * PROF_MULT,
-    napravl_top: p.napravl_top * PROF_MULT,
-    napravl_bot: p.napravl_bot * PROF_MULT,
-  };
+  return { ruchka: p.ruchka, verh: p.verh, niz: p.niz, razd: p.razd, napravl_top: p.napravl_top, napravl_bot: p.napravl_bot };
+}
+// Цены профиля в data/profiles-client.js уже клиентские. Прежний data/profiles.js (до ×3, с системой «Свои цены») мог остаться в кеше
+// браузера в первые минуты после выпуска — тогда профиль стоил бы втрое меньше. Такой расчёт не делаем: перезагружаем страницу без кеша.
+function kupeDataStale() { return typeof PROFILE_SYSTEMS === 'undefined' || PROFILE_SYSTEMS.some(s => s.system === 'Свои цены'); }
+function kupeReloadFresh() {
+  let again = false;
+  try { again = sessionStorage.getItem('kupeFreshReload') === '1'; sessionStorage.setItem('kupeFreshReload', '1'); } catch (e) { again = true; }
+  if (!again) { location.replace(location.pathname + '?fresh=' + Date.now() + location.hash); return; }
+  alert('Загружены устаревшие цены. Обновите страницу с очисткой кеша (Ctrl+F5).');
 }
 
 /* ============================================================
@@ -1390,6 +1391,7 @@ function getAdjustedPrices() {
    Формула строго по ТЗ, расширена под napravl_top / napravl_bot
    ============================================================ */
 function calculate(opts) {
+  if (kupeDataStale()) { kupeReloadFresh(); return; }
   const silent = !!(opts && opts.silent); // true = пропустить строгие алерты (для live-пересчёта)
   if (!validateOpeningDimensions(!silent, !silent)) return;
   const W = num('width');
@@ -1501,7 +1503,6 @@ function calculate(opts) {
   // Сложная сборка: только если complexRow видим (секций на дверь ≥ 4)
   const complexRow = $('complexRow');
   const complexWork = complexRow.style.display !== 'none' && $('complexWork').checked;
-  const fillMarkupMult = 1 + (num('fillMarkup') / 100);
   const p = getAdjustedPrices();
 
   const dw = W / N;
@@ -1533,7 +1534,7 @@ function calculate(opts) {
         const sArea = totalAreaPerDoor * dRowRatios[r] * dColRatios[c];
         // NaN guard: если f.p отсутствует или невалиден — считаем 0, иначе цена пойдёт NaN→NaN в КП.
         const basePrice = Number.isFinite(f.p) ? f.p : 0;
-        const sPrice = basePrice * fillMarkupMult;
+        const sPrice = basePrice;
         sectionBreakdown2D[di].push({ fill: f, sArea, fillPriceAdj: sPrice, cost: sArea * sPrice });
         filCost += sArea * sPrice;
       }
@@ -1546,7 +1547,7 @@ function calculate(opts) {
   if (!anyOverride) {
     const sectCount = sectOpt.rowRatios.length * sectOpt.colRatios.length;
     for (let si = 0; si < sectCount; si++) {
-      const ref = (sectionBreakdown2D[0] && sectionBreakdown2D[0][si]) || { fill: FILLINGS[0], fillPriceAdj: FILLINGS[0].p * fillMarkupMult };
+      const ref = (sectionBreakdown2D[0] && sectionBreakdown2D[0][si]) || { fill: FILLINGS[0], fillPriceAdj: FILLINGS[0].p };
       const sArea = sectionBreakdown2D.reduce((s, dBd) => s + (dBd[si] ? dBd[si].sArea : 0), 0);
       const cost  = sectionBreakdown2D.reduce((s, dBd) => s + (dBd[si] ? dBd[si].cost  : 0), 0);
       sectionBreakdown.push({ fill: ref.fill, sArea, fillPriceAdj: ref.fillPriceAdj, cost });
@@ -1557,7 +1558,7 @@ function calculate(opts) {
       const dArea = dBd.reduce((s, x) => s + x.sArea, 0);
       const dCost = dBd.reduce((s, x) => s + x.cost, 0);
       const refFill = (dBd[0] || {}).fill || FILLINGS[0];
-      const refPrice = (dBd[0] || {}).fillPriceAdj || (refFill.p * fillMarkupMult);
+      const refPrice = (dBd[0] || {}).fillPriceAdj || refFill.p;
       sectionBreakdown.push({
         fill: refFill, sArea: dArea, fillPriceAdj: refPrice, cost: dCost,
         doorIdx: di, sectCount: dBd.length,
@@ -1565,7 +1566,7 @@ function calculate(opts) {
     });
   }
   const fill = (doorFills[0] && doorFills[0][0]) || FILLINGS[0];
-  const fillPriceAdj = (sectionBreakdown[0] || { fillPriceAdj: fill.p * fillMarkupMult }).fillPriceAdj;
+  const fillPriceAdj = (sectionBreakdown[0] || { fillPriceAdj: fill.p }).fillPriceAdj;
   // Уникальные материалы для заголовка
   const allFillsFlat = [].concat(...doorFills.slice(0, bd));
   const uniqueFills = allFillsFlat.filter((f, i, arr) => arr.indexOf(f) === i);
@@ -1761,11 +1762,12 @@ function renderResults(d) {
   if (d.softCloseCost > 0) specItems.push({ name:'Доводчик',         qty:bdDisplay+' дв.',         sum:d.softCloseCost });
   if (d.complexCost > 0)   specItems.push({ name:'Сложная сборка',   qty:bdDisplay+' дв.',         sum:d.complexCost });
 
-  const specHTML = specItems.map(it =>
+  const specR = roundParts(specItems.map(it => it.sum), d.total);
+  const specHTML = specItems.map((it, i) =>
     '<div class="kupe-spec-row">'+
       '<span class="kupe-spec-name">'+it.name+'</span>'+
       '<span class="kupe-spec-qty">'+it.qty+'</span>'+
-      '<span class="kupe-spec-price">'+fmt(it.sum)+' ₽</span>'+
+      '<span class="kupe-spec-price">'+fmt(specR[i])+' ₽</span>'+
     '</div>'
   ).join('');
 
@@ -1780,9 +1782,6 @@ function renderResults(d) {
         (isPartition ? ' · одиночная перегородка' : '') +
       '</div>' +
     '</div>' +
-
-    // v1.5: CTA для клиентов — отправить расчёт в мессенджер
-    '<button type="button" class="kupe-btn-order" onclick="openOrderModal()">Отправить расчёт / заказать</button>' +
 
     // — Спецификация
     '<div>' +
@@ -2572,12 +2571,13 @@ function buildKPHTML(t, client, phone, manager) {
   const eManager = escapeHtml(manager);
 
   // Строки профиля — r.n приходит из PROFILE_SYSTEMS (контролируется кодом), но защита не повредит.
-  const profRowsHTML = d.profRows.map(r =>
+  const profR = roundParts(d.profRows.map(r => r.c), d.profTotal);
+  const profRowsHTML = d.profRows.map((r, i) =>
     '<tr>' +
       '<td>' + escapeHtml(r.n) + '</td>' +
       '<td class="r">' + fmt(r.l) + ' мм</td>' +
       '<td class="r">' + fmt(r.pr) + '</td>' +
-      '<td class="r">' + fmt(r.c) + '</td>' +
+      '<td class="r">' + fmt(profR[i]) + '</td>' +
     '</tr>'
   ).join('');
 
@@ -2624,11 +2624,12 @@ function buildKPHTML(t, client, phone, manager) {
     itemRows.push({label:'Сложная сборка', detail: bdDisplay + ' дв. × ' + fmt(COMPLEX_WORK_PRICE) + ' ₽', val: d.complexCost});
 
   // r.label и r.detail уже содержат escapeHtml для user-controlled частей (s.fill.n, d.profileName).
+  const itemR = roundParts(itemRows.map(r => r.val), d.total);
   const itemRowsHTML = itemRows.map((r, i) =>
     '<tr>' +
       '<td>' + (i+1) + '</td>' +
       '<td>' + r.label + '<br><span style="color:#999;font-size:8.5pt">' + r.detail + '</span></td>' +
-      '<td class="r">' + fmt(r.val) + '</td>' +
+      '<td class="r">' + fmt(itemR[i]) + '</td>' +
     '</tr>'
   ).join('');
 
@@ -2749,7 +2750,6 @@ function resetForm() {
   activeSection = null;
   rowMm = [];
   colMm = [];
-  $('fillMarkup').value = 0;
   $('singlePartition').checked = false;
   // Закрыть редактор секции если открыт
   const pf = $('panelForm');
@@ -2907,7 +2907,7 @@ function kupeSaveDraft() {
   if (!window._kupeProjectNum) window._kupeProjectNum = generateProjectNum();
 
   const draft = {
-    schemaVersion: '1.0',
+    schemaVersion: '1.1',
     projectNumber: window._kupeProjectNum,
     savedAt: new Date().toISOString(),
     pricesVersion: (typeof FILLINGS_VERSION !== 'undefined') ? FILLINGS_VERSION : '',
@@ -2915,6 +2915,11 @@ function kupeSaveDraft() {
       name:    ($('kpClient')   || {}).value || '',
       phone:   ($('kpPhone')    || {}).value || '',
       manager: ($('kpManager')  || {}).value || '',
+    },
+    // 1.1 (24.11.2026): доставка и установка из КП — раньше не сохранялись, сумма КП после «Открыть» терялась
+    services: {
+      delivery: +(($('kpDelivery') || {}).value) || 0,
+      install:  !!(($('kpInstall') || {}).checked),
     },
     modules: {
       kupe:     collectKupeState(),
@@ -3026,11 +3031,19 @@ function kupeLoadDraft(projectNumber) {
 
   // Восстановление индекса пресета сетки секций (sectOpt)
   if (k.sectOpt && k.sectOpt.rowRatios && k.sectOpt.colRatios) {
-    const idx = SECTION_OPTS.findIndex(o =>
-      JSON.stringify(o.rowRatios) === JSON.stringify(k.sectOpt.rowRatios) &&
-      JSON.stringify(o.colRatios) === JSON.stringify(k.sectOpt.colRatios)
-    );
-    if (idx >= 0) setSections(idx);
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const fits = o => o.rowRatios.length === k.sectOpt.rowRatios.length && o.colRatios.length === k.sectOpt.colRatios.length;
+    let idx = SECTION_OPTS.findIndex(o => same(o.rowRatios, k.sectOpt.rowRatios) && same(o.colRatios, k.sectOpt.colRatios));
+    // 24.11.2026: сдвинутый разделитель меняет доли сетки (commitDoorRatios) — точного совпадения с пресетом нет,
+    // раньше сетка тогда не восстанавливалась вовсе (дверь в 1 секцию, другая цена). Ищем пресет по названию и числу секций.
+    if (idx < 0) idx = SECTION_OPTS.findIndex(o => o.label === k.sectOpt.label && fits(o));
+    if (idx < 0) idx = SECTION_OPTS.findIndex(fits);
+    if (idx >= 0) {
+      setSections(idx);
+      if (!same(sectOpt.rowRatios, k.sectOpt.rowRatios) || !same(sectOpt.colRatios, k.sectOpt.colRatios)) {
+        sectOpt = Object.assign({}, sectOpt, { rowRatios: k.sectOpt.rowRatios.slice(), colRatios: k.sectOpt.colRatios.slice() });
+      }
+    }
   }
 
   // v1.2: восстановление per-door overrides (старые drafts не содержат → пустой массив)
@@ -3041,6 +3054,21 @@ function kupeLoadDraft(projectNumber) {
         h: o.h, v: o.v, label: o.label,
       } : null)
     : [];
+
+  // 24.11.2026: наполнение дверей сохранялось, но не читалось — после открытия двери получали наполнение по умолчанию и другую цену.
+  // Наполнение берём из текущего каталога по названию (цены — текущие); если названия в каталоге больше нет — сохранённое как есть.
+  if (Array.isArray(k.doorFills)) {
+    const restoreFill = f => {
+      if (!f || typeof f !== 'object') return FILLINGS[0];
+      const same = FILLINGS.filter(x => x.n === f.n);
+      return same.find(x => x.g === f.g && x.mat === f.mat) || same.find(x => x.g === f.g) || same[0] || f;
+    };
+    doorFills = k.doorFills.map(door => Array.isArray(door) ? door.map(restoreFill) : []);
+  }
+  // setSections выше сбрасывает высоты рядов — восстанавливаем их после него (раньше восстанавливались до и терялись)
+  if (k.rowMm)      rowMm      = k.rowMm.slice();
+  if (k.doorRowMm)  doorRowMm  = k.doorRowMm.slice();
+  buildDividersBlock(); // поля «Разделитель … мм от верха» — по восстановленным высотам, а не по пресету
 
   // Клиент
   window._kupeDraftClient = draft.client || null;
@@ -3069,6 +3097,12 @@ function kupeLoadDraft(projectNumber) {
     if ($('kpClient'))  $('kpClient').value  = draft.client.name || '';
     if ($('kpPhone'))   $('kpPhone').value   = draft.client.phone || '';
     if ($('kpManager')) $('kpManager').value = draft.client.manager || '';
+  }
+  // Доставка и установка (сохранения с 24.11.2026; в старых сохранениях их нет — остаются как после расчёта)
+  if (draft.services) {
+    if ($('kpDelivery')) $('kpDelivery').value = +draft.services.delivery || 0;
+    if ($('kpInstall'))  $('kpInstall').checked = !!draft.services.install;
+    updateKPPreview();
   }
 
   // Закрываем поповер

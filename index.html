@@ -1,126 +1,15 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ё Конструктор. Шкаф, купе или кухня в 3D</title>
-<meta name="description" content="3D-конструктор мебели: шкафы-купе, распашные шкафы и кухни по размерам вашего помещения. Цена пересчитывается при каждом изменении.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,400&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  :root{--bg:#f4f1ea;--ink:#221f1a;--muted:#6d675c;--line:#ddd6c8;--accent:#235b4e;
-        --accent-deep:#17423a;--accent-soft:#e4eeea;--brass:#a87c3f;--card:#fbf9f4}
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:"Manrope",system-ui,sans-serif;background:var(--bg);color:var(--ink);
-       font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
-  h1,h2,h3{font-family:"Cormorant Garamond",serif;font-weight:500;line-height:1.15}
-  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
-  @media(max-width:600px){.wrap{padding:0 16px}}
-  header{min-height:70px;display:flex;align-items:center;border-bottom:1px solid var(--line)}
-  header .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
-  .logo{font-family:"Cormorant Garamond",serif;font-size:24px;text-decoration:none;color:var(--ink);white-space:nowrap}
-  .logo b{color:var(--accent);font-weight:500}
-  .btn{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:16px;
-       padding:14px 28px;border-radius:999px;text-decoration:none;border:none;cursor:pointer;
-       background:var(--accent);color:#fff;transition:background .2s}
-  .btn:hover{background:var(--accent-deep)}
-  .btn.sm{padding:10px 20px;font-size:14.5px}
-  .btn.ghost{background:transparent;color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)}
-  .btn.ghost:hover{background:var(--accent-soft)}
-  .hdr-btns,.hero-btns{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-  @media(max-width:600px){.hdr-btns .btn.ghost{display:none}}
-  .hero{padding:72px 0 56px;display:grid;gap:40px}
-  @media(max-width:600px){.hero{padding:40px 0 36px;gap:28px}}
-  @media(min-width:960px){.hero{grid-template-columns:1fr 1fr;align-items:center}}
-  .hero h1{font-size:clamp(34px,4.6vw,58px);max-width:16ch;margin-bottom:18px}
-  .hero h1 em{font-style:italic;color:var(--brass)}
-  .hero p{color:var(--muted);max-width:48ch;margin-bottom:28px}
-  .shot{border:1px solid var(--line);border-radius:18px;background:var(--card);
-        box-shadow:0 24px 60px rgba(30,26,20,.12);overflow:hidden}
-  .shot svg{display:block;width:100%;height:auto}
-  .pick{padding:8px 0 40px;display:grid;gap:22px}
-  @media(min-width:840px){.pick{grid-template-columns:1fr 1fr}}
-  .pick a{display:block;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:28px;box-shadow:0 12px 32px rgba(30,26,20,.08);transition:transform .15s,box-shadow .15s}
-  .pick a:hover,.pick a:focus-visible{transform:translateY(-2px);box-shadow:0 18px 44px rgba(30,26,20,.14)}
-  .pick small{display:block;color:var(--brass);font-size:13px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
-  .pick b{display:block;font-size:22px;margin-bottom:8px}
-  .pick p{color:var(--muted);font-size:15px;line-height:1.55;margin-bottom:16px}
-  .pick span{font-weight:600;color:var(--brass)}
-  .feats{padding:40px 0 90px;display:grid;gap:22px}
-  @media(min-width:840px){.feats{grid-template-columns:repeat(3,1fr)}}
-  .feat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px}
-  .feat b{display:block;font-size:16px;margin-bottom:6px}
-  .feat p{color:var(--muted);font-size:14.5px;line-height:1.55}
-  footer{border-top:1px solid var(--line);padding:26px 0;color:var(--muted);font-size:14px}
-</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ё Софт</title>
+<!-- Корень сайта открывает Ё Софт (24.11.2026). Прежняя главная — landing.html -->
+<meta http-equiv="refresh" content="0; url=software/">
+<link rel="canonical" href="software/">
+<script>location.replace("software/" + location.search + location.hash);</script>
 </head>
 <body>
-
-<header>
-  <div class="wrap">
-    <a class="logo" href="./">Ё <b>Конструктор</b></a>
-    <div class="hdr-btns">
-      <a class="btn sm ghost" href="calc/">Калькулятор дверей-купе</a>
-      <a class="btn sm" href="studio/">Открыть конструктор</a>
-    </div>
-  </div>
-</header>
-
-<section class="hero wrap">
-  <div>
-    <h1>Мебель собирается <em>как конструктор</em></h1>
-    <p>Задайте размеры помещения, расставьте шкафы, купе или кухонные модули и посмотрите проект в 3D. Петли, зазоры и крепёж конструктор проставит сам по правилам производства, а цена пересчитывается при каждом изменении.</p>
-    <div class="hero-btns">
-      <a class="btn" href="studio/">Собрать проект</a>
-      <a class="btn ghost" href="calc/">Калькулятор дверей-купе</a>
-    </div>
-  </div>
-  <div class="shot" aria-hidden="true">
-    <svg viewBox="0 0 480 340" xmlns="http://www.w3.org/2000/svg">
-      <rect width="480" height="340" fill="#fbf9f4"/>
-      <path d="M40 300 L440 300" stroke="#ddd6c8" stroke-width="2"/>
-      <g stroke="#6d675c" stroke-width="2" fill="#e9e1d2">
-        <rect x="70" y="40" width="340" height="250" rx="3"/>
-      </g>
-      <g stroke="#a87c3f" stroke-width="1.5" fill="#efe7d8">
-        <rect x="78" y="48" width="106" height="228"/>
-        <rect x="187" y="48" width="106" height="228"/>
-        <rect x="296" y="48" width="106" height="228"/>
-      </g>
-      <g stroke="#235b4e" stroke-width="2" fill="none">
-        <path d="M110 110 h44 M110 120 h44"/>
-        <rect x="200" y="200" width="80" height="30" rx="2"/>
-        <rect x="200" y="236" width="80" height="30" rx="2"/>
-        <path d="M232 215 h16 M232 251 h16"/>
-        <path d="M310 90 h78 M349 90 v24"/>
-      </g>
-      <g fill="#235b4e"><circle cx="178" cy="80" r="3"/><circle cx="178" cy="244" r="3"/><circle cx="302" cy="80" r="3"/><circle cx="302" cy="244" r="3"/></g>
-      <rect x="70" y="276" width="340" height="14" fill="#d8cfbd"/>
-      <g font-family="Manrope,system-ui,sans-serif" font-size="13" fill="#6d675c" text-anchor="middle">
-        <text x="240" y="28">2400 мм</text>
-        <text x="240" y="324">цена пересчитывается сразу</text>
-      </g>
-    </svg>
-  </div>
-</section>
-
-<section class="pick wrap" aria-label="Выберите инструмент">
-  <a href="studio/"><small>3D-проектировщик</small><b>Ё Конструктор</b><p>Шкафы, купе и кухни в комнате клиента: наполнение, фасады, цена сразу, КП и документы в цех.</p><span>Открыть конструктор →</span></a>
-  <a href="calc/"><small>Быстрый расчёт</small><b>Калькулятор дверей-купе</b><p>Проём, число дверей, профиль и наполнение по секциям — цена и коммерческое предложение за минуту.</p><span>Рассчитать двери →</span></a>
-</section>
-
-<section class="feats wrap">
-  <div class="feat"><b>Правила цеха внутри</b><p>Цоколь, кромка, петли и технические зазоры — по стандартам производства. Конструктор не даст собрать то, что цех не сделает.</p></div>
-  <div class="feat"><b>Купе и распашные шкафы</b><p>Двери-купе с профилем и заполнением, распашные фасады на петлях, ящики, штанги и полки — в одном проекте.</p></div>
-  <div class="feat"><b>Кухни</b><p>Нижние и навесные модули, столешница и фасады. Меняете ширину модуля — соседи подстраиваются.</p></div>
-  <div class="feat"><b>Цена сразу</b><p>Материалы и фурнитура считаются отдельно: смените петли или ящики — стоимость изменится сразу.</p></div>
-  <div class="feat"><b>Декоры и фасады</b><p>Живые текстуры ЛДСП Lamarty и фасады МДФ: корпус и каждый фасад можно перекрасить кликом.</p></div>
-  <div class="feat"><b>Проект сохраняется</b><p>Проект остаётся в браузере. Покажите его менеджеру салона — он проверит размеры и подготовит предложение.</p></div>
-</section>
-
-<footer>
-  <div class="wrap">Ё Конструктор · 2026</div>
-</footer>
+<p><a href="software/">Открыть Ё Софт</a></p>
 </body>
 </html>

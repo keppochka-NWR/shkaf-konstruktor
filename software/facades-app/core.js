@@ -1,8 +1,9 @@
 (function (root, factory) {
-  const api = factory(typeof module === 'object' && module.exports ? require('./retail-film.js') : root.facadeFilmRetail);
+  const node = typeof module === 'object' && module.exports;
+  const api = factory(node ? require('./retail-film.js') : root.facadeFilmRetail, node ? require('./sheet-count.js') : root.FacadeSheetCount);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FacadeCore = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (retail) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (retail, sheetCount) {
   'use strict';
   const families = ['MDF', 'PAINT', 'ALU', 'Eterno', 'AGT', 'LDSP'];
   const familyNames = {MDF:'МДФ в Плёнке', PAINT:'МДФ краска', ALU:'Алюминиевые фасады', Eterno:'Eterno', AGT:'AGT', LDSP:'ЛДСП / Lamarty'};
@@ -78,7 +79,56 @@
   }
   function area(part) { return part.h * part.w * part.qty / 1000000; }
   function edgeLength(p) { return (p.w*(Number(p.edges.top)+Number(p.edges.bottom))+p.h*(Number(p.edges.left)+Number(p.edges.right)))*p.qty/1000; }
-  function calculatePart(p) {
+  // Рамка ALU (24.11.2026): цена как в смете Ё Конструктора — профиль по периметру, наполнение по площади, уплотнитель по периметру
+  // (retail.alu выгружает studio/scripts/build-facade-retail.ts). Ручная ставка материала по-прежнему главнее.
+  function aluPart(p) {
+    const al=retail.alu, perM=al&&al.profiles[p.aluProfileId], perM2=al&&al.fills[p.aluFillId];
+    if(p.family!=='ALU'||p.rates.material!==null||perM==null||perM2==null) return null;
+    const q3=x=>Math.round(x*1000)/1000, perimeter=q3(2*(p.h+p.w)/1000*p.qty), a=q3(area(p)); // количества — до 0,001, как в смете Конструктора
+    const lines=[
+      {key:'alu-profile',label:'Профиль рамки · по прайсу Конструктора',amount:perimeter,unit:'м',rate:perM},
+      {key:'alu-fill',label:'Наполнение рамки · по прайсу Конструктора',amount:a,unit:'м²',rate:perM2},
+      {key:'alu-seal',label:'Уплотнитель рамки',amount:perimeter,unit:'м',rate:al.gasket}];
+    if(p.rates.work!==null) lines.push({key:'work',label:'Дополнительная обработка',amount:p.qty,unit:'шт.',rate:p.rates.work});
+    for (const l of lines) l.total=l.rate===null?null:money(l.amount*l.rate);
+    const missing=lines.filter(l=>l.total===null).map(l=>l.label);
+    return {priceGroup:0,area:a,edge:0,lines,known:money(lines.reduce((v,l)=>v+(l.total??0),0)),complete:missing.length===0,missing};
+  }
+  // Плиты AGT, Eterno и ЛДСП — целыми листами, как в смете Ё Конструктора (24.11.2026): позиции одной плиты и толщины
+  // раскладываются вместе тем же движком (sheet-count.js = studio/src/sheetCount.ts), заказ платит за каждый начатый лист;
+  // ЛДСП — доплата ×2 за лист с крупной деталью, как у корпусов. Кромка и раскрой входят в цену листа. Сумма группы делится
+  // между позициями по площади. Ручная ставка материала по-прежнему главнее.
+  const sheetFamily=p=>['AGT','Eterno','LDSP'].includes(p.family);
+  function sheetPanel(p){const s=retail.sheets&&retail.sheets.panels[p.panelId];return sheetFamily(p)&&p.rates.material===null&&s&&sheetCount?s:null;}
+  function sheetPlan(project){
+    const groups=new Map(),plan=new Map();
+    for(const p of project.parts){const s=sheetPanel(p);if(!s)continue;const k=p.panelId+'/'+p.t;const g=groups.get(k)||{panel:s,parts:[]};g.parts.push(p);groups.set(k,g);}
+    for(const g of groups.values()){
+      const owner=id=>g.parts.find(p=>id.startsWith(p.id+'#'));
+      const r=sheetCount.classicSheets(g.parts.flatMap(p=>Array.from({length:p.qty},(_,i)=>({id:p.id+'#'+i,w:p.w,h:p.h,rot:g.panel.rot}))),g.panel.sheet[0],g.panel.sheet[1]);
+      const big=id=>{const p=owner(id),L=Math.max(p.h,p.w),S=Math.min(p.h,p.w);return retail.sheets.doubleThresholds.some(([l,w])=>L>l&&S>w);};
+      const oversized=g.panel.double?r.sheets.filter(s=>s.some(big)).length:0,unplaced=new Set(r.unplaced.map(id=>owner(id).id));
+      const placed=g.parts.filter(p=>!unplaced.has(p.id)),units=r.sheets.length+oversized,total=units*g.panel.price,area=placed.reduce((a,p)=>a+p.h*p.w*p.qty,0);
+      let left=total;
+      placed.forEach((p,i)=>{const frac=p.h*p.w*p.qty/area,share=i===placed.length-1?money(left):money(total*frac);left-=share;plan.set(p.id,{share,frac:units*frac,sheets:r.sheets.length,oversized,price:g.panel.price,parts:g.parts.length});});
+      for(const id of unplaced)plan.set(id,{unplaced:true});
+    }
+    return plan;
+  }
+  function sheetRow(p,sp){
+    const a=area(p),lines=sp.unplaced
+      ?[{key:'sheets',label:'Деталь больше листа плиты — сращивать или заказать отдельно',amount:p.qty,unit:'шт.',rate:null,total:null}]
+      :[{key:'sheets',label:'Плита целыми листами: '+sp.sheets+' л. на '+(sp.parts>1?sp.parts+' позиции заказа':'позицию')+(sp.oversized?' (из них '+sp.oversized+' с доплатой ×2 за крупную деталь)':'')+' · доля позиции',amount:Math.round(sp.frac*1000)/1000,unit:'лист',rate:sp.price,total:sp.share}];
+    if(!sp.unplaced&&p.rates.work!==null) lines.push({key:'work',label:'Дополнительная обработка',amount:p.qty,unit:'шт.',rate:p.rates.work,total:money(p.qty*p.rates.work)});
+    const missing=lines.filter(l=>l.total===null).map(l=>l.label);
+    return {priceGroup:0,area:a,edge:0,lines,known:money(lines.reduce((v,l)=>v+(l.total??0),0)),complete:missing.length===0,missing};
+  }
+  /** ctx — проект (или готовый план листов): цена позиции из плиты зависит от остальных позиций той же плиты. */
+  function calculatePart(p,ctx) {
+    const plan=ctx instanceof Map?ctx:ctx&&ctx.parts?sheetPlan(ctx):sheetPanel(p)?sheetPlan({parts:[p]}):null,sp=plan&&plan.get(p.id);
+    if(sp) return sheetRow(p,sp);
+    const aluRow=aluPart(p);
+    if(aluRow) return aluRow;
     const a=area(p), e=hasEdging(p)?edgeLength(p):0;
     const film = p.family==='MDF';
     const variant=p.variant==='glass'?'glass':'solid';
@@ -97,7 +147,7 @@
     return {priceGroup,area:a,edge:e,lines,known:money(lines.reduce((v,l)=>v+(l.total??0),0)),complete:missing.length===0,missing};
   }
   function estimate(project) {
-    const rows=project.parts.map(calculatePart);
+    const plan=sheetPlan(project),rows=project.parts.map(p=>calculatePart(p,plan));
     const group=rows.reduce((sum,row)=>sum+row.priceGroup,0);
     const rounding=money(Math.round(group/100)*100-rows.reduce((sum,row)=>sum+money(row.priceGroup),0));
     return {rows,rounding,area:rows.reduce((a,x)=>a+x.area,0),qty:project.parts.reduce((a,x)=>a+x.qty,0),
@@ -140,7 +190,7 @@
       if(!p.aluFillId) list.push('Наполнение алюминиевого фасада не выбрано.');
       if(!p.aluColorName) list.push('Укажите название цвета профиля; экранный оттенок задаётся вручную.');
       list.push('Сечение, толщина профиля, размер заполнения и совместимость фурнитуры требуют подтверждения по паспорту выбранного профиля.');
-      list.push('Ставка за м² для ALU должна включать профиль, наполнение, уплотнитель и сборку; старый прайс не применяется.');
+      if(!(p.rates.material===null&&retail.alu&&retail.alu.profiles[p.aluProfileId]!=null&&retail.alu.fills[p.aluFillId]!=null)) list.push('Выберите профиль и наполнение — цена посчитается по прайсу Конструктора; или задайте ставку вручную.');
     } else {
       const panel=catalog.panels.find(a=>a.id===p.panelId);
       if(!panel) list.push('Выберите декор по каталогу.');
@@ -204,7 +254,7 @@
   function csv(project,catalog) {
     const rows=[['Позиция','Название','Материал','Декор / фрезеровка','Плёнка','Вариант','Высота, мм','Ширина, мм','Толщина, мм','Количество','Площадь, м²','Кромка, м','Учтено, руб.','Не хватает ставок','Предупреждения','Источник ручной ставки']];
     project.parts.forEach((p,i)=>{
-      const c=calculatePart(p), panel=catalog.panels.find(x=>x.id===p.panelId), film=catalog.films.find(x=>x.id===p.filmId);
+      const c=calculatePart(p,project), panel=catalog.panels.find(x=>x.id===p.panelId), film=catalog.films.find(x=>x.id===p.filmId);
       rows.push([i+1,p.name,familyNames[p.family],description(p,catalog),film?.name||'',p.variant,p.h,p.w,p.t,p.qty,c.area,c.edge,c.known,c.missing.join('; '),warnings(p,catalog).join('; '),p.rateNote]);
     });
     return '\uFEFF'+rows.map(row=>row.map(csvCell).join(';')).join('\r\n');
